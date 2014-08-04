@@ -1,0 +1,95 @@
+/********************************************************************
+*A scalable and high-performance platform for R.
+*Copyright (C) [2013] Hewlett-Packard Development Company, L.P.
+
+*This program is free software; you can redistribute it and/or modify
+*it under the terms of the GNU General Public License as published by
+*the Free Software Foundation; either version 2 of the License, or (at
+*your option) any later version.  
+
+*This program is distributed in the hope that it will be useful, but
+*WITHOUT ANY WARRANTY; without even the implied warranty of
+*MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+*General Public License for more details.  You should have received a
+*copy of the GNU General Public License along with this program; if
+*not, write to the Free Software Foundation, Inc., 59 Temple Place,
+*Suite 330, Boston, MA 02111-1307 USA
+********************************************************************/
+
+// Protocol buffer definitions for operations implemented by the Master nodes
+
+package presto;
+
+import "shared.proto";
+
+message UpdateArrayRequest {
+  required Array array = 1;
+  required ServerInfo location = 2;
+  required string clear_name = 3;
+}
+
+message MasterRequest {
+  enum Type {
+    UPDATE = 1;
+    NEWUPDATE = 2;
+    TASKDONE = 3;
+    HELLOREPLY = 4;
+    SHUTDOWN = 5;     // this shutdown is sent from master->master to commit suicide
+    WORKERABORT = 6;  // notify master that a worker is terminating
+  }
+
+  required Type type = 1;
+  optional UpdateArrayRequest update = 2;
+  optional NewUpdateRequest newupdate = 3;
+  optional TaskDoneRequest taskdone = 4;
+  optional HelloReplyRequest helloreply = 5; 
+  optional WorkerAbortRequest workerabort = 6;
+}
+
+message NewUpdateRequest {
+  required string name = 1;
+  required ServerInfo location = 2;
+  required int64 size = 3;
+  required int64 row_dim = 4;
+  required int64 col_dim = 5;
+}
+
+message TaskDoneRequest {
+  required int64 id = 1;
+  repeated string update_names = 2;
+  repeated int64 update_sizes = 3;
+  required ServerInfo location = 4;
+  repeated string update_stores = 5;
+  repeated bool update_empties = 6;
+  required int64 uid = 7;
+  optional int64 mem_used = 8;
+  optional string task_message = 9;
+  optional int64 task_result = 10;
+  repeated int64 row_dim = 11;
+  repeated int64 col_dim = 12;
+  optional int64 npartitions = 13;
+  optional int32 loader_port = 14;
+}
+
+message ArrayStoreData {
+  required int64 size = 1;
+  required string name = 2;
+  required ServerInfo location = 3;
+}
+
+message HelloReplyRequest {
+  required ServerInfo location = 1;
+  optional int64 shared_memory = 2;
+  optional int32 executors = 3;
+  repeated ArrayStoreData array_stores = 4;
+  optional int64 mem_total = 5 [default = 0];
+  optional int64 mem_used = 6 [default = 0];
+  optional bool is_heartbeat = 7 [default = false];
+}
+
+message WorkerAbortRequest{
+  required ServerInfo location = 1;
+  required string reason = 2;
+  optional int64 shared_memory = 3;
+  optional int32 executors = 4;
+}

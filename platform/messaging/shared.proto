@@ -1,0 +1,92 @@
+/********************************************************************
+*A scalable and high-performance platform for R.
+*Copyright (C) [2013] Hewlett-Packard Development Company, L.P.
+
+*This program is free software; you can redistribute it and/or modify
+*it under the terms of the GNU General Public License as published by
+*the Free Software Foundation; either version 2 of the License, or (at
+*your option) any later version.
+
+*This program is distributed in the hope that it will be useful, but
+*WITHOUT ANY WARRANTY; without even the implied warranty of
+*MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+*General Public License for more details.  You should have received a
+*copy of the GNU General Public License along with this program; if
+*not, write to the Free Software Foundation, Inc., 59 Temple Place,
+*Suite 330, Boston, MA 02111-1307 USA
+********************************************************************/
+
+
+// Common variables, messages used in worker, server
+
+package presto;
+
+// Generic Response message used for all requests
+message Response {
+  enum Status {
+    OK = 1;
+    ERROR = 2;
+  }
+  optional Status status = 1 [default = OK];
+  optional string msg = 2;
+
+  // Use extensions to support nesting request-specific responses
+  extensions 100 to 199;
+}
+
+// Structures used to pass around information about servers
+message ServerInfo {
+  required string name = 1;
+  required int32 presto_port = 2;
+  optional int32 start_port_range = 3 [default = 50000];
+  optional int32 end_port_range = 4 [default = 50100];
+}
+
+message ServerConfig {
+  repeated ServerInfo servers = 1;
+}
+
+message Tuple {
+  repeated int64 val = 1;
+}
+
+// Structure to represent a multi-dimensional array
+message Array {
+  required string name = 1;
+  required Tuple dim = 2;
+  optional int64 size = 3 [default = 0];
+  optional bool sparse = 4 [default = false];
+//  optional ServerInfo location = 4;
+}
+
+// Arguments for a computation. Allowsw multiple arrays to be combined
+// to create an R-object with the specified name
+
+message Arg {
+  required string name = 1;
+  repeated Array arrays = 2;
+  repeated Tuple offsets = 3;
+  optional Tuple dim = 4; 
+}
+
+message RawArg {
+  required string name = 1;
+  optional bytes value = 2;
+  required bool fetch_need = 3 [default = false];
+  optional string server_addr = 4;
+  optional int32 server_port = 5;
+  optional string fetch_id = 6;
+  optional int64 data_size = 7;
+}
+
+message NewArg {
+  required string arrayname = 1;
+  required string varname = 2;
+}
+
+message CompositeArg {
+  repeated string arraynames = 1;
+  repeated Tuple offsets = 2;
+  required Tuple dim = 3;
+  required string varname = 4;
+}

@@ -1,0 +1,145 @@
+/********************************************************************
+*A scalable and high-performance platform for R.
+*Copyright (C) [2013] Hewlett-Packard Development Company, L.P.
+
+*This program is free software; you can redistribute it and/or modify
+*it under the terms of the GNU General Public License as published by
+*the Free Software Foundation; either version 2 of the License, or (at
+*your option) any later version.
+
+*This program is distributed in the hope that it will be useful, but
+*WITHOUT ANY WARRANTY; without even the implied warranty of
+*MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+*General Public License for more details.  You should have received a
+*copy of the GNU General Public License along with this program; if
+*not, write to the Free Software Foundation, Inc., 59 Temple Place,
+*Suite 330, Boston, MA 02111-1307 USA
+********************************************************************/
+
+// Protocol buffer definitions for operations implemented by worker nodes
+
+package presto;
+
+import "shared.proto";
+
+message HelloRequest {
+  optional ServerInfo master_location = 1;
+  required ServerInfo worker_location = 2;
+  optional int64 abs_time = 3;
+  optional int32 reply_attr_flag = 4 [default = 0];
+  optional bool is_heartbeat = 5 [default = false];
+}
+
+message CreateRequest {
+  required Array arr = 1;
+  optional double initial_data = 2 [default = 0.0];
+}
+
+message ClearRequest {
+  required string name = 1;
+  optional string store = 2;
+  optional int64 id = 3;
+  required int64 uid = 4;
+}
+
+message TransferRequest {
+  required Array arr = 1;
+  required string hostname = 2;
+  required int32 port = 3;
+}
+
+message CreateCompositeRequest {
+  repeated string arraynames = 1;
+  repeated Tuple offsets = 2;
+  required Tuple dims = 3;
+  required string name = 4;
+  optional int64 id = 5;
+  required int64 uid = 6;
+}
+
+// NOTE: We use WorkerRequest to differentiate between different request
+// types in the ZeroMQ server-side implementation.
+message WorkerRequest {
+  enum Type { 
+    HELLO = 1;
+    CREATE = 2; 
+    CLEAR = 3;
+    CREATECOMPOSITE = 4;
+    TRANSFER = 5;
+    SHUTDOWN = 7;
+    FETCH = 9;
+    NEWEXECR = 10;
+    NEWTRANSFER = 11;
+    IO = 12;
+    LOG = 13;
+    VERTICALOAD = 14;
+  }
+  required Type type = 1;
+  optional HelloRequest hello = 2;
+  optional CreateRequest create = 3;
+  optional ClearRequest clear = 4;
+  optional CreateCompositeRequest createcomposite = 5;
+  optional TransferRequest transfer = 6;
+  optional FetchRequest fetch = 7;
+  optional NewExecuteRRequest newexecr = 8;
+  optional IORequest io = 9;
+  optional LogRequest log = 10;
+  optional VerticaDLRequest verticaload = 11;
+  // shutdown doesn't have any request
+}
+
+// Stuff not implemented in Protobuf version:
+// - add
+// - sum_squares
+// - abs_sum
+// - get
+// - set_value
+// - scale
+// - distributed multiply
+
+message FetchRequest {
+  required string name = 1;
+  required ServerInfo location = 2;
+  required int64 size = 3;
+  optional string store = 4;
+  optional int64 id = 5;
+  optional int64 uid = 6;
+}
+
+message NewExecuteRRequest {
+  repeated string func = 1;
+  repeated NewArg args = 2;
+  repeated RawArg raw_args = 3;
+  repeated NewArg composite_args = 4;
+  optional int64 id = 5;
+  required int64 uid = 6;
+};
+
+message IORequest {
+  enum Type {
+    LOAD = 1;
+    SAVE = 2;
+  }
+  required string array_name = 1;
+  required string store_name = 2;
+  required Type type = 3;
+  optional int64 id = 4;
+  required int64 uid = 5;
+};
+
+message LogRequest {
+  required string msg = 1;
+};
+
+message VerticaDLRequest {
+  enum Type { 
+    START = 1;
+    FETCH = 2;
+    STOP = 3;
+  }
+  required Type type = 1;
+  optional int64 split_size = 2;
+  repeated string query_result = 3;
+  required int64 id = 4;
+  optional int64 uid = 5;
+}

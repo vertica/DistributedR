@@ -1,0 +1,726 @@
+%\documentclass[shortnames,nojss,article]{jss}
+\documentclass[shortnames,nojss,article, 10pt]{jss}
+\usepackage{booktabs,flafter,thumbpdf}
+\usepackage{xspace}
+\usepackage{paralist}
+\usepackage{epsf}
+\usepackage{graphicx}
+\usepackage{epsfig}
+%\VignetteIndexEntry{Presto Tutorial}
+%\VignetteKeywords{Distributed execution, darray, foreach, R}
+%\VignettePackage{Presto}
+
+
+\author{Indrajit Roy\\ HP Vertica Development Team}
+\Plainauthor{Indrajit Roy}
+
+\title{Distributed R for Big Data}
+\Plaintitle{Distributed R for Big Data}
+
+\newcommand{\pname}{Distributed R\xspace} 
+
+\Abstract{\pname simplifies large-scale analysis. It extends
+  \proglang{R}. \proglang{R} is a single-threaded environment which
+  limits its utility for Big Data analytics.  \pname allows users to
+  write programs that are executed in a distributed fashion, that
+  is, parts of programs as specified by the developer can be run in
+  multiple single-threaded \proglang{R}-processes.  The result is
+  dramatically reduced execution times for Big Data analysis. This
+  tutorial explains how \pname language primitives should be used to
+  implement distributed analytics.}
+
+\Keywords{\proglang{R}, distributed execution, \code{darray}, \code{foreach}}
+\Plainkeywords{R, distributed execution, darray, foreach}
+
+\Volume{40}
+\Issue{8}
+\Month{April}
+\Year{2011}
+\Submitdate{2010-11-15}
+\Acceptdate{2011-03-21}
+
+\Address{
+  Indrajit Roy\\
+  HP Vertica Development Team \\
+  URL: \url{http://www.hpl.hp.com/distributedR.htm}
+}
+
+%% need no \usepackage{Sweave.sty}
+
+%<<prelim,echo=FALSE,print=FALSE>>=
+%library(PrestoMaster)
+%presto.version <- packageDescription("PrestoMaster")$Version
+%presto.date <- packageDescription("PrestoMaster")$Date
+%now.date <- strftime(Sys.Date(), "%B %d, %Y")
+%@
+%
+
+
+
+\begin{document}
+
+%\vspace*{-0.25cm}
+
+\section{Introduction}
+
+Many applications need to perform advanced analytics such as machine
+learning, graph processing, and statistical analysis on large-amounts
+of data. While \proglang{R} has many advanced analytics packages, the
+single-threaded nature of the \proglang{R} limits their use on Big
+Data. \pname extends \proglang{R} in two directions:
+\begin{compactitem}
+\item {\bf Distributed data.} \pname stores data across servers and
+  manages distributed computation.  Users can run their programs on
+  very large datasets (such as Terabytes) by simply adding more
+  servers.
+\item {\bf Parallel execution.} Programmers can use \pname to
+  implement code that runs in parallel. Users can leverage a single
+  multi-core machine or a cluster of machines to obtain dramatic
+  improvement in application performance.
+\end{compactitem}
+
+\pname provides distributed data-structures to store in-memory data
+across multiple machines.  These data-structures include distributed
+arrays (\code{darray}), distributed data-frames (\code{dframe}), and
+distributed lists (\code{dlist}).  These data structures can be
+partitioned by rows, columns, or blocks. Users specify the size of the
+initial partitions.  Distributed arrays should be used whenever data
+contains {\em only} numeric values.  Distributed data-frames should be
+used for non-numeric data. Distributed lists can store complex objects
+such as R models.
+
+Programmers can express parallel processing in \pname using
+\code{foreach} loops. Such loops execute a function in parallel on
+multiple machines.  Programmers pass parts of the distributed data to
+these functions. The \pname runtime intelligently schedules functions on
+remote machines to reduce data movement.
+
+In addition to the above language constructs, \pname also has other
+helper functions.  For example, \code{distributedR_start} starts the \pname
+runtime on a cluster. Information about all the functions is present
+in the \pname Manual.  It is also available via the \code{help()}
+command in the \proglang{R} console. Unlike the manual, the focus of this
+tutorial is to show, through examples, how \pname functions are used to write
+analytics algorithms.
+
+\section{\pname architecture}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=0.5\textwidth]{architecture.pdf}
+\caption{\pname architecture.}
+\label{fig:architecture}
+\end{figure}
+
+Before explaining the \pname programming model, it is important to
+understand the system architecture.  \pname consists of a single {\em
+  master} process and multiple {\em workers}. Logically, each worker
+resides on one server. The master controls each worker and can be
+co-located with a worker or started on a separate server.  Each worker
+manages multiple local R instances.  Figure 1 shows an example cluster
+setup with two servers. The master process runs on server A and a
+worker runs on each server. Each worker has three R instances.  Note
+that you could setup the workers to use more or fewer R instances.
+
+For programmers, the master is the \proglang{R} console on which \pname
+is loaded using \code{library(distributedR)}. The master starts the
+program and is in charge of overall execution. Parts of the
+program, those corresponding to parallel sections such as
+\code{foreach}, are executed by the workers.  Distributed data
+structures such as \code{darray} and \code{dframe} contain data that
+is stored across workers. The \pname API provides commands to move data
+between workers as well as between master and workers. Programmers
+need not know on which worker data resides, as the runtime hides the
+complexity of data movement.
+
+\section{Programming model}
+
+\pname is \proglang{R} with new language extensions and a distributed
+runtime.  \pname contains the following three groups of
+commands. Details about each command can be obtained by using
+\code{help} on each command or by reading the \pname Manual.
+
+\paragraph{Session management:}
+\begin{compactitem}
+\item \code{distributedR\_start} - start session
+\item \code{distributedR\_shutdown} - end session
+\item \code{distributedR\_status} - obtain master and worker information
+\end{compactitem}
+
+\paragraph{Distributed data structures:}
+\begin{compactitem}
+\item \code{darray} - create distributed array
+\item \code{dframe} - create distributed data frame
+\item \code{dlist} - create distributed list
+\item \code{as.darray} - create darray object from matrix object
+\item \code{npartitions} - obtain total number of partitions
+\item \code{getpartition} - fetch darray, dframe, or dlist object
+\item \code{partitionsize} - size of partition
+\item \code{clone} - clone or deep copy of a darray
+\end{compactitem}
+
+\paragraph{Parallel execution:}
+\begin{compactitem}
+\item \code{foreach} - execute function on cluster
+\item \code{splits} - pass partition to foreach loop
+\item \code{update} - make partition changes inside foreach
+  loop globally visible
+\end{compactitem}
+
+\subsection{Distributed data-structures}
+
+Distributed arrays (\code{darray}) provide a shared, in-memory view
+of multi-dimensional data stored across multiple servers.  Distributed
+arrays have the following characteristics:
+
+\begin{itemize}
+\item {\bf Partitioned.} Distributed arrays can be partitioned into contiguous ranges
+of rows, columns, or blocks. Users specify the size of the initial
+partitions. \pname workers store partitions of the distributed array
+in the compressed sparse column format unless the array is defined as
+dense.  Programmers use partitions to specify coarse-grained
+parallelism by writing functions that execute in parallel and operate
+on partitions.  For example, partitions of a distributed array can be
+loaded in parallel from data stores such as HP Vertica or from
+files. Programmers can use \code{getpartition} to fetch a distributed
+array and materialize it at the master node. For example,
+\code{getpartition(A)} will re-construct the whole array \code{A} at
+the master by fetching the partitions from local and remote workers.
+The $i^{th}$ partition can be fetched by \code{getpartition(A,i)}.
+
+\item {\bf Shared.} Distributed arrays can be read-shared by multiple
+concurrent tasks.  The user simply passes the array partitions as
+arguments to many concurrent tasks. However, \pname supports only a single
+writer per partition.
+\end{itemize}
+
+A distributed data frame (\code{dframe}) is similar to a
+\code{darray}. The primary difference is that, unlike \code{darray},
+distributed data frames can store non-numeric data.  Even though a
+\code{dframe} can be used to store numeric only data, it is much more
+efficient to use \code{darray} in such cases. The efficiency
+difference is because of the underlying representation of these data
+structures.
+
+Distributed list (\code{dlist}) stores elements inside lists that are
+partitioned across servers. To create a distributed list, programmers
+only need to specify the number of partitions. For example,
+\code{dlist(5)} will create a distributed list with five
+partitions. Initially each partition is a \proglang{R} list with no elements.
+
+\subsection{Parallel programming}
+Programmers use {\tt foreach} loops to execute functions in
+parallel. Programmers can pass data, including partitions of
+\code{darray} and \code{dframe}, to the functions. Array and data frame
+partitions can be referred to by the \code{splits} function.  The
+\code{splits} function automatically fetches remote partitions and
+combines them to form a local array.  For example, if \code{splits(A)}
+is an argument to a function executing on a worker then the whole
+array \code{A} would be re-constructed by the runtime, from local and
+remote partitions, and passed to that worker. The $i^{th}$ partition
+can be referenced by \code{splits(A,i)}.
+
+Functions inside \code{foreach} do not return data. Instead,
+programmers call {\tt update} inside the function to make distributed
+array or data frame changes globally visible.  The \pname runtime
+starts tasks on worker nodes for parallel execution of the loop body.
+By default, there is a barrier at the end of the loop to ensure all
+tasks finish before statements after the loop are executed.
+
+\section{Examples}
+
+We illustrate the \pname programming model by discussing a number of
+examples.
+
+\subsection{Getting started}
+Follow the steps in the installation guide to first install \pname.
+Load the \pname library and then start the cluster by calling \code{distributedR_start}.
+
+<<start>>=
+library(distributedR)
+distributedR_start()
+@ 
+
+You can view the status of the cluster with \code{distributedR_status}. It
+shows details such as the number of workers in the cluster, number of
+\proglang{R} instances managed by each worker, system memory available
+on each worker node, and so on.
+ 
+<<status>>=
+distributedR_status()
+distributedR_shutdown()
+@ 
+
+The last command shuts down the \pname cluster. 
+
+\subsection{Creating a distributed array}
+Next, create a distributed array. 
+
+Create a 9x9 dense array by specifying its size and how it is
+partitioned. The example below shows how to partition the array into 3x3
+blocks and set all its elements to the value 10. Therefore, there are 9
+partitions that could reside on remote nodes. 
+
+<<create 1>>=
+library(distributedR)
+distributedR_start()
+A <- darray(dim=c(9,9), blocks=c(3,3), sparse=FALSE, data=10)
+@ 
+
+You can print the number of partitions using \code{npartitions} and
+fetch the whole array at the master by calling \code{getpartition}. If
+you have a really large array, such as one with billions of rows,
+fetching the whole array at the master is not a good idea as it defeats
+the purpose of managing huge datasets by distributing data across multiple
+workers.
+
+<<create 2>>=
+npartitions(A)
+getpartition(A)
+@ 
+
+Typically, you partition arrays by rows or columns (i.e., 1-D
+partitioning) instead of blocks (i.e., 2-D partitioning). Since row
+and column partitioning is a special case of block partitioning, this
+example details block partitioning. If you partition the array
+\code{A} by rows by using \code{blocks=c(3,9)} instead of
+\code{blocks=c(3,3)}, then each partition will contain 3 rows and all
+the columns.
+
+Distributed arrays can initially be declared empty. For example, it is
+typical to create an array and then load data into the array from a
+data store. The initial declaration will create a full array which is
+soon overwritten. By declaring an array empty, you can save memory
+space.
+
+<<create 3>>=
+Aempty <- darray(dim=c(9,9), blocks=c(3,3), sparse=FALSE, empty=TRUE)
+npartitions(Aempty)
+getpartition(Aempty,1)
+@ 
+
+\subsection{Parallel programming with \code{foreach}}
+
+The \code{foreach} loop is a flexible and powerful construct to
+manipulate distributed data structures. This example illustrates its use by
+initializing a distributed array with different values.  
+
+Create another distributed array \code{B} with the same size
+(9x9) as \code{A} and partitioned in the same manner.  In our previous
+example, we used the argument \code{data} to initialize all elements
+of \code{A} to 10. However, you cannot use \code{data} to set different
+values to array elements. Instead, start a \code{foreach}
+loop, pass partitions of \code{B}, and inside the loop assign values to the
+partition.
+
+<<create 3>>=
+B <- darray(dim=c(9,9), blocks=c(3,3), sparse=FALSE)
+foreach(i, 1:npartitions(B), 
+init<-function(b = splits(B,i), index=i){
+  b <- matrix(index, nrow=nrow(b),ncol=ncol(b))
+  update(b)
+})
+@ 
+
+The syntax of \code{foreach} is \code{foreach(iteration variable,
+  range, function)}. In the above example, \code{i} is the iteration
+variable which takes values from 1 to 9. Therefore, 9 parallel
+tasks are created that execute the functions. In the function, we
+pass the $i^{th}$ partition of B using \code{splits(B,i)}. We also
+pass the value of the \code{i}. Within the function we assign a matrix
+to the partition. The matrix is of the same size as the partition
+(3x3) but initialized by the value of the iteration variable. This
+means that the $i^{th}$ partition will have all elements equal to
+\code{i}. We can fetch the whole array by using \code{getpartition}.
+
+<<create 4>>=
+getpartition(B)
+@ 
+
+A particular partition, say the $5^{th}$, can be fetched by specifying
+the partition index.
+
+<<create 5>>=
+getpartition(B,5)
+@ 
+
+There are few things to keep in mind while using
+\code{foreach}. First, only variables passed as arguments to the
+function (\code{init} in this case) are available for use within the
+function. For example, the array \code{A} or its partitions cannot be
+used within the function.  Even the iterator variable (\code{i}) needs
+to be passed as an argument. Second, loop functions don't return any
+value.  The only way to make data modifications visible is to call
+\code{update} on the partition. In addition, \code{update} can be used
+     {\em only} on distributed data-structure (\code{darray},
+     \code{dframe}, \code{dlist}) arguments. For example,
+     \code{update(index)} is incorrect code as \code{index} is not a
+     distributed object.
+
+\subsection{Parallel array addition}
+With the two initialized distributed arrays, you can start
+computations such as adding their elements. We will again use a
+\code{foreach} loop to perform the parallel addition. First create
+an output array \code{C} of the same size and partitioning scheme.  In
+the \code{foreach} loop pass the $i^{th}$ partition of all three
+arrays, \code{A}, \code{B}, and \code{C}. Within the loop we add the
+corresponding partitions, put the output in \code{c}, and call
+\code{update}:
+
+<<add 1>>=
+C <- darray(dim=c(9,9), blocks=c(3,3))
+foreach(i, 1:npartitions(A),
+add<-function(a = splits(A,i), b = splits(B,i), c = splits(C,i)){
+  c <- a + b
+  update(c)
+})
+getpartition(C)
+@ 
+
+While \code{foreach} can be used to perform any parallel operation, \pname
+package provide basic operators that work out-of-the-box on distributed
+arrays.  These operators include array addition, subtraction,
+multiplication, and summary statistics such as max, min, mean, and sum
+(including their column and row versions such as
+\code{colSums}). Internally, all these operators are implemented using
+\code{foreach}. The example below illustrates some of these operators
+in action:
+
+<<ops 1>>=
+D <- A+B
+getpartition(D)
+mean(D)
+colSums(D)
+@ 
+
+\subsection{Creating a distributed data frame}
+
+The syntax for distributed data frames is similar to distributed arrays.
+However, data frames can store non-numeric values.
+
+Create a 9x9 data frame by specifying its size and how it is
+partitioned: 
+
+<<df 1>>=
+dF <- dframe(dim=c(9,9), blocks=c(3,3))
+@ 
+
+The dataframe \code{dF} has 9 partitions each of size 3x3. Unlike,
+distributed arrays, the data frame has no elements unless data is
+explicitly loaded:
+
+<<df 2>>=
+getpartition(dF)
+@ 
+
+To add data, use a \code{foreach} loop:
+
+<<df 3>>=
+foreach(i, 1:npartitions(dF),
+init<-function(df = splits(dF,i), index=i, n=3){
+    p <- matrix(index, nrow=n,ncol=n-1)
+    q <- rep("HP",n)
+    df<- data.frame(p,q)
+    update(df)
+})
+@ 
+
+Each partitions now has a column which contains the string \code{HP}:
+
+<<df 4>>=
+getpartition(dF,1)
+@ 
+
+\subsection{Creating a distributed list}
+
+Create a distributed list by specifying the number of partitions.
+<<dL 1>>=
+dL <- dlist(partitions=3)
+@ 
+
+Initially, the list is empty. 
+<<dL 2>>=
+getpartition(dL)
+@ 
+
+The list can be populated using the foreach loop.
+<<dL 3>>=
+foreach(i, 1:npartitions(dL), function(dl=splits(dL,i), idx=i){
+    dl<-list(c("HP", idx))
+    update(dl)
+})
+@ 
+
+Individual partitions or the whole list can be obtained by:
+<<dL 4>>=
+getpartition(dL,1)
+getpartition(dL)
+@ 
+
+\subsection{Load and save data from files}
+
+You can save or load data in parallel. \pname can run on top of
+databases such as HP Vertica and even file systems. Therefore, data can be
+loaded or saved to different stores as long as the right connector
+exists. Let's start with an example of saving data to files. 
+Use the \code{foreach} loop to write each partition of an array to a
+file:  
+
+<<save 1>>=
+fname <- paste(getwd(),"/Data",sep="")
+foreach(i, 1:npartitions(D),
+saves<-function(d = splits(D,i), index=i, name=fname){
+    write(d, paste(name,index,sep=""))
+})
+@ 
+
+The code above writes each partition in a different file. If \pname is
+running on a single machine, all the files are present on the same
+machine. You can load one of the partitions and check its contents:
+
+<<load 1>>=
+scan(paste(fname,5,sep=""))
+@ 
+
+Note that the above command may not work if \pname is running on a
+cluster as the file may be in a remote machine.  Instead, use a
+\code{foreach} loop to load data in parallel into a distributed
+array. First declare a new distributed array
+\code{E}, of the same size as \code{D}, and then load data from
+previously saved files. Since \code{scan} returns the values as a
+single vector, first convert the data into a matrix for the correct
+size before calling \code{update}:
+
+<<load 2>>=
+E <- darray(dim=c(9,9), blocks=c(3,3))
+foreach(i, 1:npartitions(E),
+loads<-function(e = splits(E,i), index=i, name=fname){
+    fn <- paste(name,index,sep="")
+    e <- matrix(scan(file=fn), nrow=nrow(e))
+    update(e)
+})
+getpartition(E,5)
+@ 
+
+\subsection{Load and save data from HP Vertica}
+
+To load data from a database into a distributed array, use an ODBC
+connector such as HP Vertica RODBC (vRODBC) or vanilla RODBC.  The
+example below shows how to load data using a \code{foreach} loop that
+makes concurrent ODBC connections to HP Vertica database. Declare a
+50x4 array in which each partition contains 5 rows. Within the loop
+load each partition by querying the database for 5 rows at a time.
+Note that for this example to work, \code{vRODBC} needs to be
+installed and set up correctly to connect to HP Vertica
+database. Follow installation instructions of \code{vRODBC}. To use
+\code{RODBC}, just replace the occurrences of \code{vRODBC} with
+\code{RODBC} in the example below.
+
+<<db 1, eval=FALSE, echo=TRUE>>=
+X <- darray(dim=c(50, 4), blocks=c(5, 4), sparse=FALSE)
+foreach(i, 1:npartitions(X), initArrays <- function(x = splits(X,i), index=i) {
+ library(vRODBC)
+ connect<-odbcConnect("Test")
+ size <- nrow(x)
+ start <- (index-1) * size
+ end <- index * size
+ qry <- paste("select A,B,C,D from T where id >=", start,"and id <", end, "order by id")
+ segment<-sqlQuery(connect, qry)
+ odbcClose(connect)
+ x<-cbind(segment$A, segment$B, segment$C, segment$D)
+ update(x)
+})
+@
+\begin{verbatim}
+progress: 100%
+[1] TRUE
+\end{verbatim}
+
+There are two things to observe in this example. First, the programmer
+has to load the ODBC package inside the loop (using
+\code{library(vRODBC)}). This is necessary because the function inside
+the \code{foreach} loop executes on the worker and packages need to be
+explicitly loaded in the worker environment. Second, in this
+particular example we use HP Vertica's internal row identifiers to
+select rows.  For example, the first 5 rows in the Vertica table
+\code{T} will be assigned to the first partition of array \code{X}. HP
+Vertica has row identifiers to refer to individual rows.
+
+To fetch the first partition and display data, use
+\code{getpartition}:
+
+<<db 2, eval=FALSE, echo=TRUE>>=
+getpartition(X, 1)
+@ 
+\begin{verbatim}
+      [,1]     [,2]     [,3]     [,4]
+ [1,]    5 0.903815 0.522466 0.250464
+ [2,]    1 0.994233 0.138644 0.139464
+ [3,]    3 0.117651 0.285975 0.309341
+ [4,]    4 0.280725 0.006694 0.684827
+ [5,]    6 0.331704 0.835160 0.498040
+\end{verbatim}
+
+
+%\subsection{Sparse matrix-vector multiplication}
+
+\subsection{Parallel execution using existing packages}
+
+Sometimes, a problem can be solved by applying, in parallel, functions
+from existing packages. Take the example of finding the shortest
+distance from five source vertices to all other vertices in the
+graph. Since distance calculation from each source vertex is
+independent from others, we can start five tasks to calculate them in
+parallel. \proglang{R} already has a package called \code{igraph} that
+can calculate shortest distances. The example below details how to reuse
+\code{igraph} to solve the above problem. For this example,
+\code{igraph} needs to be installed on all machines in \pname cluster.
+You can manually download the software from CRAN or use
+\code{install.packages(igraph)}.
+
+First, create a sparse distributed array to store the graph.  Since
+we don't want to partition the graph, the array has only one partition
+equal to the total size of the graph.
+<<graph 1>>=
+G<-darray(dim=c(100,100), blocks=c(100,100), sparse=TRUE)
+@ 
+
+Next, use a foreach loop to generate a random graph and store it in
+the array. Note that we need to load the \code{igraph} library inside
+the loop function.
+
+<<graph 2>>=
+foreach(i, 1:1, initGraph<-function(g=splits(G)){
+ library(igraph)
+ rg<-erdos.renyi.game(nrow(g),0.1)
+ g<-get.adjacency(rg, sparse=TRUE)
+ update(g)
+})
+@ 
+
+Now run parallel tasks to calculate shortest distances and
+store them in another array called \code{paths}. Partition the
+array \code{paths} such that each partition has one row and 100
+columns. Therefore, each element in the array corresponds to the distance of
+the source vertex to a given destination vertex.
+
+<<graph 3>>=
+paths<-darray(dim=c(5,100), blocks=c(1,100), sparse=FALSE)
+foreach(i, 1:npartitions(paths), 
+calc<-function(g=splits(G), p=splits(paths,i), vertex=i){
+ library(igraph)
+ p<-shortest.paths(graph.adjacency(g), vertex)
+ update(p)
+})
+@ 
+
+Fetch all shortest distances from the first vertex and then
+print the first ten values:
+<<graph 4>>=
+getpartition(paths, 1)[,1:10]
+distributedR_shutdown()
+@ 
+
+\subsection{Saving R sessions}
+
+\pname will shutdown when you quit the R session, even if you choose
+to save your workspace. You may encounter an error if any of your R
+variables store a reference to a distributed object, and you shutdown
+\pname, or quit R and save your session.
+
+\section{Debugging distributed programs}
+
+\pname makes it easier to write distributed machine learning and graph
+algorithms. However, programmers may face challenges in debugging
+applications. If the error occurs in the sequential part of the code,
+i.e. outside the \code{foreach} loop, then \pname will typically display
+usual \proglang{R} error messages.  You should use standard
+\proglang{R} techniques to debug the program.  The challenging part is
+if errors are in the parallel section of the code, i.e. related to the
+\code{foreach} loop. These errors may manifest on remote machines when
+functions are executed.
+
+Here are few suggestions for debugging errors during parallel
+execution:
+
+\begin{itemize}
+\item {\bf Check logs.} On each machine, the logs of the worker and
+  each of the R instances are available under \code{/tmp/R_worker*}
+  and \code{/tmp/R_executor*}.  If \pname does not give a meaningful
+  error message, the programmer may log into cluster machines and
+  check the log files.
+
+\item {\bf Add print statements.} If the logs don't contain enough
+  information, we recommend the old school technique of adding lots of
+  print statements in your code. Print statements inside the
+  \code{foreach} loop will show up in \code{/tmp/R_executor*} logs.
+  
+\item {\bf Execute in local mode.} It is easier to debug programs on a
+  single machine than a cluster.  Since many errors in cluster mode
+  will also manifest in a single multi-core machine, we
+  recommend running \pname on a single machine using the same program
+  and dataset. To further ease debugging, run \pname with only a
+  single R instance by using \code{distributedR_start(inst=1)}.
+\end{itemize}
+
+\section{Performance optimizations}
+
+When writing your own algorithms in \pname, the following
+considerations may help improve performance:
+
+\begin{description}
+\item[\proglang{R} instances.] It is typical to use number of
+  \proglang{R} instances on each worker machine equal to the number of
+  cores on that machine. Starting more \proglang{R} instances than the
+  number of cores may not improve performance as most algorithms are
+  compute intensive. Using fewer cores may leave the machine
+  underutilized.
+
+\item[Memory requirement.] \pname is an in-memory system and requires
+  all data to fit in the aggregate main memory of the cluster. In
+  addition, you may need to have spare capacity for temporary data
+  generated by the algorithm. For example, if the input dataset
+  is 50GB and machines have 32GB RAM, you will need at least two such
+  machines in the \pname cluster.
+
+\item[Array partitions.] Each array partition is worked upon by an
+  \proglang{R} instance.  For good performance, number of partitions
+  in a \code{darray} or \code{dframe} should be at least the number of
+  \proglang{R} instances used. Otherwise, some \proglang{R} instances
+  may remain idle. It is best to create arrays or data-frames with
+  number of partitions equal to the total number of \proglang{R}
+  instances or a {\em small multiple} of it. Too many partitions
+  (e.g., more than 10$\times$ the number of total \proglang{R}
+  instances) may degrade performance due to higher scheduling
+  overheads. For example, consider an input dataset of size 50GB and a
+  \pname cluster of two workers each running 5 \proglang{R}
+  instances. Since there are a total of 10 \proglang{R} instances,
+  create a distributed array with 10 (or 20 or 30) partitions to
+  ensure each \proglang{R} instance is kept busy, load is evenly
+  distributed, and scheduling overheads are low. When using 10
+  partitions, each partition will contain 5GB of data.
+
+\item[Using \code{getpartition}.] The \code{getpartition} function
+  fetches data from remote locations to the master node. It should not
+  be used to fetch full arrays (or their partitions) which may not fit
+  in the memory of the master node. In the previous example of a 50GB
+  array distributed across two 32GB machines, \code{getpartition} on
+  the full array will fail. Whenever possible, data should be
+  manipulated in parallel using \code{foreach} instead of first moving
+  data from remote nodes to master node with \code{getpartition}, and
+  then applying the function on the single threaded master node. For
+  example, it is better to calculate \code{mean} on a remote node
+  using \code{foreach} instead of fetching the data on the master node
+  and applying \code{mean}.
+
+\item[Running with HP Vertica.] Since data mining algorithms are
+  compute intensive, we recommend running \pname on a cluster of its
+  own. If \pname and HP Vertica are run on the same servers,
+  performance of both \pname and HP Vertica queries may get affected due to
+  resource contention.
+  
+\end{description}
+
+  
+  
+\end{document}

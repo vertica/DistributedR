@@ -1,0 +1,155 @@
+# All this catalog "translates" are quotation characters.
+# The msgids must be ASCII and therefore cannot contain real quotation
+# characters, only substitutes like grave accent (0x60), apostrophe (0x27)
+# and double quote (0x22). These substitutes look strange; see
+# http://www.cl.cam.ac.uk/~mgk25/ucs/quotes.html
+#
+# This catalog translates grave accent (0x60) and apostrophe (0x27) to
+# left single quotation mark (U+2018) and right single quotation mark (U+2019).
+# It also translates pairs of apostrophe (0x27) to
+# left single quotation mark (U+2018) and right single quotation mark (U+2019)
+# and pairs of quotation mark (0x22) to
+# left double quotation mark (U+201C) and right double quotation mark (U+201D).
+#
+# When output to an UTF-8 terminal, the quotation characters appear perfectly.
+# When output to an ISO-8859-1 terminal, the single quotation marks are
+# transliterated to apostrophes (by iconv in glibc 2.2 or newer) or to
+# grave/acute accent (by libiconv), and the double quotation marks are
+# transliterated to 0x22.
+# When output to an ASCII terminal, the single quotation marks are
+# transliterated to apostrophes, and the double quotation marks are
+# transliterated to 0x22.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: R 2.16.0\n"
+"Report-Msgid-Bugs-To: bugs@r-project.org\n"
+"POT-Creation-Date: 2012-06-27 09:31\n"
+"PO-Revision-Date: 2012-06-27 09:31\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: en\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "first argument is not an open RODBC channel"
+msgstr "first argument is not an open RODBC channel"
+
+msgid "Argument 'channel' must inherit from class RODBC"
+msgstr "Argument ‘channel’ must inherit from class RODBC"
+
+msgid "ODBC connection failed"
+msgstr "ODBC connection failed"
+
+msgid "Invalid case parameter: nochange | toupper | tolower | common db names"
+msgstr "Invalid case parameter: nochange | toupper | tolower | common db names"
+
+msgid "no parameters, so nothing to update"
+msgstr "no parameters, so nothing to update"
+
+msgid "missing columns in 'data'"
+msgstr "missing columns in ‘data’"
+
+msgid "argument is not an open RODBC channel"
+msgstr "argument is not an open RODBC channel"
+
+msgid "argument 'driver' must be a character string"
+msgstr "argument ‘driver’ must be a character string"
+
+msgid "argument 'value' must be a named list of length >= 4"
+msgstr "argument ‘value’ must be a named list of length >= 4"
+
+msgid "missing argument 'sqtable'"
+msgstr "missing argument ‘sqtable’"
+
+msgid "table"
+msgstr "table"
+
+msgid "not found"
+msgstr "not found"
+
+msgid "destination argument is not an open RODBC channel"
+msgstr "destination argument is not an open RODBC channel"
+
+msgid "missing parameter"
+msgstr "missing parameter"
+
+msgid "destination should be a name"
+msgstr "destination should be a name"
+
+msgid "should be a name"
+msgstr "should be a name"
+
+msgid "should be a data frame"
+msgstr "should be a data frame"
+
+msgid "already exists"
+msgstr "already exists"
+
+msgid "unable to append to table"
+msgstr "unable to append to table"
+
+msgid "argument 'varTypes' has no names and will be ignored"
+msgstr "argument ‘varTypes’ has no names and will be ignored"
+
+msgid "column(s)"
+msgstr "column(s)"
+
+msgid ","
+msgstr ","
+
+msgid "'dat' are not in the names of 'varTypes'"
+msgstr "‘dat’ are not in the names of ‘varTypes’"
+
+msgid "invalid channel"
+msgstr "invalid channel"
+
+msgid ": table not found on channel"
+msgstr ": table not found on channel"
+
+msgid "dot.dot.dot names are not supported"
+msgstr "dot.dot.dot names are not supported"
+
+msgid "missing argument 'query'"
+msgstr "missing argument ‘query’"
+
+msgid "invalid numeric 'as.is' expression"
+msgstr "invalid numeric ‘as.is’ expression"
+
+msgid "'as.is' has the wrong length"
+msgstr "‘as.is’ has the wrong length"
+
+msgid "!= cols ="
+msgstr "!= cols ="
+
+msgid "should be a data frame or matrix"
+msgstr "should be a data frame or matrix"
+
+msgid "index column(s)"
+msgstr "index column(s)"
+
+msgid "not in database table"
+msgstr "not in database table"
+
+msgid "not in data frame"
+msgstr "not in data frame"
+
+msgid "cannot update"
+msgstr "cannot update"
+
+msgid "without unique column"
+msgstr "without unique column"
+
+msgid "data frame column(s)"
+msgstr "data frame column(s)"
+
+msgid "odbcConnectExcel is only usable with 32-bit Windows"
+msgstr "odbcConnectExcel is only usable with 32-bit Windows"
+
+msgid "odbcConnectAccess is only usable with 32-bit Windows"
+msgstr "odbcConnectAccess is only usable with 32-bit Windows"
+
+msgid "odbcConnectDbase is probably only usable with 32-bit Windows"
+msgstr "odbcConnectDbase is probably only usable with 32-bit Windows"

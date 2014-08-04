@@ -1,0 +1,2 @@
+useDynLib(MatrixHelper)
+exportPattern("^[[:alpha:]]+")

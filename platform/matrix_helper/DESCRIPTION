@@ -1,0 +1,10 @@
+Package: MatrixHelper 
+Version: 0.3
+Date: 2013-12-10
+Title: Matrix manipulation helper package
+Author: HP Vertica Development Team
+Maintainer: HP Vertica Developmeent Team <xyz@hp.com>
+Description: Matrix helper package that performs common operations in C++
+Depends: Rcpp (>= 0.9.0)
+LinkingTo: Rcpp
+License: GPL v2

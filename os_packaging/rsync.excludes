@@ -1,0 +1,10 @@
+third_party
+rpmbuild
+debbuild
+rsync.*
+install
+gen-cpp
+.hg*
+.svn
+
+

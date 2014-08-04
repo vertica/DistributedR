@@ -1,0 +1,17 @@
+Package: vRODBC
+Version: 0.7.0
+Revision: $Rev: 1 $
+Date: 2013-08-15
+Author: Brian Ripley, and from 1999 to Oct 2002 Michael Lapsley
+Maintainer: Brian Ripley <ripley@stats.ox.ac.uk>
+Title: ODBC Database Access
+Description: An ODBC database interface. Includes modifications for improved access to Vertica database
+SystemRequirements: An ODBC3 driver manager and drivers.
+Depends: R (>= 2.12.0), utils
+Imports: stats
+LazyLoad: yes
+License: GPL-2 | GPL-3
+BuildVignettes: no
+Packaged: 2013-08-16 17:55:15 UTC;
+Repository: 
+Date/Publication:

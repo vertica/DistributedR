@@ -1,0 +1,21 @@
+useDynLib(vRODBC, .registration = TRUE, .fixes = "C_")
+
+importFrom(stats, runif)
+
+export(getSqlTypeInfo, odbcClearError, odbcClose, odbcCloseAll,
+       odbcConnect, odbcDataSources, odbcDriverConnect, odbcEndTran,
+       odbcFetchRows, odbcGetErrMsg, odbcGetInfo, odbcQuery,
+       odbcReConnect, odbcSetAutoCommit, odbcTables, odbcUpdate,
+       setSqlTypeInfo, sqlClear, sqlColumns, sqlCopy, sqlCopyTable,
+       sqlDrop, sqlFetch, sqlFetchMore, sqlGetResults, sqlPrimaryKeys,
+       sqlQuery, sqlSave, sqlTables, sqlTypeInfo, sqlUpdate)
+
+S3method(close, vRODBC)
+S3method(print, vRODBC)
+S3method(format, "ODBC_binary")
+S3method(print, "ODBC_binary")
+
+if(tools:::.OStype() == "windows") {
+export(odbcConnectAccess, odbcConnectAccess2007, odbcConnectDbase,
+       odbcConnectExcel, odbcConnectExcel2007)
+}

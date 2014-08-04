@@ -1,0 +1,93 @@
+# Copyright [2014] Hewlett-Packard Development Company, L.P.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+
+## inputFile: the input file which contains the complete adjacency list of a graph
+## nSplits: the desired number of partitions in the graph. It may change based on the total number of vertices
+## outputPath: it is the path for storing the output split files, it should be similar for master and workers
+## isNFS: TRUE indicates that outputPath is on NFS; therefore, only one copy of files will be sent the destination.
+##          When it is FALSE (defualt) a copy of the files will be sent to every node in the pool
+splitGraphFile <- function(inputFile, nSplits, outputPath, isNFS = FALSE) {
+    # validating arguments
+    if(!is.character(inputFile))
+        stop("The name of the input file should be specified as a string")
+    check <- system(paste("ls",inputFile), intern=TRUE)
+    if(length(check) != 1)
+        stop("cannot access the input file")
+    inputFile <- check # it helps sometimes to make the address of inputFile absolute
+
+    nSplits <- as.integer(nSplits)
+    if(nSplits <= 0)
+        stop("nSplits should be a positive integer number\n")
+
+    if(!is.character(outputPath))
+        stop("The valid path for the output files should be specified as a string\n")
+    if(isNFS) {
+        check <- system(paste("ls",outputPath), intern=TRUE)
+        if(! is.null(attributes(check)))
+            stop("cannot access the output path")
+    }
+    
+    # parsing inputPath and fileName
+    tokens <- unlist(strsplit(inputFile, "/", fixed=TRUE))
+    fileName <- tokens[length(tokens)]
+    inputPath <- paste(tokens[-length(tokens)], collapse="/")
+    # creating a temp subdirectory for generating splits
+    tempPath <- paste(inputPath,"/tempSGF", sep="")
+    system(paste("rm -r ", tempPath), ignore.stderr = TRUE) # to make sure that the temp subdirectory does not exist
+    success <- system(paste("mkdir ", tempPath))
+    if(success != 0)
+        stop("Cannot write the temporary files in ", inputPath)
+    tempFile <- paste(tempPath,"/",fileName, sep="")
+
+    # calling split function
+    result <- .Call(hpdsplitter, inputFile, 1, nSplits, tempFile)
+    if(is.null(result)) stop("Split was unsuccessful")
+    nVertices <- result$nVertices   
+    nFiles <- result$colsplits    
+
+    if(isNFS) {
+        commArg <- paste("mv ", tempFile, "?* ", outputPath, sep="")
+        success <- system(commArg)
+    } else {
+        # copy the files to the workers one by one
+        workers <- levels(distributedR_status()$Workers)
+        for(w in 1:length(workers)) {
+            thisW <- workers[[w]]
+            workerName <- strsplit(thisW,":", fixed=TRUE)[[1]][[1]]
+            cat("Sending the files to ", workerName, "\n")
+            if(nSplits == 1) {
+                check <- system(paste("ssh ", workerName, " ls ", outputPath, sep=""), intern=TRUE)
+                success <- attributes(check)
+                if(! is.null(success)) break
+            }
+            commArg <- paste("scp ", tempFile, "?* ", workerName, ":", outputPath, sep="")
+            success <- system(commArg)
+            if(success != 0) break
+
+        }
+    }
+    if(success != 0)
+        stop("Split was unsuccessful. At least one of the nodes has problem to write on the specified outputPath.")
+    # removing the temp subdirectory
+    commArg <- paste("rm -r ", tempPath)
+    system(commArg)
+
+    list(pathPrefix=paste(outputPath,"/",fileName, sep=""), nVertices=nVertices, verticesInSplit= result$colsplitsize,
+            nFiles=nFiles, isWeighted=result$isWeighted)
+}
+
+# Example:
+# splitGraphFile(inputFile=="/home/userName/graph.txt", nSplits=7, outputPath="/home/userName/splitGraph/")

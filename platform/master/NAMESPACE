@@ -1,0 +1,15 @@
+useDynLib(distributedR)
+exportPattern("^[[:alpha:]]+")
+import(Rcpp)
+export(max,
+       min,
+       sum,
+       mean,
+       colSums,
+       rowSums,
+       colMeans,
+       rowMeans,
+       head,
+       tail,
+       norm
+       )
