@@ -64,9 +64,9 @@ function(X, centers, iter.max = 10, nstart = 1,
     if(nstart <= 0) stop("nstart should be a positive integer number")
     
     nparts <- npartitions(X)  # number of partitions (blocks)
-    #blockSize <- X@blocks[1] # Removed for flexible-darray
+    blockSize <- X@blocks[1] # X should always be row-wise partitioned
 
-    mask <- NULL
+    mask = NULL
     switch(match.arg(na_action),
         "fail" = {
             anyMiss <- .naCheckKmeans(X, trace=trace)            
@@ -74,8 +74,7 @@ function(X, centers, iter.max = 10, nstart = 1,
                 stop(anyMiss, " sample(s) have missed values")
         },
         "exclude" = {
-            #mask <- darray(dim=c(nSample,1), blocks=c(blockSize,1)) # Removed for flexible-darray
-            mask <- clone(X, ncol=1, sparse=FALSE) # add for flexible-darray
+            mask = darray(dim=c(nSample,1), blocks=c(blockSize,1))
             anyMiss <- .naCheckKmeans(X, trace=trace, mask)
             if(anyMiss > 0) {
                 if(anyMiss == nSample)
@@ -209,7 +208,7 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
     if(!is.null(mask) && !is.darray(mask)) stop("'mask' should be of type darray")
 
     nparts <- npartitions(X)
-    #blockSize <- X@blocks[1] # Removed for flexible-darray
+    blockSize <- X@blocks[1]
     if(trace) {
         cat("Calculating the total sum of squares\n")
         starttime<-proc.time()
@@ -291,8 +290,7 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
     nSample <- nrow(X)    # number of samples
     p <- as.integer(ncol(X))    # number of predictors
     nparts <- npartitions(X)  # number of partitions (blocks)
-    #blockSize <- X@blocks[1] # Removed for flexible-darray
-    blockSizes <- partitionsize(X)[,1] # added for flexible-darray
+    blockSize <- X@blocks[1]
     ## we need to randomly select centers from samples distributed amon partitions of X
     ## all the samples should have the same chance to be picked as a center
     ## we need to avoid duplicates here
@@ -302,7 +300,7 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
     while(dupplicateCenters && (nCenterAttempts < maxIterCenterFinding)) {
         ## k and p are not expected to be huge
         d.centers <- darray(dim=c(k*nparts,p), blocks=c(k,p), data=NA)
-        if ( blockSizes[1] > sampling_threshold || nSample > 1e9) {       # distributed sampling # changed for flexible-darray
+	if ( blockSize > sampling_threshold || nSample > 1e9) {       # distributed sampling
             selectedBlocks <- sample.int(nparts, k, replace=TRUE)
             if(trace) {
                 cat("Picking randomly selected centers (distributed sampling)\n")
@@ -334,11 +332,8 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
                 starttime<-proc.time()
             }
             foreach(i, 1:nparts, progress=trace, centerCent <- function(idx=i, Xi=splits(X,i), indexOfCenters=indexOfCenters
-                    , d.centersi=splits(d.centers,i), blockSizes=blockSizes){ # changed for flexible-darray
-                #offset <- blockSize * (idx -1) # Removed for flexible-darray
-                offset <- 0
-                if(idx > 1) # added for flexible-darray
-                    offset <- sum(blockSizes[1:(idx -1)]) # added for flexible-darray
+		    , d.centersi=splits(d.centers,i), blockSize=blockSize){
+                offset <- blockSize * (idx -1)
                 index <- (indexOfCenters > offset) & (indexOfCenters <= nrow(Xi) + offset)
                 if(any(index)) {
                     if(class(Xi) == "matrix")
@@ -374,20 +369,17 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
     nSample <- nrow(X)    # number of samples
     p <- as.integer(ncol(X))    # number of features
     nparts <- npartitions(X)  # number of partitions (blocks)
-    #blockSize <- X@blocks[1] # Removed for flexible-darray
+    blockSize <- X@blocks[1]
     # Create two arrays which hold the intermediate sum of points and total no. of points belonging to a cluster
     # We create k.p matrix as it's easier to operate on
     sumOfCluster <- darray(dim=c(k*p, nparts), blocks=c(k*p, 1), FALSE)
     numOfPoints <- darray(dim=c(k, nparts), blocks=c(k,1), FALSE)
 
     #Create an array that maps points to their clusters
-    if(returnCluster) {
-        #cluster <- darray(dim=c(nSample, 1), blocks=c(blockSize, 1), data=NA)  # Removed for flexible-darray
-        cluster <- clone(X, ncol=1, data=NA, sparse=FALSE) # add for flexible-darray
-    } else {
-        #cluster <- darray(dim=c(nSample, 1), blocks=c(blockSize, 1), empty=TRUE) # Removed for flexible-darray
-        cluster <- clone(X, ncol=1, data=0, sparse=TRUE) # add for flexible-darray
-    }
+    if(returnCluster)
+        cluster <- darray(dim=c(nSample, 1), blocks=c(blockSize, 1), data=NA)
+    else
+        cluster <- darray(dim=c(nSample, 1), blocks=c(blockSize, 1), empty=TRUE)
 
     iteration_counter <- 1
     .hpkmeans.env$iterations_totalTime <- 0
@@ -566,12 +558,10 @@ hpdapply <- function(newdata, centers, trace=FALSE) {
 
   if(darrayInput) { # newdata is a darray
     nparts <- npartitions(newdata)  # number of partitions (blocks)
-    if(p != partitionsize(newdata)[1,2]) stop("newdata should always be row-wise partitioned")
-    #blockSize <- newdata@blocks[1] # Removed for flexible-darray 
+    blockSize <- newdata@blocks[1] # newdata should always be row-wise partitioned
 
     # samples with missed values should not be used
-    #mask = darray(dim=c(nSample,1), blocks=c(blockSize,1)) # Removed for flexible-darray
-    mask <- clone(newdata, ncol=1, sparse=FALSE) # added for flexible-darray
+    mask = darray(dim=c(nSample,1), blocks=c(blockSize,1))
     anyMiss <- .naCheckKmeans(newdata, trace=trace, mask)
     if(anyMiss > 0) {
         if(anyMiss == nSample)
@@ -582,8 +572,7 @@ hpdapply <- function(newdata, centers, trace=FALSE) {
         mask <- NULL # to avoid extra overhead
 
     #Create an array that maps points to their cluster labels
-    #cluster <- darray(dim=c(nSample, 1), blocks=c(blockSize, 1), data=NA) # Removed for flexible-darray
-    cluster <- clone(newdata, ncol=1, data=NA, sparse=FALSE) # added for flexible-darray
+    cluster <- darray(dim=c(nSample, 1), blocks=c(blockSize, 1), data=NA)
 
     if(trace) {
       cat("Finding labels\n")
