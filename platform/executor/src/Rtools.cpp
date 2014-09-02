@@ -45,9 +45,12 @@ static SEXP RSymbol_x = NULL;
     RSymbol_##symbol = install(#symbol); \
   }
 
-RcppExport SEXP ReadSparse(SEXP fn, SEXP d,
+typedef Rcpp::CharacterVector::iterator char_itr;
+typedef Rcpp::LogicalVector::iterator log_itr;
+
+RcppExport SEXP ReadSparse(SEXP fn_sexp, SEXP d,
                            SEXP i_offset, SEXP j_offset,
-                           SEXP trans) {
+                           SEXP trans_sexp) {
   BEGIN_RCPP
   if (RSymbol_dim == NULL)
     RSymbol_dim = R_DimSymbol;
@@ -56,11 +59,16 @@ RcppExport SEXP ReadSparse(SEXP fn, SEXP d,
   INSTALL_SYMBOL(p);
   INSTALL_SYMBOL(x);
 
-  string filename = Rcpp::as<string>(fn);
+  Rcpp::CharacterVector fn_vec(fn_sexp);
+  char_itr fn_itr = fn_vec.begin();
+  std::string filename = std::string(fn_itr[0]);
   Rcpp::IntegerVector dims(d);
   int i_off = INTEGER(i_offset)[0];
   int j_off = INTEGER(j_offset)[0];
-  bool transpose = Rcpp::as<bool>(trans);
+
+  Rcpp::LogicalVector trans_vec(trans_sexp);
+  log_itr trans_itr = trans_vec.begin();
+  bool transpose = trans_itr[0];
 
   FILE *in = fopen(filename.c_str(), "r");
 
@@ -140,7 +148,7 @@ RcppExport SEXP ReadSparse(SEXP fn, SEXP d,
   END_RCPP
 }
 
-RcppExport SEXP ReadSparseColPartition(SEXP fn, SEXP d,
+RcppExport SEXP ReadSparseColPartition(SEXP fn_sexp, SEXP d,
                                        SEXP col_sexp, SEXP zerobased_sexp) {
   BEGIN_RCPP
   if (RSymbol_dim == NULL)
@@ -150,8 +158,14 @@ RcppExport SEXP ReadSparseColPartition(SEXP fn, SEXP d,
   INSTALL_SYMBOL(p);
   INSTALL_SYMBOL(x);
 
-  bool zerobased = Rcpp::as<bool>(zerobased_sexp);
-  string filename = Rcpp::as<string>(fn);
+  Rcpp::LogicalVector zerobased_vec(zerobased_sexp);
+  log_itr zerobased_itr = zerobased_vec.begin();
+  bool zerobased = zerobased_itr[0];
+
+  Rcpp::CharacterVector fn_vec(fn_sexp);
+  char_itr fn_itr = fn_vec.begin();
+  std::string filename = std::string(fn_itr[0]);
+
   int *dims = INTEGER(d);
   int col = INTEGER(col_sexp)[0] - 1;  // change to 0-based
   size_t start;
@@ -226,7 +240,7 @@ RcppExport SEXP ReadSparseColPartition(SEXP fn, SEXP d,
   END_RCPP
 }
 
-RcppExport SEXP ReadSparse2DPartition(SEXP fn, SEXP d,
+RcppExport SEXP ReadSparse2DPartition(SEXP fn_sexp, SEXP d,
                                       SEXP col_sexp, SEXP row_sexp,
                                       SEXP total_rows_sexp,
                                       SEXP zerobased_sexp,
@@ -239,9 +253,18 @@ RcppExport SEXP ReadSparse2DPartition(SEXP fn, SEXP d,
   INSTALL_SYMBOL(j);
   INSTALL_SYMBOL(x);
 
-  bool hasweights = Rcpp::as<bool>(hasweights_sexp);
-  bool zerobased = Rcpp::as<bool>(zerobased_sexp);
-  string filename = Rcpp::as<string>(fn);
+  Rcpp::LogicalVector hasweights_vec(hasweights_sexp);
+  log_itr hasweights_itr = hasweights_vec.begin();
+  bool hasweights = hasweights_itr[0];
+
+  Rcpp::LogicalVector zerobased_vec(zerobased_sexp);
+  log_itr zerobased_itr = zerobased_vec.begin();
+  bool zerobased = zerobased_itr[0];
+
+  Rcpp::CharacterVector fn_vec(fn_sexp);
+  char_itr fn_itr = fn_vec.begin();
+  std::string filename = std::string(fn_itr[0]);
+
   int *dims = INTEGER(d);
   int col = INTEGER(col_sexp)[0] - 1;  // change to 0-based
   int row = INTEGER(row_sexp)[0] - 1;  // change to 0-based

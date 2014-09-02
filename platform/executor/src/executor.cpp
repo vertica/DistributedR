@@ -97,14 +97,23 @@ set<pair<string, bool> > *updatesptr;
  * @param empty indicates if this variable is empty
  * @return NULL
  */
-RcppExport SEXP NewUpdate(SEXP updates_ptr_sexp, SEXP name, SEXP empty) {
+RcppExport SEXP NewUpdate(SEXP updates_ptr_sexp, SEXP name_sexp, SEXP empty_sexp) {
   BEGIN_RCPP
       if (updatesptr == NULL) {
         LOG_WARN("NewUpdate => updateptr is NULL");
         throw PrestoWarningException("NewUpdate::updatesptr is null");
       }
-      updatesptr->insert(make_pair(Rcpp::as<string>(name),
-                                   Rcpp::as<bool>(empty)));
+
+      Rcpp::CharacterVector name_vec(name_sexp);
+      Rcpp::LogicalVector empty_vec(empty_sexp);
+      typedef Rcpp::CharacterVector::iterator char_itr;
+      typedef Rcpp::LogicalVector::iterator log_itr;
+      char_itr name_itr = name_vec.begin();
+      log_itr empty_itr = empty_vec.begin();
+      
+      std::string name = std::string(name_itr[0]);
+      bool empty = empty_vec[0];
+      updatesptr->insert(make_pair(name, empty));
   return Rcpp::wrap(true);
   END_RCPP
 }
@@ -648,7 +657,8 @@ int main(int argc, char *argv[]) {
       LOG_INFO("Executing Function:");
       LOG_INFO(cmd);
       
-      Rcpp::Evaluator::run(exec_call, R_GlobalEnv);  // Run the given fucntion
+      //Rcpp::Evaluator::run(exec_call, R_GlobalEnv);  // Run the given fucntion with Rcpp < 0.11
+      Rcpp::Rcpp_eval(exec_call, R_GlobalEnv);
       LOG_INFO("Function execution Complete.");
 
       // Send back updates to worker
