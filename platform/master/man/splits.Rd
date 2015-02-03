@@ -6,40 +6,39 @@
   \code{\link{dframe}} or \code{\link{dlist}} to function in \code{\link{foreach}}.
 }
 
-\usage{ splits(x, y, z)}
+\usage{ splits(x, y)}
 
 \arguments{
 
   \item{x}{input distributed array, distributed data frame or distributed list.}
 
-  \item{y}{index of partition to fetch. In a 2-D partition this is the
-  row-index of partition (number of partitions above).}
+  \item{y}{index of partition to fetch.}
   
-  \item{z}{column-index of the partition in a 2-D partitioning scheme
-    (number of partitions to the left). } 
+%  \item{z}{column-index of the partition in a 2-D partitioning scheme
+%    (number of partitions to the left). } 
 }
 
 \details{ \code{\link{splits}} can be used only as an argument to the
     function in a \code{\link{foreach}} loop. 
 
-  If both y and z are missing then the full input
+  If y is missing then the full input
   \code{\link{darray}}, \code{\link{dframe}} or \code{\link{dlist}} is returned.
 
-  2-D partitioning is valid only for \code{\link{darray}} and \code{\link{dframe}}.
-  Since \code{\link{dlist}} is paritioned length wise, only argument \code{y} is used to
-  fetch a \code{\link{dlist}} partition. Argument \code{z} is undefined for \code{\link{dlist}}.
+%  2-D partitioning is valid only for \code{\link{darray}} and \code{\link{dframe}}.
+%  Since \code{\link{dlist}} is paritioned length wise, only argument \code{y} is used to
+%  fetch a \code{\link{dlist}} partition. Argument \code{z} is undefined for \code{\link{dlist}}.
   
   Partitions are numbered from left to right and then top to bottom,
-  i.e., row-major order. Partition numbers start from 1. For row
-  partitioning (each partition has all the columns) or column
-  partitioning (each partition has all the rows) index argument
-  \code{z} should not be used. For 2-D partitioning, both index argument
-  \code{y} and \code{z} may be used. 
+  i.e., row-major order. Partition numbers start from 1. 
+  %For row
+  %partitioning (each partition has all the columns) or column
+  %partitioning (each partition has all the rows) index argument
+  %\code{z} should not be used. For 2-D partitioning, both index argument
+  %\code{y} and \code{z} may be used. 
 
-  For example, the array \code{darray(dim=c(5,5),blocks=c(3,3))}
+  For example, the array \code{A=darray(dim=c(5,5),blocks=c(3,3))}
   has four partitions. To fetch the bottom left partition we can
-  either only use argument \code{y = 3} or 2-D indexing where \code{y=2,
-  z=1}.
+  use \code{splits(A, 3)}.
 }
 
 \value{A reference to the \code{\link{darray}}, \code{\link{dframe}} or \code{\link{dlist}} partition(s).}
@@ -51,7 +50,7 @@
     Learning and Graph Processing with Sparse
       Matrices. \emph{EuroSys'13},
       197--210.
-      \item Homepage: http://www.hpl.hp.com/research/distributedr.htm
+      \item Homepage: http://www.vertica.com/distributedr
 %      \item Mailing list: presto-dev@external.groups.hp.com
     }
 }

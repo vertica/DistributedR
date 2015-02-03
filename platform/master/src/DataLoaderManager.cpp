@@ -33,6 +33,7 @@
 #include <Rcpp.h>
 #include "DataLoaderManager.h"
 
+using namespace boost;
 namespace presto {
 
 // keeping original R SIGINT hanlder
@@ -94,7 +95,7 @@ SEXP DataLoaderManager::getFileIDs() {
 void DataLoaderManager::HandlePortAssignment(WorkerInfo* worker, int loader_port) {
   unique_lock<mutex> lock(loader_mutex);
   if(loader_port == -1) {
-    LOG_ERROR("Could not open port on Worker %s. Check its worker log for more information", worker->hostname().c_str());
+    LOG_ERROR("<DataLoader> Could not open port on Worker %s. Check its worker log for more information", worker->hostname().c_str());
     invalid_ports = true;
   }
   std::string worker_hostname = worker->hostname();
@@ -109,7 +110,7 @@ void DataLoaderManager::HandlePortAssignment(WorkerInfo* worker, int loader_port
  * - Update total number of partitions
  * - Update file_ids generated per worker
  */
-void DataLoaderManager::WorkerLoaderComplete(WorkerInfo* workerinfo, int64_t npartitions) {
+void DataLoaderManager::WorkerLoaderComplete(WorkerInfo* workerinfo, ::int64_t npartitions) {
   unique_lock<mutex> lock(loader_mutex);
   totalPartitions += npartitions;
   
@@ -119,11 +120,13 @@ void DataLoaderManager::WorkerLoaderComplete(WorkerInfo* workerinfo, int64_t npa
     else 
       file_id_map_[i+1]++; 
   }
-    
-  partitions_worker_id_map_[workerinfo->getID()] = npartitions;
-  loader_workers_.push_back(workerinfo->getID());
-  LoaderSemaPost();
+  
+  if (npartitions > 0)  {
+    partitions_worker_id_map_[workerinfo->getID()] = npartitions;
+    loader_workers_.push_back(workerinfo->getID());
+  }
 
+  LoaderSemaPost();
   lock.unlock();
 }
 
@@ -162,7 +165,7 @@ SEXP DataLoaderManager::GetLoaderParameterLocal(SEXP table_metadata_) {
         success = false;
         param_str.str(std::string());
         param_str << "No ports open for loading data from Vertica in Worker " << worker_hostname;
-        LOG_ERROR(param_str.str().c_str());
+        LOG_ERROR("<DataLoader> %s", param_str.str().c_str());
         error_code = "ERR02";
         break;
       } else {
@@ -208,7 +211,7 @@ SEXP DataLoaderManager::GetLoaderParameterUniform() {
       success = false;
       param_str.str(std::string());
       param_str << "No ports open for loading data from Vertica in Worker " << worker_hostname;
-      LOG_ERROR(param_str.str().c_str());
+      LOG_ERROR("<DataLoader> %s", param_str.str().c_str());
       break;
     } else {
       param_str << worker_hostname << ":" << itr->second;
@@ -264,41 +267,24 @@ SEXP DataLoaderManager::FetchLoaderStatus(SEXP UDx_result_) {
   for(map<WorkerInfo*, int>::iterator itr = worker_port_info.begin(); itr != worker_port_info.end(); ++itr) { 
     std::string worker_hostname = resolve_hostname(itr->first->hostname());
     presto_master_->GetScheduler()-> FetchLoaderStatus(itr->first, load_status[worker_hostname]);
-
   }
 
   for(int i = 0; i<worker_port_info.size(); i++) 
     LoaderSemaWait();
 
+  Rcpp::NumericVector totalsize_sexp = UDx_result["NROWS"];
+  vector< ::int64_t> totalsize = vector< ::int64_t>(totalsize_sexp.begin(), totalsize_sexp.end());
+  ::int64_t nrows = 0;
+  for (uint i = 0; i < totalsize.size(); i++)
+      nrows += totalsize[i];
+
+  LOG_INFO("<DataLoader> Transfer of dataset(total %d rows) from Vertica complete. " 
+            "Conversion to distributed objects in progress.", nrows);
+
   return Rcpp::List::create(Rcpp::Named("npartitions") = getNPartitions(),
                             Rcpp::Named("file_ids") = getFileIDs());
 
   END_RCPP;
-}
-
-/**
- *
- */
-SEXP DataLoaderManager::DataLoaderError(SEXP udx_error) {
-  Rcpp::CharacterVector udx_error_sexp(udx_error); 
-  vector<std::string> error_vec = vector<std::string>(udx_error_sexp.begin(), udx_error_sexp.end());
-  LOG_ERROR("%s-  %s", error_vec[1].c_str(), error_vec[0].c_str());
-  std::string error = error_vec[0];
-
-  /*int pos_start = error.find("error code: ");
-  if(pos_start == -1)
-    return Rcpp::List::create(Rcpp::Named("error_code") = Rcpp::wrap(0),
-                            Rcpp::Named("error_msg") = Rcpp::wrap(error));
-  int error_code = atoi(error.substr(pos_start+strlen("error code: "), 1).c_str());*/
-
-  std::string error_msg;
-  int pos_start = error.find("message: ");
-  if(pos_start == -1)
-    error_msg = error;
-  else 
-    std::string error_msg = error.substr(pos_start+strlen("message: "));
-
-  return Rcpp::wrap(error_msg);
 }
 
 
@@ -310,6 +296,10 @@ DataLoaderManager::~DataLoaderManager() {
   loader_workers_.clear();
   file_id_map_.clear();
   worker_port_info.clear();
+
+  // Clearing semaphores
+  for(int i = 0; i<presto_master_->NumClients(); i++)
+    LoaderSemaPost();
 }
 
 }  // namespace presto

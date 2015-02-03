@@ -39,25 +39,26 @@ dobject_name <- function() {
 }
 setClass("dobject", representation(dim="numeric", blocks="numeric",
                                   name="character", dimnames="list", 
-                                  dobject_ptr="Rcpp_DistributedObject", npartitions="numeric", subtype="character", split_distribution="character"), 
+                                  dobject_ptr="Rcpp_DistributedObject", npartitions="numeric", subtype="character", distribution_policy="character"), 
                    prototype(dim=c(0,0), blocks=c(0,0),
-                             name="", dobject_ptr=NULL, npartitions=c(0,0), subtype="STD"),
+                             name="", dobject_ptr=NULL, npartitions=c(0,0), subtype="STD", distribution_policy="roundrobin"),
                    S3methods=TRUE)
 
 #subtype can be one of the three. It is used as metadata when performing checks related to updates
 # (1)  STD    (standard dobject. Nothing special)
-# (2)  UNINIT   (uninitialized object, e.g., empty darray or dframe. Currently unused.)
+# (2)  UNINIT_DECLARED   (uninitialized object, e.g., empty darray)
 # (3)  FLEX_DECLARED  (object with flexible or unequal partition sizes, e.g., dlist or darrays)
 
 setMethod("initialize", "dobject",
-          function(.Object, dim=c(0,0), blocks=c(0,0), name=NA, npartitions = NA, subtype="STD", split_distribution="roundrobin") {
+          function(.Object, dim=c(0,0), blocks=c(0,0), name=NA, npartitions = NA, subtype="STD", distribution_policy="roundrobin") {
             pm <- get_pm_object()
+            if(class(dim)!="numeric" && class(dim)!="integer") stop("dim should be numeric")
+	    if(class(blocks)!="numeric" && class(blocks)!="integer") stop("blocks should be numeric")
             if(length(dim)!=2||length(blocks)!=2) stop("length(dim) and length(block) should be two")
-            dim<-as.numeric(dim)
-            blocks<-as.numeric(ceiling(blocks))
-            if(all(blocks<=.Machine$integer.max) == FALSE) stop(paste("block size should be less than",.Machine$integer.max))
-            if(class(dim)!="numeric"||class(blocks)!="numeric") stop("dim and blocks should be numeric value")
             if(!all(dim==floor(dim)))stop("dim should be integral values")
+            if(!all(blocks==floor(blocks)))stop("blocks should be integral values")
+            if(all(blocks<=.Machine$integer.max) == FALSE) stop(paste("block size should be less than",.Machine$integer.max))
+
             if(dim[1]<=0||dim[2]<=0||blocks[1]<=0||blocks[2]<=0) stop("dim and blocks should be larger than 0")
             if(dim[1]<blocks[1]||dim[2]<blocks[2]) stop("blocks should be smaller than dim")
 	    if(all(is.na(npartitions))) npartitions <-  c(ceiling(dim[1]/blocks[1]), ceiling(dim[2]/blocks[2]))
@@ -65,34 +66,35 @@ setMethod("initialize", "dobject",
             #nblocks <-  ceiling(dim[1]/blocks[1]) * ceiling(dim[2]/blocks[2])
 	    nblocks <-  npartitions[1]*npartitions[2]
             nexecutors <- sum((distributedR_status())$Inst)
-            
-            if(nblocks > 20000){
-                stop("Too many array partitions. Use fewer partitions. E.g., 1x-5x of #cores (",nexecutors,") instead of ",nblocks,".\n")
+
+            if(nblocks > 20000 || nblocks > nexecutors*50){
+                stop("Exceeded max limit of partitions on this cluster. Use fewer partitions. E.g., 1x-5x of #cores (",nexecutors,") instead of ",nblocks,".\n")
             }
             if(nblocks > 5*nexecutors){
-                cat(paste("Warning: Too many array partitions may degrade performance. Use fewer partitions. E.g., 1x-5x of #cores (",nexecutors,") instead of ",nblocks,".\n",sep=""))
+                cat(paste("Warning: Too many partitions may degrade performance. Use fewer partitions. E.g., 1x-5x of #cores (",nexecutors,") instead of ",nblocks,".\n",sep=""))
             }
 
-            split_distribution_policy <- c("roundrobin", "random", "custom")
-            split_distribution <- as.character(tolower(split_distribution))
-            if(!split_distribution %in% split_distribution_policy)
-              stop("Split can be distributed in Workers using following policies: roundrobin, random, custom\nPlease choose on of them")
+            supported_distributions <- c("roundrobin") #c("roundrobin", "random", "custom")
+            distribution_policy <- as.character(tolower(distribution_policy))
+            if(!distribution_policy %in% supported_distributions && distribution_policy!="custom")
+              stop("Invalid distribution policy")
 
             .Object@dimnames = list(NULL,NULL)
             .Object@dim = as.vector(dim)
             .Object@blocks = as.vector(blocks)
 	    .Object@subtype = subtype
 	    .Object@npartitions = npartitions
-            .Object@split_distribution = split_distribution
+            .Object@distribution_policy = distribution_policy
 
             if (is.na(name)) {
               .Object@name = dobject_name()
             } else {
               .Object@name = paste(.get.shm.prefix(), name, sep="")
             }
+
             # dobj_ptr can be overwritten in the inherited class.
-            .Object@dobject_ptr = new (DistributedObject, pm, as.character(class(.Object)), subtype, split_distribution)
-            if(.Object@dobject_ptr$create(.Object@name, dim, blocks) == FALSE){stop("Fail to create dobject")}
+            .Object@dobject_ptr = new (DistributedObject, pm, as.character(class(.Object)), subtype, distribution_policy)
+            if(.Object@dobject_ptr$create(.Object@name, dim, blocks) == FALSE){stop("Failed to create dobject")}
 
             .Object
           })
@@ -123,21 +125,74 @@ dimnames.dobject <- function(x) {
 
   value[[1]] <- as.character(value[[1]])
   value[[2]] <- as.character(value[[2]])
-  if((is.null(value[[1]]) == FALSE && length(value[[1]]) != 0) && x@dim[1] != length(value[[1]])) stop("invalid row size 'dimnames' given")
-  if((is.null(value[[2]]) == FALSE && length(value[[2]]) != 0) && x@dim[2] != length(value[[2]])) stop("invalid column size 'dimnames' given")
+  if((is.null(value[[1]]) == FALSE && length(value[[1]]) != 0) && dim(x)[1] != length(value[[1]])) stop("invalid row size given in 'dimnames'")
+  if((is.null(value[[2]]) == FALSE && length(value[[2]]) != 0) && dim(x)[2] != length(value[[2]])) stop("invalid column size given in 'dimnames'")
   x@dimnames[[1]] <- value[[1]]
   x@dimnames[[2]] <- value[[2]]
   x
 }
 
-# get (x,y) offsets of split with index
+# get (row,col) offsets of split with index
 dobject.getoffsets <- function(fulldim, blockdim, index) {
   blocks <- ceiling(fulldim/blockdim)
-  block.x <- (index-1)%/%blocks[2]+1
-  block.y <- (index-1)%%blocks[2]+1
-  return(c((block.x-1)*blockdim[1], (block.y-1)*blockdim[2]))
+  block.r <- (index-1)%/%blocks[2]+1
+  block.c <- (index-1)%%blocks[2]+1
+  return(c((block.r-1)*blockdim[1], (block.c-1)*blockdim[2]))
 }
-         
+ 
+# get (r,c) offsets of partition with index
+dobject.getPartitionOffsets <- function(obj, index) {
+ ret<-NULL
+ blocks <- npartitions2D(obj)
+ block.r <- (index-1)%/%blocks[2]+1
+ block.c <- (index-1)%%blocks[2]+1
+
+ if(obj@subtype == "FLEX_DECLARED"){
+ #For flex objects let's first figure out the parition sizes 
+  psize<-partitionsize(obj)
+  #For x side offset sum all partitions to the left
+  coffset<-0
+  if(block.c>1){coffset<-sum(psize[1:(block.c-1),2])}
+  #For x side offset sum all partitions to the top
+  roffset<-0
+  i<-0
+  while(i < (block.r-1)){
+    roffset<-roffset+psize[1+(i*blocks[2]),1]
+    i<-i+1
+  }
+  ret<-c(roffset, coffset)
+ }else{
+  fulldim<-dim(obj)
+  blockdim<-obj@blocks
+  ret<-c((block.r-1)*blockdim[1], (block.c-1)*blockdim[2])
+ }
+ return (ret)
+}
+
+# get (r,c) offsets of all partitions
+dobject.getAllOffsets <- function(obj) {
+  blocks <- npartitions2D(obj)
+ ret<-NULL
+ if(obj@subtype == "FLEX_DECLARED"){
+  psize<-partitionsize(obj)
+  coffsets<-0
+  if(blocks[2]>1){coffsets<-c(0,cumsum(psize[1:(blocks[2]-1),2]))}
+  roffsets<-0
+  if(blocks[1]>1) {roffsets<-c(0,cumsum(psize[(1:(blocks[1]-1))*blocks[2],1]))}
+  #return a matrix which has offsets for each partition
+  ret<- (cbind(rep(roffsets,each=length(coffsets)),rep(coffsets,length(roffsets))))
+ } else{
+  fulldim<-dim(obj)
+  blockdim<-obj@blocks
+  coffsets<-0
+  if(blocks[2]>1) { coffsets<-c(0,(1:(blocks[2]-1))*blockdim[2])}
+  roffsets<-0
+  if(blocks[1]>1) { roffsets<-c(0,(1:(blocks[1]-1))*blockdim[1])}
+  ret<- (cbind(rep(roffsets,each=length(coffsets)),rep(coffsets,length(roffsets))))	
+ }
+  return (ret)
+}
+
 # get dims of split with index
 dobject.getdims <- function(fulldim, blockdim, index) {
   res <- c(1,1)
@@ -193,9 +248,22 @@ setMethod("partitionsize", signature("dobject","missing"),
    }else{
      #For non-flex objects we will reuse information from dimensions
      temp<-NULL
-     for(i in 1:nparts){
-     	 temp<-rbind(temp, dobject.getdims(x@dim,x@blocks,i))
+     fulldim<-dim(x)
+     blockdim<-x@blocks
+     nblocks<-npartitions2D(x)
+
+     lastrsize<-blockdim[1]
+     if (fulldim[1]%%blockdim[1] != 0) {
+      lastrsize <- fulldim[1]%%blockdim[1]
      }
+    
+     lastcsize<-blockdim[2]
+     if (fulldim[2]%%blockdim[2] != 0) {
+      lastcsize <- fulldim[2]%%blockdim[2]
+     }
+     rsizes<-c(rep(blockdim[1],(nblocks[1]-1)),lastrsize)
+     csizes<-c(rep(blockdim[2],(nblocks[2]-1)),lastcsize)
+     temp<- (cbind(rep(rsizes,each=length(csizes)),rep(csizes,length(rsizes))))
      return (temp)
    }
 })
@@ -236,25 +304,59 @@ setGeneric("clone", function(input,nrow=NA,ncol=NA,data=0,sparse=NA) standardGen
 #Primarily used with flex objects where we want to keep the same flex dimension as that of the object
 setMethod("clone", signature(input="dobject"),
   function(input, nrow=NA, ncol=NA, data=0, sparse=NA) {
+  if(is.invalid(input)) stop("Operation not supported on empty arrays and data-frames.")
   if(!is.na(nrow) && !is.na(ncol)) stop("Only one of nrow and ncol should be specified")
+  data_class<-class(data)
   if(!is.na(nrow)){
-    if(input@npartitions[1]!=1) stop("Input object has varible number of rows in a partition. All rows will be cloned. Did you want to specify 'ncol' instead?")
     if(!is.numeric(nrow)) stop("nrow should be numeric")
     nrow<-as.integer(nrow)
-    if(nrow<0) stop("nrow should be positive")
+    if(nrow<=0) stop("nrow should be positive")
   }
   if(!is.na(ncol)){
-   if(input@npartitions[2]!=1) stop("Input object has varible number of columns in a partition. All columns will be cloned. Did you want to specify 'nrow' instead?")
    if(!is.numeric(ncol)) stop("ncol should be numeric")
    ncol<-as.integer(ncol)
-   if(ncol<0) stop("ncol should be positive")
+   if(ncol<=0) stop("ncol should be positive")
   }
-
-  if(is.na(sparse)) sparse <- input@sparse  
-  if(sparse && (data!=0)) stop("Initializing a sparse matrix with all non-zero elements makes it dense. Set 'data=0'")
+  do_dest <- NULL
+  pindex <- NULL
+  nvalue<-dimnames(input)
+ 
   if(class(input)=="darray"){
-    do_dest = darray(npartitions=input@npartitions, sparse = sparse)
-    foreach (i, 1:npartitions(input), function(sOrg  = splits(input, i),
+    if(is.na(sparse)) sparse <- input@sparse  
+    if(sparse && (data!=0)) stop("Initializing a sparse matrix with all non-zero elements makes it dense. Set 'data=0'")
+    if(data_class != "numeric" && data_class != "integer" && data_class != "logical") stop("Argument 'data' should be a number or logical value.")
+    if(length(data)>1) stop("Argument 'data' should be a number or logical value.")
+    if(is.na(nrow) && is.na(ncol)){
+       #Keep all the array, but change values to data
+       if(input@subtype=="STD" || input@subtype=="UNINIT_DECLARED"){
+        do_dest = darray(dim=input@dim, blocks=input@blocks, sparse = sparse)
+	}else{
+        do_dest = darray(npartitions=input@npartitions, sparse = sparse)
+	}
+	pindex<-1:npartitions(input)
+        #Set dimension names only if all rows and cols of input is copied
+	if(!is.null(nvalue)){do_dest@dimnames<-nvalue}
+    }else{ 
+    	   if(is.na(nrow)){
+	   	#Retain leftmost row partitions (i.e. left vertical stripe) and change the number of cols in these partitions.
+		if(input@subtype=="STD" || input@subtype=="UNINIT_DECLARED"){
+		        do_dest = darray(dim=c(input@dim[1],ncol), blocks=c(input@blocks[1],ncol), sparse = sparse)
+		}else{
+			do_dest = darray(npartitions=c(input@npartitions[1],1), sparse = sparse)
+		}
+		pindex<-seq(1,npartitions(input),input@npartitions[2])
+	    }else{
+		#Retain top column partitions (i.e. top horizontal stripe) and change the number of rows in these partitions.
+		if(input@subtype=="STD" || input@subtype=="UNINIT_DECLARED"){
+		        do_dest = darray(dim=c(nrow, input@dim[2]), blocks=c(nrow, input@blocks[2]), sparse = sparse)
+		}else{
+			do_dest = darray(npartitions=c(1,input@npartitions[2]), sparse = sparse) 
+		}
+		pindex<-1:input@npartitions[2]	
+    	    }
+    }
+
+    foreach (i, 1:npartitions(do_dest), function(sOrg  = splits(input, pindex[i]),
                                              sDest = splits(do_dest, i), nr=nrow, nc=ncol, isSparse=sparse, v =data){
       if(is.na(nr)) nr <- nrow(sOrg)
       if(is.na(nc)) nc <- ncol(sOrg)
@@ -269,23 +371,91 @@ setMethod("clone", signature(input="dobject"),
       }
       update(sDest)
     }, progress=FALSE)
-    do_dest
-   }else{
-    stop("clone only supports darrays")
+
+   }else if(class(input) =="dframe"){
+    if(data_class != "numeric" && data_class != "integer" && data_class != "logical" && data_class !="character") stop("Argument 'data' should be a number, character, or logical value.")
+    if(length(data)>1) stop("Argument 'data' should be a number, character, or logical value.")
+    if(!is.na(sparse)) stop("Argument 'sparse' cannot be used with dframes.")
+    if(is.na(nrow) && is.na(ncol)){
+       #Keep all the dframe, but change values to data
+       if(input@subtype=="STD" || input@subtype=="UNINIT_DECLARED"){
+        do_dest = dframe(dim=input@dim, blocks=input@blocks)
+       }else{
+        do_dest = dframe(npartitions=input@npartitions)
+	}
+	pindex<- 1: npartitions(input)
+    }else{
+        if(is.na(nrow)){
+		#Retain leftmost row partitions (i.e. left vertical stripe) and change the number of cols in these partitions.
+		if(input@subtype=="STD" || input@subtype=="UNINIT_DECLARED"){
+			do_dest = dframe(dim=c(input@dim[1],ncol), blocks=c(input@blocks[1],ncol))
+        	}else{
+			do_dest = dframe(npartitions=c(input@npartitions[1],1))
+		}
+		pindex<-seq(1,npartitions(input),input@npartitions[2])
+	}else{
+		#Retain top column partitions (i.e. top horizontal stripe) and change the number of rows in these partitions.
+		if(input@subtype=="STD" || input@subtype=="UNINIT_DECLARED"){
+			do_dest = dframe(dim=c(nrow, input@dim[2]), blocks=c(nrow, input@blocks[2]))
+        	}else{
+			do_dest = dframe(npartitions=c(1,input@npartitions[2]))
+		}
+		pindex<-1:input@npartitions[2]	
+    	}
     }
+
+    foreach (i, 1:npartitions(do_dest), function(sOrg  = splits(input, pindex[i]),
+                                             sDest = splits(do_dest, i), nr=nrow, nc=ncol, v =data){
+      if(is.na(nr)) nr <- nrow(sOrg)
+      if(is.na(nc)) nc <- ncol(sOrg)
+      X1<-matrix(v, nrow=nr, ncol=nc)
+      sDest <- data.frame(X1)
+      update(sDest)
+    }, progress=FALSE)
+    #Set dimension names only if all rows and cols of input is copied
+    if(!is.null(nvalue) && is.na(nrow) && is.na(ncol)){dimnames(do_dest)<-nvalue }
+   }else{
+    stop("clone only supports darrays and dframes")
+   }
+  do_dest
   }
 )
 
-#performs deep-copy of input darray and return a darray
+#performs deep-copy of input object and return a dobject
 setMethod("clone", signature(input="dobject", nrow="missing", ncol="missing",data="missing",sparse="missing"),
   function(input) {
-    if(class(input)!="darray"){stop("clone only supports darrays")}
-    do_dest = darray(npartitions=input@npartitions, sparse = input@sparse)
+    if(is.invalid(input)) stop("Operation not supported on empty arrays and data-frames.")
+    do_dest<-NULL
+    if(class(input)=="darray"){ 
+       if(input@subtype=="STD" || input@subtype=="UNINIT_DECLARED"){
+        do_dest = darray(dim=input@dim, blocks=input@blocks, sparse = input@sparse)
+	}else{
+        do_dest = darray(npartitions=input@npartitions, sparse = input@sparse)
+	}
+    } else if(class(input)=="dframe"){ 
+       if(input@subtype=="STD" || input@subtype=="UNINIT_DECLARED"){
+        do_dest = dframe(dim=input@dim, blocks=input@blocks)
+       }else{
+        do_dest = dframe(npartitions=input@npartitions)
+	}
+    } else {stop("clone only supports darrays and dframes")}
+
     foreach (i, 1:numSplits(input), function(sOrg  = splits(input, i),
                                              sDest = splits(do_dest, i)){
       sDest <- sOrg
       update(sDest)
     }, progress=FALSE)
+    nvalue<-dimnames(input)
+    if(!is.null(nvalue)){do_dest@dimnames<-nvalue}
     do_dest
   }
 )
+
+#Check if the distributed object is invalid. An object is invalid if the user has not yet written contents to the 
+#object which was declared empty (via argument 'empty) or a flexible dobject (via npartitions)
+
+setGeneric("is.invalid", function(x) standardGeneric("is.invalid"))
+setMethod("is.invalid", signature("dobject"),
+   function(x) {
+        x@dobject_ptr$is_object_invalid()
+   })

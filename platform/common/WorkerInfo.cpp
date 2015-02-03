@@ -24,6 +24,7 @@
 #include "WorkerInfo.h"
 #include "PrestoException.h"
 
+using namespace boost;
 namespace presto {
 
 /** This function sends a message (or task) in a queue to a worker. This is called from a master side

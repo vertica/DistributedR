@@ -18,7 +18,7 @@
 
 #include "PrestoMaster.h"
 #include "ResourceManager.h"
-
+using namespace boost;
 using namespace google::protobuf;
 namespace presto {
 ResourceManager::ResourceManager
@@ -80,7 +80,9 @@ void ResourceManager::Run() {
         // Check the time of no contact to detect if it is dead
         if (CheckIfDead(wit->second)) {
           ostringstream msg;
-          msg << "A worker (" << wit->first << ") is down\n";
+          msg << "Cannot connect to a worker " << wit->first 
+            << endl << "The worker might be down." << endl << 
+            "Otherwise, check the firewall setup in the worker if the port number range in the configuration file is allowed for incoming traffic.";
           unordered_map<std::string, Worker*>::iterator wwit;
           for (wwit = workers.begin(); wwit != workers.end(); ++wwit) {
             LOG_ERROR("ResourceManager shutting down - %s age is %d\n", wwit->second->server.name().c_str(), wwit->second->last_contacted.age());

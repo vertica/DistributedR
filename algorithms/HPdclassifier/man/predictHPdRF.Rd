@@ -17,14 +17,16 @@ predictHPdRF(object, newdata, trace=FALSE)
 }
 
 \value{
-  It returns a darray or a dframe of predicted classes. The type
-  of returned value will be darray unless there is any categorical data.
+  It returns a darray or a dframe of predicted classes. When the newdata is of type darray,
+  the type of returned value will be also darray unless the output is categorical data.
+  When the output is a dframe when the newdata is of type dframe.
 }
 \references{
   Breiman, L. (2001), \emph{Random Forests}, Machine Learning 45(1),
   5-32.
 }
-\author{ Arash Fard <afard@vertica.com>
+\author{
+    HP Vertica Analytics Team
 }
 
 \seealso{\code{\link{hpdrandomForest}}}
@@ -39,12 +41,14 @@ nparts <- sum(drs$Ins)
 
 nSamples <- 100
 nAttributes <- 5
-nSpllits <- 1
+nPartitions <- 2
 
-dax <- darray(c(nSamples,nAttributes), c(round(nSamples/nSpllits),nAttributes))
-day <- darray(c(nSamples,1), c(round(nSamples/nSpllits),1))
+dax <- darray(c(nSamples,nAttributes), 
+              c(ceiling(nSamples/nPartitions),nAttributes))
+day <- darray(c(nSamples,1), c(ceiling(nSamples/nPartitions),1))
 
-foreach(i, 1:npartitions(dax), function(x=splits(dax,i),y=splits(day,i),id=i){
+foreach(i,1:npartitions(dax),function(x=splits(dax,i),
+                                      y=splits(day,i),id=i){
     x <- matrix(runif(nrow(x)*ncol(x)), nrow(x),ncol(x))
     y <- matrix(runif(nrow(y)), nrow(y), 1)
     update(x)
@@ -55,27 +59,27 @@ foreach(i, 1:npartitions(dax), function(x=splits(dax,i),y=splits(day,i),id=i){
 dp <- predictHPdRF(myrf1, dax)
 
 # example for dframe
-nSamples <- 100
-nAttributes <- 5
-nSpllits <- 4
+nSamples <- nrow(iris)
+nAttributes <- ncol(iris)
+nPartitions <- 4
 
-dfx <- dframe(c(nSamples,nAttributes), c(round(nSamples/nSpllits),nAttributes))
-dfy <- dframe(c(nSamples,1), c(round(nSamples/nSpllits),1))
-blockSize <- dfx@blocks[1]
+df <- dframe(c(nSamples,nAttributes), 
+             c(ceiling(nSamples/nPartitions),nAttributes))
+end = cumsum(partitionsize(df)[,1])
+start = c(0,end[-length(end)])
 
-foreach(i, 1:npartitions(dfx), function(xi=splits(dfx,i),yi=splits(dfy,i),
-  blockSize=blockSize,nAttributes=nAttributes){
-     xi <- data.frame( matrix(runif(blockSize*nAttributes,1,10), 
-           nrow=blockSize,ncol=nAttributes) )
-     yi <- data.frame( gl(2, blockSize/2) )
+foreach(i, 1:npartitions(df), function(xi=splits(df,i),
+  start = start[i]+1, end = end[i], iris=iris){
+     xi <- iris[start:end,]
      update(xi)
-     update(yi)
 })
+# the following line will be redundant in the next release
+colnames(df) <- colnames(iris)
 
-(myrf2 <- hpdrandomForest(dfx, dfy, nExecutor=nparts))
-fp2 <- predictHPdRF(myrf2, dfx)
+(myrf2 <- hpdrandomForest(Species ~ ., df, nExecutor=nPartitions))
+fp2 <- predictHPdRF(myrf2, df)
     
  }
 }
-\keyword{classif}% at least one, from doc/KEYWORDS
+\keyword{classification}
 \keyword{regression}

@@ -23,6 +23,7 @@
 
 #include "MasterClient.h"
 
+using namespace boost;
 namespace presto {
 
 /** Push message into master. This is generally called when a worker needs to send messaes to a master

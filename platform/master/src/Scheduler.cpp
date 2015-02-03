@@ -50,7 +50,7 @@ static Scheduler *sch = NULL;
  * @return NULL
  */
 static void dispatch_task(WorkerInfo *wi, TaskArg *t,
-                          uint64_t id, uint64_t uid) {
+                          ::uint64_t id, ::uint64_t uid) {
 
   NewExecuteRRequest req;
   req.set_id(id);
@@ -89,7 +89,7 @@ static void dispatch_task(WorkerInfo *wi, TaskArg *t,
  */
 static void dispatch_fetch(WorkerInfo *to, const ServerInfo &from,
                            const string &name, size_t size,
-                           uint64_t id, uint64_t uid) {
+                           ::uint64_t id, ::uint64_t uid) {
   FetchRequest req;
   req.set_name(name);
   req.mutable_location()->CopyFrom(from);
@@ -112,7 +112,7 @@ static void dispatch_fetch(WorkerInfo *to, const ServerInfo &from,
  */
 static void dispatch_io(WorkerInfo *wi, const string &array_name,
                         const string &store_name, IORequest::Type type,
-                        uint64_t id, uint64_t uid) {
+                        ::uint64_t id, ::uint64_t uid) {
   IORequest req;
   req.set_array_name(array_name);
   req.set_store_name(store_name);
@@ -134,8 +134,8 @@ static void dispatch_io(WorkerInfo *wi, const string &array_name,
 static void dispatch_createcomposite(WorkerInfo *wi,
                                      const string &name,
                                      const Arg &arg,
-                                     uint64_t id,
-                                     uint64_t uid) {
+                                     ::uint64_t id,
+                                     ::uint64_t uid) {
   CreateCompositeRequest req;
   req.set_name(name);
   for (int j = 0; j < arg.arrays_size(); j++) {
@@ -155,9 +155,10 @@ static void dispatch_createcomposite(WorkerInfo *wi,
  * @return NULL
  */
 void Scheduler::InitiateDataLoader(WorkerInfo* wi,
-                                uint64_t split_size) {
+                                   ::uint64_t split_size,
+                                   string split_prefix) {
 
-  int64_t taskid = GetNewTaskID();
+  ::int64_t taskid = GetNewTaskID();
   unique_lock<recursive_mutex> lock(metadata_mutex);
   dataloadereq[taskid]=wi;
   lock.unlock();
@@ -165,6 +166,7 @@ void Scheduler::InitiateDataLoader(WorkerInfo* wi,
   VerticaDLRequest req;
   req.set_type(VerticaDLRequest::START);
   req.set_split_size(split_size);
+  req.set_split_name(split_prefix);
   req.set_id(000);
   req.set_uid(taskid);     
   wi->VerticaLoad(req);     
@@ -180,7 +182,7 @@ void Scheduler::InitiateDataLoader(WorkerInfo* wi,
 void Scheduler::FetchLoaderStatus(WorkerInfo* wi,
                          std::vector<std::string> vnodenames) {
 
-   int64_t taskid = GetNewTaskID();
+   ::int64_t taskid = GetNewTaskID();
    unique_lock<recursive_mutex> lock(metadata_mutex);
    fetchresultreq[taskid] = wi;
    lock.unlock();
@@ -204,7 +206,7 @@ void Scheduler::FetchLoaderStatus(WorkerInfo* wi,
  */
 void Scheduler::StopDataLoader(WorkerInfo* wi) {
 
-  int64_t taskid = GetNewTaskID();
+  ::int64_t taskid = GetNewTaskID();
   unique_lock<recursive_mutex> lock(metadata_mutex);
   dataloadereq[taskid]=wi;
   lock.unlock();
@@ -218,7 +220,7 @@ void Scheduler::StopDataLoader(WorkerInfo* wi) {
   LOG_INFO("VerticaDL::STOP TaskID %12d - Sent to Worker %s", taskid, wi->hostname().c_str());
 }
 
-bool Scheduler::IsExecTask(uint64_t taskid) {
+bool Scheduler::IsExecTask(::uint64_t taskid) {
   bool isExec = false;
   unique_lock<recursive_mutex> lock(metadata_mutex);
   isExec = (exectasks.find(taskid) != exectasks.end());
@@ -231,11 +233,12 @@ bool Scheduler::IsExecTask(uint64_t taskid) {
  */
 
 std::pair<bool, bool> Scheduler::UpdateTaskResult(TaskDoneRequest* req, bool validated) {
-  unique_lock<mutex> lock(single_threading_mutex);
+  unique_lock<mutex> single_threading_lock(single_threading_mutex);
 
-  uint64_t taskid = req->uid();
+  ::uint64_t taskid = req->uid();
+  void *task;
+
   foreach_status_->num_tasks--;
-
   if (req->has_task_result() && req->task_result() != TASK_SUCCEED) {
     foreach_status_->is_error = true;
     TaskErrorMsg(req->task_message().c_str());
@@ -245,10 +248,18 @@ std::pair<bool, bool> Scheduler::UpdateTaskResult(TaskDoneRequest* req, bool val
   taskdones_[taskid] = req; 
   std::pair<bool, bool> result = std::make_pair((foreach_status_->num_tasks==0), foreach_status_->is_error);
 
+  unique_lock<recursive_mutex> lock(metadata_mutex);
   ExecTask *exectask = exectasks[taskid];
-  exectask->args->sema->post();
+  task = reinterpret_cast<void*>(exectask);
   lock.unlock();
+
+  reinterpret_cast<ExecTask*>(task)->args->sema->post();
   return result;
+}
+
+/*Set the error flag associated with this foreach status. (TODO) Not thread safe*/
+void Scheduler::SetForeachError(bool value){
+  foreach_status_->is_error = value;
 }
 
 /** Removes invalid splits created on worker in case of errored foreach.
@@ -268,14 +279,15 @@ void Scheduler::PurgeUpdates(TaskDoneRequest* req) {
  * It updates split information after a task (if needed)
  * @param req information about a task done
  */
-void Scheduler::Done(TaskDoneRequest* req) {
+bool Scheduler::Done(TaskDoneRequest* req) {
+  bool success = true;
   unique_lock<mutex> single_threading_lock(single_threading_mutex);
 
   if (sch == NULL)
     sch = this;
 
   total_scheduler_timer_.start();
-  uint64_t taskid = req->uid();  // an ID of this task
+  ::uint64_t taskid = req->uid();  // an ID of this task
   void *task;
   TaskType type;
   Worker *worker = NULL;
@@ -310,6 +322,12 @@ void Scheduler::Done(TaskDoneRequest* req) {
       throw PrestoWarningException
         ("Fetch task is NULL. Restart session using distributedR_shutdown()");
     }
+    //(TODO) Need to cleanly handle cases when fetch task did not succeed. Currently just prints error message.
+    if (req->has_task_result() && req->task_result() != TASK_SUCCEED) {
+      LOG_ERROR("FETCH TaskID %16d - Encountered TASKERROR from Worker.", static_cast<int>(taskid));
+      success = false;
+    }
+
     // update a split's worker information by adding newly received hostname
     fetchtask->split->workers.insert(fetchtask->to);
     // a worker that receives a split, and update the worker's information
@@ -374,7 +392,7 @@ void Scheduler::Done(TaskDoneRequest* req) {
 
     // delete from source if this was a move
     if (movetasks.find(taskid) != movetasks.end()) {
-      uint64_t clear_id = Delete(split, loadtask->store, true);
+      ::uint64_t clear_id = Delete(split, loadtask->store, true);
 
       ClearTask *ct = new ClearTask;
       ct->load = loadtask;
@@ -407,7 +425,7 @@ void Scheduler::Done(TaskDoneRequest* req) {
 
     // delete from source if this was a move
     if (movetasks.find(taskid) != movetasks.end()) {
-      uint64_t clear_id = Delete(split, store->worker, true);
+      ::uint64_t clear_id = Delete(split, store->worker, true);
 
       ClearTask *ct = new ClearTask;
       ct->save = savetask;
@@ -534,6 +552,7 @@ void Scheduler::Done(TaskDoneRequest* req) {
   }
 
   total_scheduler_time_ += total_scheduler_timer_.stop() / 1e6;
+  return success;
 }
 
 void Scheduler::AddTask(TaskArg *t) {
@@ -571,12 +590,12 @@ void Scheduler::GarbageCollect(Worker *worker, int degree) {
   lock.unlock();
 }
 
-uint64_t Scheduler::GetNewTaskID() {
+::uint64_t Scheduler::GetNewTaskID() {
   unique_lock<mutex> lock(current_task_id_mutex_);
   current_task_id_++;
   if (current_task_id_ == 0)
     current_task_id_ = 1;
-  uint64_t ret = current_task_id_;
+  ::uint64_t ret = current_task_id_;
   lock.unlock();
   return ret;
 }
@@ -663,12 +682,12 @@ void Scheduler::DeleteSplit(const string& split_name) {
  * @param taskarg Arguements that are needed to perform this task
  * @return an ID of this task
  */
-uint64_t Scheduler::Exec(Worker *worker, TaskArg *taskarg) {
+::uint64_t Scheduler::Exec(Worker *worker, TaskArg *taskarg) {
   if (worker->workerinfo->IsRunning() == false) {
     forward_exception_to_r(PrestoWarningException("a scheduled node is not running"));
 //    throw PrestoWarningException("a scheduled node is not running");
   }
-  uint64_t id = GetNewTaskID();
+  ::uint64_t id = GetNewTaskID();
   LOG_DEBUG("EXECUTE TaskID %14d - Initializing", static_cast<int>(id));
 
   ExecTask *exectask = new ExecTask;
@@ -692,10 +711,10 @@ uint64_t Scheduler::Exec(Worker *worker, TaskArg *taskarg) {
   return id;
 }
 
-uint64_t Scheduler::CreateComposite(Worker *worker,
+::uint64_t Scheduler::CreateComposite(Worker *worker,
                                     const std::string &name,
                                     const Arg &arg) {
-  uint64_t id = GetNewTaskID();
+  ::uint64_t id = GetNewTaskID();
   LOG_DEBUG("CREATECOMPOSITE Task %6d Initializing", static_cast<int>(id));
 
   CCTask *cctask = new CCTask;
@@ -715,10 +734,10 @@ uint64_t Scheduler::CreateComposite(Worker *worker,
   return id;
 }
 
-uint64_t Scheduler::Fetch(Worker *to, Worker *from, Split *split) {
+::uint64_t Scheduler::Fetch(Worker *to, Worker *from, Split *split) {
   WorkerInfo *w = to->workerinfo;
   ServerInfo s = from->server;
-  uint64_t id = GetNewTaskID();
+  ::uint64_t id = GetNewTaskID();
 
   LOG_DEBUG("FETCH TaskID %16d - Will Fetch Split %s from Worker %s to Worker %s",
       static_cast<int>(id), split->name.c_str(),
@@ -741,8 +760,8 @@ uint64_t Scheduler::Fetch(Worker *to, Worker *from, Split *split) {
   return id;
 }
 
-uint64_t Scheduler::Save(Split *split, ArrayStore *arraystore) {
-  uint64_t id = GetNewTaskID();
+::uint64_t Scheduler::Save(Split *split, ArrayStore *arraystore) {
+  ::uint64_t id = GetNewTaskID();
 
   LOG_DEBUG("save task %d: %s to %s on %s\n",
       static_cast<int>(id), split->name.c_str(),
@@ -768,8 +787,8 @@ uint64_t Scheduler::Save(Split *split, ArrayStore *arraystore) {
   return id;
 }
 
-uint64_t Scheduler::Load(Split *split, ArrayStore *arraystore) {
-  uint64_t id = GetNewTaskID();
+::uint64_t Scheduler::Load(Split *split, ArrayStore *arraystore) {
+  ::uint64_t id = GetNewTaskID();
 
   LOG("load task %d: %s from %s on %s\n",
       static_cast<int>(id), split->name.c_str(),
@@ -795,13 +814,13 @@ uint64_t Scheduler::Load(Split *split, ArrayStore *arraystore) {
   return id;
 }
 
-uint64_t Scheduler::MoveToStore(Split *split, ArrayStore *arraystore) {
+::uint64_t Scheduler::MoveToStore(Split *split, ArrayStore *arraystore) {
   unique_lock<recursive_mutex> lock(metadata_mutex);
   split->workers.erase(arraystore->worker);
   arraystore->worker->splits_dram.erase(split);
   arraystore->worker->used -= split->size;
 
-  uint64_t id = Save(split, arraystore);
+  ::uint64_t id = Save(split, arraystore);
 
   LOG("move task %d: %s to %s on %s\n",
       static_cast<int>(id), split->name.c_str(),
@@ -814,13 +833,13 @@ uint64_t Scheduler::MoveToStore(Split *split, ArrayStore *arraystore) {
   return id;
 }
 
-uint64_t Scheduler::MoveToDRAM(Split *split, ArrayStore *arraystore) {
+::uint64_t Scheduler::MoveToDRAM(Split *split, ArrayStore *arraystore) {
   unique_lock<recursive_mutex> lock(metadata_mutex);
   split->arraystores.erase(arraystore);
   arraystore->splits.erase(split);
   arraystore->used -= split->size;
 
-  uint64_t id = Load(split, arraystore);
+  ::uint64_t id = Load(split, arraystore);
 
   LOG("move task %d: %s from %s on %s\n",
       static_cast<int>(id), split->name.c_str(),
@@ -833,9 +852,9 @@ uint64_t Scheduler::MoveToDRAM(Split *split, ArrayStore *arraystore) {
   return id;
 }
 
-uint64_t Scheduler::Delete(Split *split, ArrayStore *store,
+::uint64_t Scheduler::Delete(Split *split, ArrayStore *store,
                            bool metadata_already_erased) {
-  uint64_t id = GetNewTaskID();
+  ::uint64_t id = GetNewTaskID();
   LOG("delete from store task %zu: %s from %s on %s\n",
       id,
       split->name.c_str(), store->name.c_str(),
@@ -859,9 +878,9 @@ uint64_t Scheduler::Delete(Split *split, ArrayStore *store,
   return id;
 }
 
-uint64_t Scheduler::Delete(Split *split, Worker *worker,
+::uint64_t Scheduler::Delete(Split *split, Worker *worker,
                            bool metadata_already_erased) {
-  uint64_t id = GetNewTaskID();
+  ::uint64_t id = GetNewTaskID();
   LOG("delete from mem task %zu: %s on %s\n",
       id,
       split->name.c_str(),
@@ -902,11 +921,11 @@ bool Scheduler::IsSplitOnWorker(Split *split, Worker *worker) {
   * @param to check if the input split is fetched to this worker
   * @return  if a split is being fetched, the task id is returned. Otherwise, 0 is returned.
   */
-uint64_t Scheduler::IsSplitBeingFetched(Split *split, Worker *worker) {
+::uint64_t Scheduler::IsSplitBeingFetched(Split *split, Worker *worker) {
   // TODO(erik): speed this up with special map
-  uint64_t ret = 0;
+  ::uint64_t ret = 0;
   unique_lock<recursive_mutex> lock(metadata_mutex);
-  for (unordered_map<uint64_t, FetchTask*>::iterator i = fetchtasks.begin();
+  for (unordered_map< ::uint64_t, FetchTask*>::iterator i = fetchtasks.begin();
        i != fetchtasks.end(); i++) {
     if (i->second->split == split && i->second->to == worker) {
       ret = i->second->id;
@@ -917,11 +936,11 @@ uint64_t Scheduler::IsSplitBeingFetched(Split *split, Worker *worker) {
   return ret;
 }
 
-uint64_t Scheduler::IsSplitBeingLoaded(Split *split, Worker *worker) {
+::uint64_t Scheduler::IsSplitBeingLoaded(Split *split, Worker *worker) {
   // TODO(erik): speed this up with special map
-  uint64_t ret = 0;
+  ::uint64_t ret = 0;
   unique_lock<recursive_mutex> lock(metadata_mutex);
-  for (unordered_map<uint64_t, LoadTask*>::iterator i = loadtasks.begin();
+  for (unordered_map< ::uint64_t, LoadTask*>::iterator i = loadtasks.begin();
        i != loadtasks.end(); i++) {
     if (i->second->split == split && i->second->store->worker == worker) {
       ret = i->second->id;
@@ -932,9 +951,9 @@ uint64_t Scheduler::IsSplitBeingLoaded(Split *split, Worker *worker) {
   return ret;
 }
 
-uint64_t Scheduler::IsSplitBeingAcquired(Split *split, Worker *worker) {
+::uint64_t Scheduler::IsSplitBeingAcquired(Split *split, Worker *worker) {
   // TODO(erik): this arbitrarily favors fetches over loads
-  uint64_t id = IsSplitBeingFetched(split, worker);
+  ::uint64_t id = IsSplitBeingFetched(split, worker);
   if (id != 0) {
     return id;
   }
@@ -1065,7 +1084,7 @@ string Scheduler::CompositeName(vector<string>& array_names) {
   string split_name;
   int32_t split_id;
   ParseSplitName(array_names[0], &split_name, &split_id);
-  uint64_t comp_hash = 0;
+  ::uint64_t comp_hash = 0;
   for (int i = 0; i < array_names.size(); ++i) {
     int32_t version;
     ParseVersionNumber(array_names[i], &version);
@@ -1166,7 +1185,7 @@ Worker* Scheduler::GetMostMemWorker() {
     }
   }
   if (worker == NULL) {
-    throw PrestoWarningException("GetMostMemWorker: no available worker");
+    throw PrestoWarningException("Could not find a worker with enough memory to run the job. Add more nodes or increase memory capacity on worker nodes.");
   }
   return worker;
 }
@@ -1187,7 +1206,7 @@ Worker* Scheduler::GetRndAvailableWorker() {
 }
 
 Scheduler::~Scheduler() {
-  unordered_map<uint64_t, ExecTask*>::iterator exec_it = exectasks.begin();
+  unordered_map< ::uint64_t, ExecTask*>::iterator exec_it = exectasks.begin();
   for(; exec_it != exectasks.end(); ++exec_it) {
     try {
       exec_it->second->args->sema->post();
@@ -1197,22 +1216,22 @@ Scheduler::~Scheduler() {
     delete exec_it->second;
   }
 
-  unordered_map<uint64_t, FetchTask*>::iterator fetch_it = fetchtasks.begin();
+  unordered_map< ::uint64_t, FetchTask*>::iterator fetch_it = fetchtasks.begin();
   for(; fetch_it != fetchtasks.end(); ++fetch_it) {
     delete fetch_it->second;
   }
   
-  unordered_map<uint64_t, SaveTask*>::iterator save_it = savetasks.begin();
+  unordered_map< ::uint64_t, SaveTask*>::iterator save_it = savetasks.begin();
   for(; save_it != savetasks.end(); ++save_it) {
     delete save_it->second;
   }
 
-  unordered_map<uint64_t, LoadTask*>::iterator load_it = loadtasks.begin();
+  unordered_map< ::uint64_t, LoadTask*>::iterator load_it = loadtasks.begin();
   for(; load_it != loadtasks.end(); ++load_it) {
     delete load_it->second;
   }
 
-  unordered_map<uint64_t, CCTask*>::iterator cc_it = cctasks.begin();
+  unordered_map< ::uint64_t, CCTask*>::iterator cc_it = cctasks.begin();
   for(; cc_it != cctasks.end(); ++cc_it) {
     delete cc_it->second;
   }

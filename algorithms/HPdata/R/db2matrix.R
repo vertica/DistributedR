@@ -17,13 +17,16 @@
 ## A simple function for reading a matrix from a table in a database
 ## tableName: name of the table
 ## features: a list containing the name of columns corresponding to attributes of the matrix (features of samples)
-## conf: ODBC configuration
-db2matrix <- function(tableName, features = list(...), conf) {
+## dsn: ODBC configuration
+db2matrix <- function(tableName, dsn, features = list(...)) {
 
     if(!is.character(tableName))
         stop("The name of the table should be specified")
-    if(is.null(conf))
+    if(is.null(dsn))
         stop("The ODBC configuration should be specified")
+
+    if(missing(features) || length(features)==0 || features=="")
+       features <- list("*")
 
     nFeatures <- length(features)  # number of features
     # loading vRODBC or RODBC library for master
@@ -39,7 +42,7 @@ db2matrix <- function(tableName, features = list(...), conf) {
     qryString <- paste(qryString, features[nFeatures])
     qryString <- paste(qryString, " from", tableName)
 
-    connect <- odbcConnect(conf)
+    connect <- odbcConnect(dsn)
     segment<-sqlQuery(connect, qryString)
     odbcClose(connect)
     # check valid response from the database
@@ -49,4 +52,4 @@ db2matrix <- function(tableName, features = list(...), conf) {
     as.matrix(segment)
 }
 # Example:
-# centers <- db2matrix("mortgage", list("mltvspline1", "mltvspline2", "agespline1", "agespline2", "hpichgspline", "ficospline"), conf="RDev")
+# centers <- db2matrix("mortgage", dsn="RDev", list("mltvspline1", "mltvspline2", "agespline1", "agespline2", "hpichgspline", "ficospline"))

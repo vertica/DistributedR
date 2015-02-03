@@ -26,7 +26,7 @@ This function applies the centers found by hpdkmeans on a new set of samples in 
 hpdapply returns a darray or a matrix based on the type of newdata which contains the corresponding label of each sample.
 }
 \author{
-Arash Fard <afard@vertica.com>
+    HP Vertica Analytics Team
 }
 
 \examples{

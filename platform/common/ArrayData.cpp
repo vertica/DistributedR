@@ -255,18 +255,18 @@ ArrayData* ParseShm(const string &name) {
 
 ArrayData* CreateDobjectData(RInside &R, ARRAYTYPE org_class, const string &varname, const string &newname) {
    char cmd[CMD_BUF_SIZE];
-   snprintf(cmd, CMD_BUF_SIZE, ".serialized.%s <- serialize(%s, NULL)",
+   snprintf(cmd, CMD_BUF_SIZE, "%s.serializedtmp... <- serialize(%s, NULL)",
        varname.c_str(), varname.c_str());
     R.parseEval(cmd);
-    snprintf(cmd, CMD_BUF_SIZE, "as.numeric(object.size(.serialized.%s))", varname.c_str());
+    snprintf(cmd, CMD_BUF_SIZE, "as.numeric(object.size(%s.serializedtmp...))", varname.c_str());
     size_t size = Rcpp::as<size_t>(R.parseEval(cmd));
 
     if (org_class == DATA_FRAME) 
-       return new DistDataFrame(newname, R[".serialized."+varname], (size - SEXP_HEADER_SIZE));
+       return new DistDataFrame(newname, R[varname+".serializedtmp..."], (size - SEXP_HEADER_SIZE));
     else if (org_class == LIST) {
        SEXP sexp_from = R[varname];     // Extracting length of the list in the split.
        int split_len = LENGTH(sexp_from);
-       return new DistList(newname, R[".serialized."+varname], (size - SEXP_HEADER_SIZE), split_len);
+       return new DistList(newname, R[varname+".serializedtmp..."], (size - SEXP_HEADER_SIZE), split_len);
     } else {
        ostringstream msg;
        msg << "Unhandled dobject: "<< org_class ;
@@ -285,62 +285,68 @@ ArrayData* ParseVariable(RInside &R, const string &varname,
     const string &newname, ARRAYTYPE org_class) {
   char cmd[CMD_BUF_SIZE];
   snprintf(cmd, CMD_BUF_SIZE, "class(%s)", varname.c_str());
-  string classname = Rcpp::as<string>(R.parseEval(cmd));
-  LOG_INFO("org_class: %d, class: %s", org_class, classname.c_str());
+  vector<string> classname_vec = Rcpp::as<vector<string>> (R.parseEval(cmd));
+  boost::unordered_set<string> classname(classname_vec.begin(), classname_vec.end());
+
+  snprintf(cmd, CMD_BUF_SIZE, "paste(class(%s), collapse=', ')", varname.c_str());
+  string classname_str = Rcpp::as<string>(R.parseEval(cmd));
+  LOG_INFO("org_class: %d, class: %s", org_class, classname_str.c_str());
+
   if (org_class == DENSE) {
-    if (classname != "matrix" && classname != "numeric") {
+    if (classname.find("matrix") == classname.end() && classname.find("numeric") == classname.end()) {
       ostringstream msg;
       msg << "update(" << varname <<") failure due to data type inconsistency. " <<
-        "Variable '" << varname << "' should be a dense matrix.";
+        "Variable '" << varname << "' should be a dense matrix instead of " << classname_str <<".";
       throw PrestoWarningException(msg.str().c_str());
     }
+    
     return new DenseArrayData(newname, R[varname], classname);
   } else if (org_class == SPARSE) { 
-    if (classname != "dgCMatrix") {    
+    if (classname.find("dgCMatrix") == classname.end()) {    
       ostringstream msg;
       msg << "update(" << varname <<") failure due to data type inconsistency. " <<
-        "Variable '" << varname << "' should be a sparse matrix.";
+        "Variable '" << varname << "' should be a sparse matrix instead of "<< classname_str <<".";
       throw PrestoWarningException(msg.str().c_str());
     }
     return new SparseArrayData(newname, R[varname], classname);
   } else if (org_class == SPARSE_TRIPLET) {
-    if (classname != "dgTMatrix") {
+    if (classname.find("dgTMatrix") == classname.end()) {
       ostringstream msg;
       msg << "update(" << varname <<") failure due to data type inconsistency. " <<
-        "Variable '" << varname << "' should be a sparse matrix with triplet format.";
+        "Variable '" << varname << "' should be a sparse matrix with triplet format instead of " << classname_str <<".";
       throw PrestoWarningException(msg.str().c_str());
     }
     return new SparseArrayTripletData(newname, R[varname], classname);
   } else if (org_class == DATA_FRAME) {
-    if (classname != "data.frame") {  // for data.frame we give a serialized input
+    if (classname.find("data.frame") == classname.end()) {  // for data.frame we give a serialized input
       ostringstream msg;
       msg << "update(" << varname <<") failure due to data type inconsistency. " <<
-        "Variable '" << varname <<"' should be a data frame.";
+        "Variable '" << varname <<"' should be a data frame instead of " << classname_str <<".";
       throw PrestoWarningException(msg.str().c_str());
     }
     return CreateDobjectData(R, DATA_FRAME, varname, newname);
   } else if (org_class == LIST) {
-    if (classname != "list") {   // Handlind lists
+    if (classname.find("list") == classname.end()) {
       ostringstream msg;
       msg << "update(" << varname <<") failure due to data type inconsistency. " <<
-        "Variable '" << varname <<"' should be a list.";
+        "Variable '" << varname <<"' should be a list instead of " << classname_str <<".";
       throw PrestoWarningException(msg.str().c_str());
     }
     return CreateDobjectData(R, LIST, varname, newname);
   } else if (org_class == EMPTY){
-    if (classname == "matrix" || classname == "numeric")
+    if (classname.find("matrix") != classname.end() || classname.find("numeric") != classname.end())
        return new DenseArrayData(newname, R[varname], classname);
-    else if (classname == "dgCMatrix") 
+    else if (classname.find("dgCMatrix") != classname.end()) 
        return new SparseArrayData(newname, R[varname], classname);
-    else if (classname == "dgTMatrix")
+    else if (classname.find("dgTMatrix") != classname.end())
        return new SparseArrayTripletData(newname, R[varname], classname);
-    else if (classname == "data.frame")
+    else if (classname.find("data.frame") != classname.end())
        return CreateDobjectData(R, DATA_FRAME, varname, newname);
-    else if (classname == "list") 
+    else if (classname.find("list") != classname.end()) 
        return CreateDobjectData(R, LIST, varname, newname);
     else {
        ostringstream msg;
-       msg << "Parse R variable to shm: wrong class \"" << classname
+       msg << "Parse R variable to shm: wrong class \"" << classname_str
         << "\" for variable \"" << varname <<"\"";
        throw PrestoWarningException(msg.str());
     }
@@ -358,9 +364,9 @@ ArrayData* ParseVariable(RInside &R, const string &varname,
  */
 size_t CreateComposite(
     const std::string &name,
-    const std::vector<std::pair<int, int> > &offsets,
+    const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
     const std::vector<ArrayData*> &splits,
-    std::pair<int, int> dims,
+    std::pair<std::int64_t, std::int64_t> dims,
     ARRAYTYPE type) {
     try {
     switch (type) {
@@ -437,7 +443,7 @@ ArrayData::~ArrayData() {
  *
  */
 pair<void*, size_t> ArrayData::Compress() {
-  return pair<void*, size_t>(NULL, 0);
+  return pair<void*, size_t>((void *)NULL, 0);
 }
 
 /** Decompress compressed data
@@ -469,7 +475,7 @@ size_t ArrayData::GetSize() {
  * @param name the name of shared memory segment in the shared memory region
  */
 DenseArrayData::DenseArrayData(const string &name)
-  : ArrayData(name, DENSE), array_region(pair<void*, int>(NULL, 0)) {
+  : ArrayData(name, DENSE), array_region(pair<void*, int>((void *)NULL, 0)) {
   //  header_region = new mapped_region(shm, read_only);
   OpenShm(false);
   header_region = new boost::interprocess::mapped_region(*shm,
@@ -483,14 +489,14 @@ DenseArrayData::DenseArrayData(const string &name)
  * @param classname the name of the class in R of the ArrayData
  */
 DenseArrayData::DenseArrayData(const string &name, const SEXP sexp_from,
-    const string &classname)
-  : ArrayData(name, DENSE), array_region(pair<void*, int>(NULL, 0)) {
+    const boost::unordered_set<std::string> &classname)
+  : ArrayData(name, DENSE), array_region(pair<void*, int>((void *)NULL, 0)) {
   // Get dimensions, create array
   if (Rf_isNull(sexp_from)) {
     throw PrestoWarningException("DenseArray: updated value of split is NULL");
   }
   int64_t x, y;
-  if (classname == "matrix") {
+  if (classname.find("matrix") != classname.end()) {
     // get dimension symbol variable
     SEXP dimsexp = getAttrib(sexp_from, RSymbol_dim);
     if (Rf_isNull(dimsexp)) {
@@ -498,14 +504,14 @@ DenseArrayData::DenseArrayData(const string &name, const SEXP sexp_from,
     }
     x = INTEGER(dimsexp)[0];  // number of rows
     y = INTEGER(dimsexp)[1];  // number of columns
-  } else if (classname == "numeric") {
+  } else if (classname.find("numeric") != classname.end()) {
     x = LENGTH(sexp_from);
     y = 1;
   }
   SEXPTYPE val_type = TYPEOF(sexp_from);
-  if (val_type != INTSXP && val_type != REALSXP) {
+  if (val_type != INTSXP && val_type != REALSXP && val_type != LGLSXP) {
     throw PrestoWarningException
-      ("DenseArray supports only integer or numeric(real) values");
+      ("DenseArray supports only integer, logical, or numeric (real) values");
   }
   // the size of input array (header + data size)
   size_t data_size = x*y*(val_type==REALSXP ? sizeof(double) : sizeof(int));
@@ -582,48 +588,21 @@ void DenseArrayData::LoadInR(RInside &R, const string &varname) {
  */
 DenseArrayData::DenseArrayData(
     const std::string &name,
-    const std::vector<std::pair<int, int> > &offsets,
+    const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
     const std::vector<ArrayData*> &splits,
-    std::pair<int, int> dims)
+    std::pair<std::int64_t, std::int64_t> dims)
     : ArrayData(name, DENSE),
-      array_region(pair<void*, int>(NULL, 0)) {
+      array_region(pair<void*, int>((void *)NULL, 0)) {
   OpenShm(false);  // create a object in the shm object
   if (splits.size() <= 0){
     throw PrestoWarningException("DenseArray composite: number of splits is less than 0");
   }
   boost::interprocess::mapped_region region(*splits[0]->shm, boost::interprocess::read_write);
   dense_header_t* s_header = reinterpret_cast<dense_header_t*>(region.get_address());
-  SEXPTYPE val_type = s_header->value_type;
+  SEXPTYPE dst_val_type = s_header->value_type;
 
-  // the size will be header size + #col*#row*sizeof(data_type)
-  size_t size = mapped_size(sizeof(*header))+
-      mapped_size(dims.first*dims.second*(val_type==REALSXP ? sizeof(double) : sizeof(int)));
-  shm->truncate(size);  // allocate the size in the shared memory region
-
-  header_region = new mapped_region(*shm, read_write);
-  header = reinterpret_cast<dense_header_t*>(header_region->get_address());
-  header->type = type;  // set the type
-  header->dims[0] = dims.first;  // number of rows
-  header->dims[1] = dims.second;  // number of columns
-  header->value_type = val_type;
-  // the location where the values of the composite array will be written
-  double* dbl_dest = NULL;
-  int* int_dest = NULL;
-  if (val_type == REALSXP) {
-    dbl_dest = reinterpret_cast<double*>(reinterpret_cast<char*>(header)+mapped_size(sizeof(*header)));
-  } else if (val_type == INTSXP) {
-    int_dest = reinterpret_cast<int*>(reinterpret_cast<char*>(header)+mapped_size(sizeof(*header)));
-  } else {
-    throw PrestoWarningException("DenseArray support only integer or numeric(real) values");
-  }
-  if (dbl_dest == NULL && int_dest == NULL){
-    throw PrestoWarningException
-      ("DenseArray: destination array is NULL");
-  }
-
-  for (int i = 0; i < splits.size(); i++) {
-    // dimension of input split
-    pair<size_t, size_t> split_dims = splits[i]->GetDims();
+  //Check if all splits are of the same type: logical/int or double/numeric
+   for (int i = 1; i < splits.size(); i++) {
     // this should not be NULL, as this function is called after FETCH is done
     if (splits[i]->shm == NULL) {
       throw PrestoWarningException
@@ -631,9 +610,71 @@ DenseArrayData::DenseArrayData(
     }
     boost::interprocess::mapped_region region(*splits[i]->shm,
         boost::interprocess::read_write);
+    dense_header_t* tmp_header = reinterpret_cast<dense_header_t*>(region.get_address());
+    if(dst_val_type != tmp_header->value_type){
+      //Some partitions are numeric while others are logical/int. We need to make everyone numeric
+      LOG_DEBUG("Partitions are of different types (numeric,logical,int) when creating dense composite array. Will make composite array numeric");
+      dst_val_type = REALSXP;
+      break;
+    }
+   }
+
+  // the size will be header size + #col*#row*sizeof(data_type)
+  size_t size = mapped_size(sizeof(*header))+
+      mapped_size(dims.first*dims.second*(dst_val_type==REALSXP ? sizeof(double) : sizeof(int)));
+  shm->truncate(size);  // allocate the size in the shared memory region
+
+  header_region = new mapped_region(*shm, read_write);
+  header = reinterpret_cast<dense_header_t*>(header_region->get_address());
+  header->type = type;  // set the type
+  header->dims[0] = dims.first;  // number of rows
+  header->dims[1] = dims.second;  // number of columns
+  header->value_type = dst_val_type;
+  // the location where the values of the composite array will be written
+  double* dbl_dest = NULL;
+  int* int_dest = NULL;
+  if (dst_val_type == REALSXP) {
+    dbl_dest = reinterpret_cast<double*>(reinterpret_cast<char*>(header)+mapped_size(sizeof(*header)));
+  } else if (dst_val_type == INTSXP || dst_val_type == LGLSXP) {
+    int_dest = reinterpret_cast<int*>(reinterpret_cast<char*>(header)+mapped_size(sizeof(*header)));
+  } else {
+    throw PrestoWarningException("DenseArray supports only integer or numeric(real) values");
+  }
+  if (dbl_dest == NULL && int_dest == NULL){
+    throw PrestoWarningException
+      ("DenseArray: destination array is NULL");
+  }
+
+   //iR(TODO): We should try to use R's NA_REAL constant 
+   //NA_REAL in R is IEEE's NA value with lower word as 1954
+   //This is the code from R-X.X.X/src/main/arithmetic.c
+   //This code assume little endian (i.e. x86 architecture). Otherwise flip the 1 and 0 words for big endian
+   typedef union
+   {
+     double value;
+     unsigned int word[2];
+   } ieee_double;
+   volatile ieee_double R_NA_REAL;
+   R_NA_REAL.word[1] = 0x7ff00000;
+   R_NA_REAL.word[0] = 1954;
+
+  for (int i = 0; i < splits.size(); i++) {
+    // dimension of input split
+    pair<std::int64_t, std::int64_t> split_dims = splits[i]->GetDims();
+    LOG_DEBUG("Processing split: %d with dimensions (%lld, %lld)", i, split_dims.first, split_dims.second);
+    // this should not be NULL, as this function is called after FETCH is done
+    if (splits[i]->shm == NULL) {
+      throw PrestoWarningException
+        ("DenseArray: split shm is NULL");
+    }
+    boost::interprocess::mapped_region region(*splits[i]->shm,
+        boost::interprocess::read_write);
+    dense_header_t* s_header = reinterpret_cast<dense_header_t*>(region.get_address());
+    SEXPTYPE src_val_type = s_header->value_type;
+
     double* dbl_data = NULL;
     int* int_data = NULL;
-    if (val_type == REALSXP) {
+    if (src_val_type == REALSXP) {
       dbl_data = reinterpret_cast<double*>(
         reinterpret_cast<char*>(region.get_address()) +
         mapped_size(sizeof(*header)));  // value of the split
@@ -646,27 +687,40 @@ DenseArrayData::DenseArrayData(
       throw PrestoWarningException
         ("DenseArray composite: split data is NULL");
     }
-    
+
     // determine the absolute row-coordinate of this split
-    int x = offsets[i].first;
+    std::int64_t x = offsets[i].first;
     // optimize for vectors
     if (dims.first == 1) {  // #row = 1
       // fill the composite array shared memory region      
-      if (val_type == REALSXP) {
-        memcpy(&dbl_dest[offsets[i].second], dbl_data,
-               split_dims.second*sizeof(double));
-      } else {
+      if (dst_val_type == REALSXP) {
+	if(src_val_type == REALSXP){
+	  memcpy(&dbl_dest[offsets[i].second], dbl_data,
+		 split_dims.second*sizeof(double));
+	} else{//Slow path. We have to cast logical/int vectors to numeric(double), and also take care of NA values.
+	  for(std::int64_t kk=0; kk<split_dims.second;kk++){
+	    dbl_dest[(offsets[i].second)+kk]=(int_data[kk]== std::numeric_limits<int>::min() ? R_NA_REAL.value : int_data[kk]) ;
+	  }
+	}
+      } else {//If it's logical/int, we are sure that the src and dst are of the same type. Just use memcpy.
         memcpy(&int_dest[offsets[i].second], int_data,
                split_dims.second*sizeof(int));
       }
     } else {
       // fill the composite array in row-major order
-      for (int j = 0; j < split_dims.second; j++) {
-        int y = offsets[i].second + j;
+      for (std::int64_t j = 0; j < split_dims.second; j++) {
+        std::int64_t y = offsets[i].second + j;
         // fill the composite array shared region
-        if (val_type == REALSXP) {
-          memcpy(&dbl_dest[y*dims.first + x], &dbl_data[j*split_dims.first],
-               split_dims.first*sizeof(double));
+        if (dst_val_type == REALSXP) {
+	  if(src_val_type == REALSXP){
+	    memcpy(&dbl_dest[y*dims.first + x], &dbl_data[j*split_dims.first],
+		   split_dims.first*sizeof(double));
+	  } else{//Slow path. We have to cast logical/int vectors to numeric(double), and also take care of NA values.
+	    for(std::int64_t kk=0; kk<split_dims.first;kk++){
+	      int v = int_data[(j*split_dims.first)+kk];
+	      dbl_dest[(y*dims.first)+x+kk]= (v == std::numeric_limits<int>::min() ? R_NA_REAL.value : v) ;
+	    }
+	  }
         } else {
           memcpy(&int_dest[y*dims.first + x], &int_data[j*split_dims.first],
                split_dims.first*sizeof(int));
@@ -686,7 +740,7 @@ DenseArrayData::~DenseArrayData() {
 /** Get dimension of the dense array data (number of rows/columns)
  * @return a pair of number of rows/columns
  */
-pair<size_t, size_t> DenseArrayData::GetDims() const {
+pair<std::int64_t, std::int64_t> DenseArrayData::GetDims() const {
   return make_pair(header->dims[0], header->dims[1]);
 }
 
@@ -728,7 +782,7 @@ sprs_encoding_t SparseArrayData::ChooseEncoding(
  * @return a SparseArrayData object
  */
 SparseArrayData::SparseArrayData(const string &name, const SEXP sexp_from,
-    const string &classname)
+    const boost::unordered_set<std::string> &classname)
   : ArrayData(name, SPARSE) {
   // Get dimensions*nnzs, create array
   int64_t dim0, dim1, nonzeros;
@@ -736,7 +790,7 @@ SparseArrayData::SparseArrayData(const string &name, const SEXP sexp_from,
     throw PrestoWarningException
       ("SparseArray: updated value of split is NULL");
   }
-  if (classname == "dgCMatrix") {   // CSC sparse format
+  if (classname.find("dgCMatrix") != classname.end()) {   // CSC sparse format
     SEXP dimsexp = getAttrib(sexp_from, RSymbol_Dim);
     SEXP fromi = getAttrib(sexp_from, RSymbol_i);  // get i attribute
     if (Rf_isNull(dimsexp) || Rf_isNull(fromi)) {
@@ -785,7 +839,7 @@ SparseArrayData::SparseArrayData(const string &name, const SEXP sexp_from,
       reinterpret_cast<char*>(data_x)+
       mapped_size(header->nnz*sizeof(data_x[0])));
 
-  if (classname == "dgCMatrix") {
+  if (classname.find("dgCMatrix") != classname.end()) {
     SEXP fromi = getAttrib(sexp_from, RSymbol_i);
     SEXP fromx = getAttrib(sexp_from, RSymbol_x);
     SEXP fromp = getAttrib(sexp_from, RSymbol_p);
@@ -892,9 +946,9 @@ void SparseArrayData::LoadInR(RInside &R, const string &varname) {
  */
 SparseArrayData::SparseArrayData(
     const std::string &name,
-    const std::vector<std::pair<int, int> > &offsets,
+    const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
     const std::vector<ArrayData*> &splits,
-    std::pair<int, int> dims)
+    std::pair<std::int64_t, std::int64_t> dims)
     : ArrayData(name, SPARSE) {
   // need to make sure that we go through splits in right order
   int nnz = 0;
@@ -1084,7 +1138,7 @@ SparseArrayData::~SparseArrayData() {
 /** Get the dimensions of the sparse array
  * @return a pair of the number of row/column
  */
-pair<size_t, size_t> SparseArrayData::GetDims() const {
+pair<std::int64_t, std::int64_t> SparseArrayData::GetDims() const {
   return make_pair(header->dims[0], header->dims[1]);
 }
 
@@ -1100,7 +1154,7 @@ SparseArrayTripletData::SparseArrayTripletData(const string &name)
 
 SparseArrayTripletData::SparseArrayTripletData(const string& name,
     const SEXP sexp_from,
-    const string &classname, const int32_t startx, const int32_t starty,
+    const boost::unordered_set<std::string> &classname, const int32_t startx, const int32_t starty,
     const int32_t endx, const int32_t endy, const int64_t nonzeros,
     bool is_row_split)
   : ArrayData(name, SPARSE_TRIPLET) {
@@ -1116,14 +1170,15 @@ SparseArrayTripletData::SparseArrayTripletData(const string& name,
  */
 SparseArrayTripletData::SparseArrayTripletData(const string &name,
     const SEXP sexp_from,
-    const string &classname)
+    const boost::unordered_set<std::string> &classname)
   : ArrayData(name, SPARSE_TRIPLET) {
   // Get dimensions*nnzs, create array
   int64_t dim0, dim1, nonzeros;
-  if (classname != "dgTMatrix") {
+  if (classname.find("dgTMatrix") == classname.end()) {
+    std::string classname_str = (classname.size() > 0) ? *(classname.begin()) : ""; 
     ostringstream msg;
     msg << "SparseArrayTriplet: classtype \""
-      << classname<<"\" is not supported";
+    << classname_str << "\" is not supported";
     throw PrestoWarningException(msg.str());
   }
   SEXP dimsexp = getAttrib(sexp_from, RSymbol_Dim);
@@ -1264,9 +1319,9 @@ void SparseArrayTripletData::LoadInR(RInside &R, const string &varname) {
 
 SparseArrayTripletData::SparseArrayTripletData(
     const std::string &name,
-    const std::vector<std::pair<int, int> > &offsets,
+    const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
     const std::vector<ArrayData*> &splits,
-    std::pair<int, int> dims)
+    std::pair<std::int64_t, std::int64_t> dims)
     : ArrayData(name, SPARSE_TRIPLET) {
   int nnz = 0;
 
@@ -1348,7 +1403,7 @@ SparseArrayTripletData::SparseArrayTripletData(
 SparseArrayTripletData::~SparseArrayTripletData() {
 }
 
-pair<size_t, size_t> SparseArrayTripletData::GetDims() const {
+pair<std::int64_t, std::int64_t> SparseArrayTripletData::GetDims() const {
   return make_pair(header->dims[0], header->dims[1]);
 }
 
@@ -1370,7 +1425,7 @@ void EmptyArrayData::LoadInR(RInside &R, const string &varname) {
 /** Get dimension of array data
  * @return the dimension (0,0)
  */
-pair<size_t, size_t> EmptyArrayData::GetDims() const {
+pair<std::int64_t, std::int64_t> EmptyArrayData::GetDims() const {
   return make_pair(0, 0);
 }
 

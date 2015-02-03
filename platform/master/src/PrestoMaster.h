@@ -46,7 +46,7 @@
 #include "dLogger.h"
 #include "DataLoaderManager.h"
 
-using namespace boost;
+//using namespace boost;
 using namespace Rcpp;
 using namespace std;
 using namespace zmq;
@@ -97,7 +97,7 @@ class PrestoMaster {
     return int_to_string(master_.presto_port());
   }
 
-  bool StartDataLoader(uint64_t split_size);
+  bool StartDataLoader(uint64_t split_size, string split_prefix);
 
   void StopDataLoader();
 
@@ -118,7 +118,7 @@ class PrestoMaster {
         "Number of workers: " << NumClients();
       throw PrestoWarningException(msg.str());
     }
-    map<int32_t, shared_ptr<WorkerInfo> >::iterator itr =
+    map<int32_t, boost::shared_ptr<WorkerInfo> >::iterator itr =
       worker_infos.begin();
     advance(itr, index);
     if (itr == worker_infos.end()) {
@@ -134,10 +134,10 @@ class PrestoMaster {
 Release WorkerInfo resources to enable garbage-collection
 */
   void ClearClientInfo() {
-    map<int32_t, shared_ptr<WorkerInfo> >::iterator it;
+    map<int32_t, boost::shared_ptr<WorkerInfo> >::iterator it;
     for (it = worker_infos.begin();
         it != worker_infos.end(); ++it) {
-      shared_ptr<WorkerInfo> wi = it->second;
+      boost::shared_ptr<WorkerInfo> wi = it->second;
       wi.reset();
     }
     worker_infos.clear();
@@ -174,34 +174,34 @@ Release WorkerInfo resources to enable garbage-collection
  private:
   void InitProtoThread();
   void ConnectWorkers(const vector<ServerInfo>& workers);
-  bool CheckMasterAddrSanity();
-  bool CheckWorkerConfigSanity();
+  bool CheckMasterWorkerAddrSanity();
+
   int32_t ParseXMLConfig(const string& config, ServerInfo* master,
       vector<ServerInfo>* workers);
 
   // ZeroMQ context used for creating sockets.
   context_t zmq_ctx_;
 
-  shared_ptr<thread> proto_bind_thread_;
+  boost::shared_ptr<boost::thread> proto_bind_thread_;
 
-  shared_ptr<PrestoMasterHandler> handler_;
+  boost::shared_ptr<PrestoMasterHandler> handler_;
   boost::thread *handler_thread_;
-  shared_ptr<ResourceManager> res_manager_;
+  boost::shared_ptr<ResourceManager> res_manager_;
   boost::thread *resource_manager_thread_;
 
   // This map is used to get to the actual WorkerInfo object.
   // the key is ID of a worker (starting from 0) and 
   // determined based on the order in the XML file
-  map<int32_t, shared_ptr<WorkerInfo> > worker_infos;
+  map<int32_t, boost::shared_ptr<WorkerInfo> > worker_infos;
   ServerInfo master_;
   vector<ServerInfo> workers_;
   // darray_map_ keeps tack of darray string name with its object
-  scoped_ptr<DistributedObjectMap> dobject_map_;
+  boost::scoped_ptr<DistributedObjectMap> dobject_map_;
 
   Scheduler* scheduler_;
   DataLoaderManager* dataloader_manager_;
 
-  mutex workerinfos_mutex_;
+  boost::mutex workerinfos_mutex_;
   boost::interprocess::interprocess_semaphore workerinfos_sema_;
   boost::timed_mutex  is_running_mutex_;
   bool is_running_;

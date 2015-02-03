@@ -18,7 +18,6 @@
 #  File graphLoader.R
 #
 #  
-#  Aarsh Fard (afard@vertica.com)
 #
 #########################################################
 
@@ -26,31 +25,32 @@
 # tableName: the name of the table in the database
 # from: the name of the column in the table which stores the source vertices
 # to: the name of the column in the table which stores the target vertices
-# conf: ODBC configuration of the database
+# dsn: ODBC configuration of the database
 # weight: the name of the column in the table which stores the weights of the edges (it is an optional argument)
-# nSplits: number of partitions in darrays (it is an optional argument)
+# npartitions: number of partitions in darrays (it is an optional argument)
 # outdegree: when this optional argument is TRUE, the function also returns outdegree of the vertices; otherwise (default) does not return it
 # row_wise: if TRUE the returned darray will be row_wise partitioned
-db2dgraph <- function(tableName, from, to, conf, weight, nSplits) {
+db2dgraph <- function(tableName, dsn, from, to, weight, npartitions) {
     outdegree <- FALSE  # reserved for the future
     row_wise <- FALSE   # it is kept for future
     if(!is.character(tableName))
         stop("The name of the table should be specified")
     if(!is.character(from) || !is.character(to))
         stop("The name of the columns for pair of vertices of edge-list should be specified")
-    if(is.null(conf))
+    if(is.null(dsn))
         stop("The ODBC configuration should be specified")
 
-    if(missing(nSplits)) {
+    missingNparts <- FALSE
+    if(missing(npartitions)) {
         ps <- distributedR_status()
         nExecuters <- sum(ps$Inst)   # number of executors asked from distributedR
         noBlock2Exc <- 1             # ratio of block numbers to executor numbers
-        nparts <- nExecuters * noBlock2Exc  # number of partitions
+        npartitions <- nExecuters * noBlock2Exc  # number of partitions
+        missingNparts <- TRUE
     } else {
-        nSplits <- round(nSplits)
-        if(nSplits <= 0)
-            stop("nSplits should be a positive integer number")
-        nparts <- nSplits
+        npartitions <- round(npartitions)
+        if(npartitions <= 0)
+            stop("npartitions should be a positive integer number")
     }
 
     isWeighted <- FALSE
@@ -63,24 +63,42 @@ db2dgraph <- function(tableName, from, to, conf, weight, nSplits) {
     # loading vRODBC or RODBC library for master
     if (! require(vRODBC) )
         library(RODBC)
-    # connecting to Vertica and finding the number of verices in the table
-    connect <- odbcConnect(conf)
+
+    connect <- odbcConnect(dsn)
+
+    # checking availabilty and type of all columns
+    if(isWeighted)
+        qryString <- paste("select", from, ",", to, ",", weight, "from", tableName, "limit 1")
+    else
+        qryString <- paste("select", from, ",", to, "from", tableName, "limit 1")
+
+    oneLine <- sqlQuery(connect, qryString)
+    # check valid response from the database
+    if (! is.data.frame(oneLine) ) {
+        odbcClose(connect)
+        stop(oneLine)
+    }
+    if (nrow(oneLine) == 0) stop("No data read from the tabel, or the table is empty")        
+    if ( !all(sapply(oneLine, is.numeric)) || (oneLine[1,1] != as.integer(oneLine[1,1])) || (oneLine[1,2] != as.integer(oneLine[1,2])) ) {
+        odbcClose(connect)
+        stop("Unsupported data types in the table")
+    }
+
+    # connecting to DB and finding the number of verices in the table
     if(isWeighted)
         qryString <- paste("select max(",from,"), max(",to ,"), max(",weight ,") from", tableName)
     else
         qryString <- paste("select max(",from,"), max(",to ,") from", tableName)
     nVertices <- sqlQuery(connect, qryString)
+    odbcClose(connect)
     # check valid response from the database
     if (! is.data.frame(nVertices) ) {
-        odbcClose(connect)
         stop(nVertices)
-    }
-    
-    odbcClose(connect)
+    }    
     
     nVertices <- max(nVertices[[1]],nVertices[[2]]) + 1 # the id of vertices starts from 0
     if(is.na(nVertices)) stop("The content of the table cannot be correctly interpreted! Vertex IDs should be integer numbers.")
-    blockSize <- ceiling(nVertices/nparts) # number of rows (columns) in each partition
+    blockSize <- ceiling(nVertices/npartitions) # number of rows (columns) in each partition
   
     # creating a sparse darray for adjacency matrix and if needed one for weights
     W <- NULL
@@ -94,16 +112,16 @@ db2dgraph <- function(tableName, from, to, conf, weight, nSplits) {
           W <- darray(dim=c(nVertices, nVertices), blocks=c(nVertices,blockSize), sparse=TRUE)
     }
 
-    if(!missing(nSplits)) {
+    if(!missingNparts) {
         nparts <- npartitions(X)
-        if(nparts != nSplits)
+        if(nparts != npartitions)
             warning("The number of splits changed to ", nparts)
     }
 
     #Load data from Vertica to darray
     if(isWeighted) {
         foreach(i, 1:npartitions(X), initArrays <- function(x = splits(X,i), w = splits(W,i), myIdx = i, blockSize = blockSize, 
-                nVertices=nVertices, tableName=tableName, from=from, to=to, weight=weight, conf=conf, row_wise=row_wise) {
+                nVertices=nVertices, tableName=tableName, from=from, to=to, weight=weight, dsn=dsn, row_wise=row_wise) {
 
             # loading RODBC for each worker
             if (! require(vRODBC) )
@@ -126,10 +144,10 @@ db2dgraph <- function(tableName, from, to, conf, weight, nSplits) {
             connect <- -1
             tryCatch(
                 {
-                  connect <- odbcConnect(conf)
+                  connect <- odbcConnect(dsn)
                 }, warning = function(war) {
                   if(connect == -1)
-                    stop(war)
+                    stop(war$message)
                 }
             )
             segment<-sqlQuery(connect, qryString)
@@ -151,7 +169,7 @@ db2dgraph <- function(tableName, from, to, conf, weight, nSplits) {
         })
     } else {
         foreach(i, 1:npartitions(X), initArrays <- function(x = splits(X,i), myIdx = i, blockSize = blockSize, 
-                nVertices=nVertices, tableName=tableName, from=from, to=to, conf=conf, row_wise=row_wise) {
+                nVertices=nVertices, tableName=tableName, from=from, to=to, dsn=dsn, row_wise=row_wise) {
 
             # loading RODBC for each worker
             if (! require(vRODBC) )
@@ -174,10 +192,10 @@ db2dgraph <- function(tableName, from, to, conf, weight, nSplits) {
             connect <- -1
             tryCatch(
                 {
-                  connect <- odbcConnect(conf)
+                  connect <- odbcConnect(dsn)
                 }, warning = function(war) {
                   if(connect == -1)
-                    stop(war)
+                    stop(war$message)
                 }
             )
             segment<-sqlQuery(connect, qryString)
@@ -199,14 +217,14 @@ db2dgraph <- function(tableName, from, to, conf, weight, nSplits) {
         OD <- darray(dim=c(nVertices, 1), blocks=c(nVertices,1), empty=TRUE)
         #Load data from Vertica to darray
         foreach(i, 1:1, initArrays <- function(x = splits(OD), nVertices=nVertices,
-                tableName=tableName, from=from, to=to, conf=conf) {
+                tableName=tableName, from=from, to=to, dsn=dsn) {
 
             # loading RODBC for each worker
             if (! require(vRODBC) )
                 library(RODBC)
                 
             qryString <- paste("select ",from,", count(distinct ",to, ") from", tableName, "group by ",from)
-            connect <- odbcConnect(conf)
+            connect <- odbcConnect(dsn)
             segment<-sqlQuery(connect, qryString)
             odbcClose(connect)
 
@@ -219,7 +237,7 @@ db2dgraph <- function(tableName, from, to, conf, weight, nSplits) {
         list(X=X, W=W)
 }
 # Example:
-# dgraphDB <- db2dgraph("graph", from="x", to="y", conf="RDev")
+# dgraphDB <- db2dgraph("graph", from="x", to="y", dsn="RDev")
 
 ## Loading adjaceny matrix from an edgelist strored in a set of files
 # pathPrefix: the path and prefix to the files. It should be the same on all nodes of the cluster.

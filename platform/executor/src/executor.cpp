@@ -39,6 +39,7 @@
 #include <signal.h>
 #include <zmq.hpp>
 
+#include <tuple>
 #include <cstdio>
 #include <map>
 #include <string>
@@ -86,7 +87,7 @@ static SEXP RSymbol_x = NULL;
 
 // contains a list of variables to update
 // (a function that usually called within foreach)
-set<pair<string, bool> > *updatesptr;
+set<tuple<string, bool, int64_t, int64_t> > *updatesptr;
 
 /** Propages new value to other workers. 
  * This is generally called from Presto R funtion update(). 
@@ -97,7 +98,7 @@ set<pair<string, bool> > *updatesptr;
  * @param empty indicates if this variable is empty
  * @return NULL
  */
-RcppExport SEXP NewUpdate(SEXP updates_ptr_sexp, SEXP name_sexp, SEXP empty_sexp) {
+  RcppExport SEXP NewUpdate(SEXP updates_ptr_sexp, SEXP name_sexp, SEXP empty_sexp, SEXP dim_sexp) {
   BEGIN_RCPP
       if (updatesptr == NULL) {
         LOG_WARN("NewUpdate => updateptr is NULL");
@@ -106,14 +107,21 @@ RcppExport SEXP NewUpdate(SEXP updates_ptr_sexp, SEXP name_sexp, SEXP empty_sexp
 
       Rcpp::CharacterVector name_vec(name_sexp);
       Rcpp::LogicalVector empty_vec(empty_sexp);
+      Rcpp::NumericVector dim_vec(dim_sexp);
       typedef Rcpp::CharacterVector::iterator char_itr;
       typedef Rcpp::LogicalVector::iterator log_itr;
+      typedef Rcpp::NumericVector::iterator numeric_itr;
+
       char_itr name_itr = name_vec.begin();
       log_itr empty_itr = empty_vec.begin();
-      
+      numeric_itr dim_itr = dim_vec.begin();
+
       std::string name = std::string(name_itr[0]);
       bool empty = empty_vec[0];
-      updatesptr->insert(make_pair(name, empty));
+      int64_t nr = dim_vec[0];
+      int64_t nc = dim_vec[1];
+
+      updatesptr->insert(make_tuple(name, empty, nr, nc));
   return Rcpp::wrap(true);
   END_RCPP
 }
@@ -125,11 +133,14 @@ RcppExport SEXP NewUpdate(SEXP updates_ptr_sexp, SEXP name_sexp, SEXP empty_sexp
  * @param splitname a name of split that is internal to Presto library
  * @param R a pointer of RInside
  * @empty indicates if this variable is empty
+ * @obj_nrow no. of rows in split. -1 in case of composite arrays and lists. Primarily used for dframes.
+ * @obj_ncol no. of cols in split. -1 in case of composite arrays and lists. Primarily used for dframes.
  * @return NULL
  */
 static inline void CreateUpdate(const string &varname, const string &splitname,
                                 RInside &R,
-                                bool empty) {
+                                bool empty,
+				int64_t obj_nrow, int64_t obj_ncol) {
   Timer t;
   t.start();
   string prev_arr_name = splitname;  // darray name
@@ -175,9 +186,15 @@ static inline void CreateUpdate(const string &varname, const string &splitname,
   //         new_arr_name.c_str(),
   //         ad->GetOffset(), ad->GetSize(), empty ? 1 : 0);
   t.start();
-  LOG_DEBUG("New value of variable written in Shared memory.");
   // write task result to send it to worker.
-  std::pair<size_t, size_t> dims = ad->GetDims();
+  std::pair<size_t, size_t> dims = ad->GetDims();  
+
+  //TODO(iR) Hack for obtaining size of dataframe splits, since GetDims() is 0 for dframes and lists
+  if(org_class == DATA_FRAME){
+    dims = make_pair(obj_nrow,obj_ncol);
+  }
+  
+  LOG_DEBUG("New value of variable written in Shared memory. Size=(%d,%d)", dims.first, dims.second);
   AppendUpdate(new_arr_name, ad->GetSize(), empty, dims.first, dims.second, out);
   delete ad;
   LOG_INFO("Variable %s (%s in R) updated successfully.", prev_arr_name.c_str(), varname.c_str());
@@ -291,7 +308,7 @@ void IncreaseRHeap(const RInside &R) {
 void ClearTaskData(RInside &R,  // NOLINT
         map<string, ArrayData*>& var_to_ArrayData,
         map<string, Composite*>& var_to_Composite) {
-  R.parseEvalQ("rm(list=ls());gc()");
+  R.parseEvalQ("rm(list=ls(all.names=TRUE));gc()");
 
   // delete splits information in this task
   for (map<string, ArrayData*>::iterator i = var_to_ArrayData.begin();
@@ -572,15 +589,15 @@ int main(int argc, char *argv[]) {
   // load packages
   R.parseEvalQ("tryCatch({library(Matrix);library(MatrixHelper);library(Executor);gc.time()}, error=function(ex){Sys.sleep(2);library(Matrix);library(MatrixHelper);library(Executor);gc.time()})");
   
-  updatesptr = new set<pair<string, bool> >();
-  set<pair<string, bool> > &updates = *updatesptr;
+  updatesptr = new set<tuple<string, bool, int64_t, int64_t> >();
+  set<tuple<string, bool, int64_t, int64_t> > &updates = *updatesptr;
   LOG_DEBUG("New Update pointer to maintain list of updated split/composite variables in Function execution created.");
   // map of variable name (in R) with corresponding ArrayData object
   map<string, ArrayData*> var_to_ArrayData;
   // map of variable name (in R) with correspponding Composite array
   map<string, Composite*> var_to_Composite;
   // update pointer in R-session
-  Rcpp::XPtr<set<pair<string, bool> > > updates_ptr(&updates, false);
+  Rcpp::XPtr<set<tuple<string, bool,int64_t,int64_t> > > updates_ptr(&updates, false);
   Rcpp::Language exec_call;
   string prev_cmd;
   // a buffer to keep the task result from RInside
@@ -668,11 +685,14 @@ int main(int argc, char *argv[]) {
       
       LOG_INFO("There are %d variables that are updated. Sending them to the Worker.", updates.size());
 
-      for (set<pair<string, bool> >::iterator i = updates.begin();
+      for (set<tuple<string, bool,int64_t,int64_t> >::iterator i = updates.begin();
            i != updates.end(); i++) {
         
-        const string &name = i->first;   // name of variable in R-session
-        bool empty = i->second;
+	const string &name = get<0>(*i);   // name of variable in R-session
+        bool empty = get<1>(*i);
+        int64_t obj_nrow = get<2>(*i);
+        int64_t obj_ncol = get<3>(*i);
+
         // if the variable is a composite array
         if (contains_key(var_to_Composite, name)) {
           // updating composite
@@ -709,7 +729,7 @@ int main(int argc, char *argv[]) {
                }
                R.parseEvalQ(cmd);
                string var_name = string("compositetmpvar...");
-               CreateUpdate(var_name, composite->splitnames[j], R, empty);
+               CreateUpdate(var_name, composite->splitnames[j], R, empty, -1, -1);
              }   
           }else if (composite->dobjecttype == DARRAY_DENSE || composite->dobjecttype == DARRAY_SPARSE) {
 	    //Flag to determine if all split sizes are zero
@@ -750,7 +770,7 @@ int main(int argc, char *argv[]) {
 	      all_split_size_zero = false;
 	      R.parseEvalQ(cmd);
 	      string var_name = string("compositetmpvar...");
-	      CreateUpdate(var_name, composite->splitnames[j], R, empty);
+	      CreateUpdate(var_name, composite->splitnames[j], R, empty, -1, -1);
 	    }
           }
 	  //(iR)If all splits were zero sized, we are possibly using an empty darray
@@ -759,11 +779,14 @@ int main(int argc, char *argv[]) {
 	    throw PrestoWarningException("Update to empty composite array is not supported.");
 	  }
 
-         }
+         }else if (composite->dobjecttype == DFRAME ) {
+	    LOG_ERROR("Update to composite dframe");
+	    throw PrestoWarningException("Update to composite dframe is not supported.");
+	  }
         } else {
           // updating a split
           CreateUpdate(name, var_to_ArrayData[name]->GetName(), R,
-                       empty);
+                       empty, obj_nrow, obj_ncol);
         }
       }
     }catch (const Rcpp::eval_error& eval_err) {

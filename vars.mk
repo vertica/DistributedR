@@ -20,7 +20,10 @@
 BOOST_DIR = $(PWD)/third_party/install/include
 BOOST_LIB_DIR = $(PWD)/third_party/install/lib
 
-PROTOC_BIN=/usr/bin/protoc
+PROTOC_BIN=$(PWD)/third_party/install/bin/protoc
+PROTOBUF_STATIC_LIB=$(PWD)/third_party/install/lib/libprotobuf.a
+#order matters
+ZMQ_STATIC_LIB=$(PWD)/third_party/install/lib/libzmq.a $(PWD)/third_party/install/lib/libuuid.a 
 
 BOOST_THREADPOOL_DIR = $(PWD)/third_party/boost_threadpool/threadpool
 ATOMICIO_DIR = $(PWD)/third_party/atomicio
@@ -72,8 +75,9 @@ PRESTO_MATRIX_HELPER_SRC = $(wildcard ${PRESTO_MATRIX_HELPER_DIR}/src/*.cpp)
 PRESTO_MATRIX_HELPER_OBJS = $(PRESTO_MATRIX_HELPER_SRC:.cpp=.o)
 PRESTO_MATRIX_HELPER_RFILES = $(wildcard ${PRESTO_MATRIX_HELPER_DIR}/R/*.R)
 
-PRESTO_RUN = ${BIN_DIR}/run.sh
+PRESTO_RUN = ${PWD}/tests/run.sh
 PRESTO_DEF_WORKER_LIST = ${CONF_DIR}/cluster_conf.xml
+PRESTO_INSTALL_LOCALLIB_SCRIPT = $(PWD)/tools/InstallLocalLib.R
 PRESTO_UNITTEST_SCRIPT = $(PWD)/tests/RunPrestoUnitTest.R
 PRESTO_ALGOTEST_SCRIPT = $(PWD)/tests/RunPrestoAlgoTest.R
 PRESTO_STRSTEST_SCRIPT = $(PWD)/tests/RunPrestoStressTest.R
@@ -90,7 +94,7 @@ TUTORIAL_DATA_FILE = Data
 FAQ_FILE = FAQ
 
 INCLUDE_FLAGS = -DBOOST_LOG_DYN_LINK -DCSTACK_DEFNS -DHAVE_NETINET_IN_H -DHAVE_INTTYPES_H -I ${BOOST_DIR} -I ${GEN_DIR} -I ${BOOST_THREADPOOL_DIR} -I ${ATOMICIO_DIR} -I ${PRESTO_COMMON_DIR} ${R_INCLUDE_FLAGS} ${RCPP_INCLUDE_FLAGS} ${RINSIDE_INCLUDE_FLAGS}
-LINK_FLAGS = -lm -rdynamic -L ${LIB_DIR} -Wl,-rpath,${LIB_DIR} ${R_LD_FLAGS} -lpthread -L$(BOOST_LIB_DIR) -Wl,-rpath,${BOOST_LIB_DIR} -lboost_thread -lboost_system -lboost_log -lboost_log_setup -lboost_chrono -L ${ATOMICIO_DIR} -Wl,-rpath,${ATOMICIO_DIR} -latomicio ${RCPP_LD_FLAGS} ${RINSIDE_LD_FLAGS} -laio -lrt
+LINK_FLAGS = -lm -rdynamic -L ${LIB_DIR} -Wl,-rpath,${LIB_DIR} ${R_LD_FLAGS} -lpthread -L$(BOOST_LIB_DIR) -Wl,-rpath,${BOOST_LIB_DIR} -lboost_thread -lboost_system -lboost_log -lboost_log_setup -lboost_chrono -lboost_filesystem -lboost_date_time -L ${ATOMICIO_DIR} -Wl,-rpath,${ATOMICIO_DIR} -latomicio ${RCPP_LD_FLAGS} ${RINSIDE_LD_FLAGS} -lrt #-laio 
 
 DEBUG = -g
 #PROFILING = -DPROFILING
@@ -107,7 +111,7 @@ DEBUG = -g
 #UNIQUE_EXECUTOR_LOG_NAMES = -DUNIQUE_EXECUTOR_LOG_NAMES
 #EXECUTOR_TRYCATCH = -DEXECUTOR_TRYCATCH
 #MULTITHREADED_SCHEDULER = -DMULTITHREADED_SCHEDULER  # locking in multi-threaded scheduler is not 100% tested; use single thread until it affects performance
-GCC_FLAGS = ${DEBUG} -O2 -fopenmp -finline-limit=10000 -DNDEBUG ${INCLUDE_FLAGS} ${LINK_FLAGS} -Wno-deprecated-declarations -DSTRICT_R_HEADERS ${USE_MMAP_AS_SHMEM} ${SCHEDULER_LOGGING} ${OOC_SCHEDULER} ${USE_DYNAMIC_PARTITION} ${PROFILING} ${FAST_UPDATE} ${INCREASE_R_HEAP} ${UNIQUE_EXECUTOR_LOG_NAMES} ${EXECUTOR_TRYCATCH}
+GCC_FLAGS = -std=c++0x ${DEBUG} -O2 -fopenmp -finline-limit=10000 -DNDEBUG ${INCLUDE_FLAGS} ${LINK_FLAGS} -Wno-deprecated-declarations -DSTRICT_R_HEADERS ${USE_MMAP_AS_SHMEM} ${SCHEDULER_LOGGING} ${OOC_SCHEDULER} ${USE_DYNAMIC_PARTITION} ${PROFILING} ${FAST_UPDATE} ${INCREASE_R_HEAP} ${UNIQUE_EXECUTOR_LOG_NAMES} ${EXECUTOR_TRYCATCH}
 CXXFLAGS=${GCC_FLAGS} -fPIC
 
 ATOMICIO_LIB=${ATOMICIO_DIR}/libatomicio.so

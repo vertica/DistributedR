@@ -1,14 +1,14 @@
 Package: distributedR
 Type: Package
 Title: Distributed computation using R
-Version: 0.7.0
-Date: 2014-07-29
-Author: HP Vertica Development Team
-Maintainer: HP Vertica Development Team <XYZ@hp.com> 
+Version: 1.0.0
+Date: 2015-01-16
+Author: HP Vertica Analytics Team
+Maintainer: HP Vertica Analytics Team <distributedRTeam@external.groups.hp.com>
 Description: Distribute R for Big Data
 License: GPLv2
 LazyLoad: yes
-Depends: Rcpp (>= 0.10.6), RInside (>= 0.2.10)
+Depends: Rcpp (>= 0.11.0), RInside (>= 0.2.11), XML (>= 3.98-1.1),  R (>= 3.0.0)
 LinkingTo: Rcpp, RInside
-Collate: 'dobject.R' 'darray.R' 'dframe.R' 'dlist.R' 'splits.R' 'darray_ops.R' 'dframe_ops.R' 'master.R' 'reduce.R'
+Collate: 'dobject.R' 'darray.R' 'dframe.R' 'dlist.R' 'splits.R' 'darray_ops.R' 'dframe_ops.R' 'master.R' 'reduce.R' 'deploy.R'
 RcppModules: master_module, dobject_module

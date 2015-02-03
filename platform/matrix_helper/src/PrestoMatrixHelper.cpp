@@ -18,6 +18,7 @@
 
 #include <Rcpp.h>
 #include <Rinternals.h>
+#include <cmath>    // std::sqrt
 
 using namespace std;
 
@@ -296,52 +297,76 @@ RcppExport SEXP rowSums(SEXP mx) {
 /*
 **  Calculating K-means clustering based on Lloyd algorithm
 **  Rx: the matrix of samples
+**  Rnorm: the matrix of norms
 **  Rcen: the matrix of centers
 **  Rcl: the vector of cluster labels
 **  Rnc: the number of points in each cluster
 */
 
-RcppExport SEXP hpdkmeans_Lloyd(SEXP Rx, SEXP Rcen, SEXP Rcl, SEXP Rnc)
+RcppExport SEXP hpdkmeans_Lloyd(SEXP Rx, SEXP Rnorm, SEXP Rcen, SEXP Rcl, SEXP Rnc)
 {
     BEGIN_RCPP
-    int n, k, p, crow;
+    int n, k, p, cencol;
     int i, j, c, it, inew = 0;
     double best, dd, tmp;
-    double *x, *cen;
+    double *x, *norm, *cen;
     int *cl, *nc;
+    double approxDistance = 0;
 
     int * dimx = INTEGER(Rf_getAttrib(Rx, R_DimSymbol));
     n = dimx[0]; // number of samples
     p = dimx[1]; // number of predictors
     int *dimc = INTEGER(Rf_getAttrib(Rcen, R_DimSymbol));
     k = dimc[0]; // number of centers
-    crow = dimc[1];
-
+    cencol = dimc[1];
+/*
+    int * dimnorm = INTEGER(Rf_getAttrib(Rnorm, R_DimSymbol));
+    if(dimnorm[0] != n)
+        Rf_error("Wrong number of norms");
+    if(dimnorm[1] != 1)
+        Rf_error("There must be only one norm per sample");
+*/
     Rx = Rf_coerceVector(Rx, REALSXP);
+    Rnorm = Rf_coerceVector(Rnorm, REALSXP);
     Rcen = Rf_coerceVector(Rcen, REALSXP);
     Rcl = Rf_coerceVector(Rcl, INTSXP);
     Rnc = Rf_coerceVector(Rnc, INTSXP);
 
     x = REAL(Rx);
+    norm = REAL(Rnorm);
     cen = REAL(Rcen);
     cl = INTEGER(Rcl);
     nc = INTEGER(Rnc);
 
-    if( p != crow )
+    if(Rf_length(Rnorm) != n)
+        Rf_error("Wrong number of norms");
+    x = REAL(Rx);
+    if( p != cencol )
         Rf_error("Wrong dimention of matrices");
     if( Rf_length(Rcl) != n )
         Rf_error("wrong dimention of cl");
     if( Rf_length(Rnc) != k )
         Rf_error("wrong dimention of nc");
 
+    // calculating the norm of centers
+    Rcpp::DoubleVector centerNorm(k);
+    for(i = 0; i < k; i++) // iterating on centers
+        for(j = 0; j < p; j++) // iterating on features
+            centerNorm[i] += cen[i+k*j] * cen[i+k*j];
+    for(i = 0; i < k; i++) // iterating on centers
+        centerNorm[i] = std::sqrt(centerNorm[i]);
+
     // clear all the cluster labels
     for(i = 0; i < n; i++) cl[i] = -1;
-    for(i = 0; i < n; i++) {
+    for(i = 0; i < n; i++) { // iterating on samples
         // find nearest centre for each point 
         best = R_PosInf;
-        for(j = 0; j < k; j++) {
+        for(j = 0; j < k; j++) { // iterating on centers
+            approxDistance = norm[i] - centerNorm[j];
+            approxDistance *= approxDistance;
+            if(best < approxDistance) continue;
 	        dd = 0.0;
-	        for(c = 0; c < p; c++) {
+	        for(c = 0; c < p; c++) { // iterating on features
 	            tmp = x[i+n*c] - cen[j+k*c];
 	            dd += tmp * tmp;
 	        }
@@ -366,6 +391,99 @@ RcppExport SEXP hpdkmeans_Lloyd(SEXP Rx, SEXP Rcen, SEXP Rcl, SEXP Rnc)
     return R_NilValue;
     END_RCPP
 }
+
+/*
+** Calculates the norm of input vectors (used in hpdkmeans)
+**  Rx: the matrix of samples
+**  Rnorm: the matrix of norms
+*/
+RcppExport SEXP calculate_norm(SEXP Rx, SEXP Rnorm) {
+    BEGIN_RCPP
+    int n, p;
+    int i,j;
+    double *x, *norm;
+
+    int * dimx = INTEGER(Rf_getAttrib(Rx, R_DimSymbol));
+    n = dimx[0]; // number of samples
+    p = dimx[1]; // number of predictors
+/*
+    int * dimnorm = INTEGER(Rf_getAttrib(Rnorm, R_DimSymbol));
+    if(dimnorm[0] != n)
+        Rf_error("Wrong number of norms");
+    if(dimnorm[1] != 1)
+        Rf_error("There must be only one norm per sample");
+*/
+    Rx = Rf_coerceVector(Rx, REALSXP);
+    Rnorm = Rf_coerceVector(Rnorm, REALSXP);
+    if(Rf_length(Rnorm) != n)
+        Rf_error("Wrong number of norms");
+    x = REAL(Rx);
+    norm = REAL(Rnorm);
+
+    // calcilating the norm of samples
+    for(i = 0; i < n; i++) // iterating on samples
+        for(j = 0; j < p; j++) // iterating on features
+            norm[i] += x[i+n*j] * x[i+n*j];
+    for(i = 0; i < n; i++) // iterating on samples
+        norm[i] = std::sqrt(norm[i]);
+        
+    return Rnorm;
+    END_RCPP
+}
+
+/*
+** Calculates wss (used in hpdkmeans)
+**  Rx: the matrix of samples
+**  Rcen: the matrix of centers
+**  Rcl: the vector of cluster labels
+*/
+RcppExport SEXP calculate_wss(SEXP Rx, SEXP Rcen, SEXP Rcl) {
+    BEGIN_RCPP
+    int n, k, p, cencol;
+    int i, j, label;
+    double *x, *cen;
+    int *cl;
+    double dd, temp;
+
+    int * dimx = INTEGER(Rf_getAttrib(Rx, R_DimSymbol));
+    n = dimx[0]; // number of samples
+    p = dimx[1]; // number of predictors
+    int *dimc = INTEGER(Rf_getAttrib(Rcen, R_DimSymbol));
+    k = dimc[0]; // number of centers
+    cencol = dimc[1];
+
+    Rx = Rf_coerceVector(Rx, REALSXP);
+    Rcen = Rf_coerceVector(Rcen, REALSXP);
+    Rcl = Rf_coerceVector(Rcl, INTSXP);
+
+    x = REAL(Rx);
+    cen = REAL(Rcen);
+    cl = INTEGER(Rcl);
+
+    if( p != cencol )
+        Rf_error("Wrong dimention of matrices");
+    if( Rf_length(Rcl) != n )
+        Rf_error("wrong dimention of cluster labels");
+
+    // the vector of wss
+    Rcpp::DoubleVector dwss(k);
+    for(i = 0; i < k; i++)
+        dwss[i] = 0;
+
+    for(i = 0; i < n; i++) { // iterating on samples
+        dd = 0;
+        label = cl[i] - 1;
+        for(j = 0; j < p; j++) { // iterating on features
+            temp = x[i+n*j] - cen[label+k*j];
+            dd += temp * temp;
+        }
+        dwss[label] += dd;
+    }
+
+    return dwss;
+    END_RCPP
+}
+
 
 /*
 ** The calculation in each iteration of pagerank when the graph (mx) is sparse
@@ -516,7 +634,9 @@ RcppExport SEXP pagerank_vm(SEXP newPR, SEXP PR, SEXP mx, SEXP TP, SEXP damping,
   double *v1 = REAL(PR);
   double *v2 = REAL(newPR);
   double *tp = REAL(TP);
-  double *x_vec = REAL(mx);
+
+  mx = Rf_coerceVector(mx, INTSXP);
+  int *x_vec = INTEGER(mx);
   double tempRes;
 
   for (int i = 0; i < y; i++) {

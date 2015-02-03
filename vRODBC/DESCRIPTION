@@ -1,9 +1,9 @@
 Package: vRODBC
-Version: 0.7.0
+Version: 1.0.0
 Revision: $Rev: 1 $
 Date: 2013-08-15
-Author: Brian Ripley, and from 1999 to Oct 2002 Michael Lapsley
-Maintainer: Brian Ripley <ripley@stats.ox.ac.uk>
+Author: Shreya Prasad. RODBC package authored by Brian Ripley, and from 1999 to Oct 2002 Michael Lapsley.
+Maintainer: Shreya Prasad <shreya.prasad@hp.com>
 Title: ODBC Database Access
 Description: An ODBC database interface. Includes modifications for improved access to Vertica database
 SystemRequirements: An ODBC3 driver manager and drivers.

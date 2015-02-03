@@ -23,7 +23,7 @@ This function finds and returns the index of the maximum value stored in a darra
 it returns the index of the maximum value stored in a darray.
 }
 \author{
-Arash Fard <afard@vertica.com>
+    HP Vertica Analytics Team
 }
 
 \examples{
@@ -33,9 +33,9 @@ Arash Fard <afard@vertica.com>
     distributedR_start()
     
     graph <- matrix(0, 6,6)
-    graph[2,1] <- 1; graph[2,3] <- 1; graph[3,1] <- 1; graph[3,2] <- 1;
-    graph[3,4] <- 1; graph[4,5] <- 1; graph[4,6] <- 1; graph[5,4] <- 1; 
-    graph[5,6] <- 1; graph[6,4] <- 1
+    graph[2,1] <- 1L;graph[2,3] <- 1L;graph[3,1] <- 1L;graph[3,2] <- 1L;
+    graph[3,4] <- 1L;graph[4,5] <- 1L;graph[4,6] <- 1L;graph[5,4] <- 1L; 
+    graph[5,6] <- 1L;graph[6,4] <- 1L
 
     dgraph <- as.darray(graph, c(6,3))
     pr <- hpdpagerank(dgraph)

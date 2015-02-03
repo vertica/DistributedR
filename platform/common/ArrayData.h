@@ -32,6 +32,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <boost/unordered_set.hpp>
 
 #include "Rinternals.h"
 #include <RInside.h>
@@ -74,7 +75,8 @@ class ArrayData;
 
 // Struct needed to cut up composites (for updating)
 struct Composite {
-  vector<pair<size_t, size_t> > offsets, dims;
+  vector<pair<std::int64_t, std::int64_t> > offsets;
+  vector<pair<std::int64_t, std::int64_t> > dims;
   vector<string> splitnames;
   DobjectType dobjecttype;
 };
@@ -131,7 +133,7 @@ class ArrayData {
   // Get total size in shared memory
   virtual size_t GetSize();
   // Get array dimensions
-  virtual std::pair<size_t, size_t> GetDims() const = 0;
+  virtual std::pair<std::int64_t, std::int64_t> GetDims() const = 0;
 
   // Create an 'empty' array in R that has the same type as this array
   // (used for creating composite arrays)
@@ -166,9 +168,9 @@ ArrayData* ParseVariable(RInside &R, const std::string &varname,
 // Create composite array from metadata described in ca
 size_t CreateComposite(
     const std::string &name,
-    const std::vector<std::pair<int, int> > &offsets,
+    const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
     const std::vector<ArrayData*> &splits,
-    std::pair<int, int> dims,
+    std::pair<std::int64_t, std::int64_t> dims,
     ARRAYTYPE type);
 
 // Store dense array data
@@ -176,14 +178,14 @@ class DenseArrayData : public ArrayData {
  public:
   explicit DenseArrayData(const std::string &name);
   DenseArrayData(const std::string &name, const SEXP sexp,
-      const std::string &classname);
+      const boost::unordered_set<std::string> &classname);
   DenseArrayData(
       const std::string &name,
-      const std::vector<std::pair<int, int> > &offsets,
+      const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
       const std::vector<ArrayData*> &splits,
-      std::pair<int, int> dims);
+      std::pair<std::int64_t, std::int64_t> dims);
   virtual void LoadInR(RInside &R, const std::string &varname);
-  virtual std::pair<size_t, size_t> GetDims() const;
+  virtual std::pair<std::int64_t, std::int64_t> GetDims() const;
 
   // virtual void CreateEmpty(RInside &R, const std::string &varname, int dimx,
   // int dimy) const;
@@ -201,14 +203,14 @@ class SparseArrayData : public ArrayData {
  public:
   explicit SparseArrayData(const std::string &name);
   SparseArrayData(const std::string &name, const SEXP sexp,
-      const std::string &classname);
+      const boost::unordered_set<std::string> &classname);
   SparseArrayData(const std::string &name,
-      const std::vector<std::pair<int, int> > &offsets,
+      const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
       const std::vector<ArrayData*> &splits,
-      std::pair<int, int> dims);
+      std::pair<std::int64_t, std::int64_t> dims);
 
   virtual void LoadInR(RInside &R, const std::string &varname);
-  virtual std::pair<size_t, size_t> GetDims() const;
+  virtual std::pair<std::int64_t, std::int64_t> GetDims() const;
 //  virtual std::pair<void*, size_t> Compress();
 //  virtual void Decompress();
   static int* ConvertJtoPVector(int* j_vector, int nnz, int num_col);
@@ -224,19 +226,19 @@ class SparseArrayTripletData : public ArrayData {
  public:
   explicit SparseArrayTripletData(const std::string &name);
   SparseArrayTripletData(const std::string &name, const SEXP sexp,
-      const std::string &classname);
+      const boost::unordered_set<std::string> &classname);
   SparseArrayTripletData(const std::string &name,
-      const std::vector<std::pair<int, int> > &offsets,
+      const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
       const std::vector<ArrayData*> &splits,
-      std::pair<int, int> dims);
+      std::pair<std::int64_t, std::int64_t> dims);
 
   SparseArrayTripletData(const string& name, const SEXP sexp_from,
-    const string &classname, const int32_t startx, const int32_t starty,
+    const boost::unordered_set<std::string> &classname, const int32_t startx, const int32_t starty,
     const int32_t endx, const int32_t endy, const int64_t nonzeros,
     bool is_row_split);
 
   virtual void LoadInR(RInside &R, const std::string &varname);
-  virtual std::pair<size_t, size_t> GetDims() const;
+  virtual std::pair<std::int64_t, std::int64_t> GetDims() const;
   virtual ~SparseArrayTripletData();
 
  private:
@@ -251,7 +253,7 @@ class EmptyArrayData : public ArrayData {
  public:
   explicit EmptyArrayData(const std::string name);
   virtual void LoadInR(RInside &R, const std::string &varname);
-  virtual std::pair<size_t, size_t> GetDims() const;
+  virtual std::pair<std::int64_t, std::int64_t> GetDims() const;
   // virtual void CreateEmpty(RInside &R, const std::string &varname, int dimx,
   //   int dimy) const;
 };

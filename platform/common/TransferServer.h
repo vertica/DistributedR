@@ -74,6 +74,7 @@ class TransferServer {
   int start_port_range_;
   int end_port_range_;
   sem_t server_ready;
+  bool error_in_transfer_thread;  //communicates error from transfer server to the creating thread. Non-zero means error.
 };
 
 }  // namespace presto

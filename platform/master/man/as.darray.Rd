@@ -12,19 +12,25 @@
   rows and columns.}
 }
 
-\details{ If partition size (blocks) is not present then a distributed
-array with only a single partition is created.
-Last set of partitions may have fewer
-rows or columns if input matrix size is not an integer multiple of partition
-size. For example, the distributed array \code{as.darray(matrix(1,nrow=5,ncol=5),
-blocks=c(2,5))} has three partitions. The first two partitions have two
-rows each but the last partition has only one row. All three partitions
-have five columns.
-}
+\details{ If partition size (blocks) is missing then the input matrix
+is row partitioned and striped across the cluster, i.e., the returned
+distributed array has approximately as many partitions as the number
+of R instances in the Distributed R session. 
+%If partition size (blocks) is not present then a distributed
+%array with only a single partition is created.  
+The last set of partitions may have fewer rows or columns if input matrix size is not
+an integer multiple of partition size. For example, the distributed
+array \code{as.darray(matrix(1,nrow=5,ncol=5), blocks=c(2,5))} has
+three partitions. The first two partitions have two rows each but the
+last partition has only one row. All three partitions have five
+columns. 
+
+To create a distributed array with just one partition, pass the dimension of the input array, 
+i.e. \code{as.darray(A, blocks=dim(A)}}
 
 \value{ Returns a distributed array with dimensions equal to that of the
- input matrix and partitioned according to argument blocks.  Data may
- reside as partitions in remote nodes.}  
+ input matrix and partitioned according to argument 'blocks'.  Data may
+ reside as partitions on remote nodes.}  
 
 \references{
   \itemize{
@@ -33,8 +39,7 @@ have five columns.
     Learning and Graph Processing with Sparse
     Matrices. \emph{EuroSys'13},
     197--210.
-    \item Homepage: http://www.hpl.hp.com/research/distributedr.htm
-%    \item Mailing list: presto-dev@external.groups.hp.com
+    \item Homepage: http://www.vertica.com/distributedr
   }
 }
 
@@ -45,7 +50,7 @@ have five columns.
 }
 
 \seealso{
-\code{\link{darray}}
+\code{\link{darray}},\code{\link{partitionsize}}
 }
 
 \examples{
@@ -54,16 +59,17 @@ library(distributedR)
 distributedR_start()
 ##Create 4x4 matrix
 mtx<-matrix(sample(0:1, 16, replace=T), nrow=4)
-##Create distributed array with single partition
+##Create distributed array spread across the cluster
 da<-as.darray(mtx)
-da@dim
-da@blocks
-getpartition(da)
+partitionsize(da)
+##Create distributed array with single partition
+db<-as.darray(mtx, blocks=dim(mtx))
+partitionsize(db)
 ##Create distributed array with two partitions
-db<- as.darray(mtx, blocks=c(2,4))
-db@blocks
+dc<- as.darray(mtx, blocks=c(2,4))
+partitionsize(dc)
 ##Fetch first partition
-getpartition(db,1)
+getpartition(dc,1)
 distributedR_shutdown()
 }
 }

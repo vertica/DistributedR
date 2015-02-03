@@ -55,7 +55,7 @@ int32_t TransferServer::transfer_blob(void *dest, const string &name,
   this->dest_ = dest;
   this->size_ = size;
   bytes_fetched_ = 0;
-
+  error_in_transfer_thread= false;
   // Initialize semaphore to zero. Server thread will increment
   // when it is ready
   sem_init(&server_ready, 0, 0);
@@ -72,12 +72,12 @@ int32_t TransferServer::transfer_blob(void *dest, const string &name,
   // Wait till server is ready
   sem_wait(&server_ready);
 
-  // FIXME(shivaram): This doesn't work on bfc machines
-  // char hostname[64]; // HOST_NAME_MAX is 64 in Linux
-  // int ret = gethostname(hostname, 64);
-  // if (ret < 0) {
-  //   return ret;
-  // }
+  //Check if there was an error in creating the transfer server.
+  if(error_in_transfer_thread){
+    LOG_ERROR("Error in creating TransferServer."); 
+    throw PrestoShutdownException
+       ("Master or Worker failed to bind to port for data transfer. Check port availability and restart session.");
+  }
 
   // Information of the requester
   ServerInfo location;
@@ -117,12 +117,14 @@ int32_t TransferServer::transfer_blob(void *dest, const string &name,
  * @return If the action succeed, it will return 0. Otherwise, socket descriptor.
  */
 void* TransferServer::transfer_server_thread(void) {
-  static int32_t ret = 0;
+  static int32_t ret = -1;
   LOG_DEBUG("transfer_server_thread started - %u", pthread_self());
   try {
     serverfd = CreateBindedSocket(start_port_range_, end_port_range_, &server_socket_port);
   } catch (...) {
-    LOG_ERROR("transfer_server_thread - fail to open/bind a socket\n");
+    LOG_ERROR("transfer_server_thread - fail to open/bind a socket.");
+    error_in_transfer_thread = true;
+    sem_post(&server_ready);
     return reinterpret_cast<void*>(&ret);
   }
   LOG_DEBUG("transfer_server_thread socket bind complete. binded port: %u %d", pthread_self(), server_socket_port);
@@ -131,7 +133,8 @@ void* TransferServer::transfer_server_thread(void) {
   socklen_t sin_size = sizeof(their_addr);
   ret = listen(serverfd, MAX_CONN);
   if (ret < 0) {
-    fprintf(stderr, "listen failure\n");
+    LOG_ERROR("transfer_server_thread - socket listen failed.");
+    error_in_transfer_thread = true;
     sem_post(&server_ready);
     return reinterpret_cast<void*>(&ret);
   }

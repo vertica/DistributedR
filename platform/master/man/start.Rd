@@ -4,33 +4,51 @@
 \title{distributedR_start}
 \description{Starts distributedR in single-machine or cluster mode. By
 default, distributedR starts on the local machine with number of R instances
-equal to one less than the number of CPU cores. For cluster mode, worker
+equal to the number of CPU cores. For cluster mode, worker
 details should be present in cluster_conf file. After successful distributedR_start call,
 the master address and port number is displayed. This value is useful when a user wants to
 reference log files in workers.}
 
 \usage{
-distributedR_start (inst = 0, mem=0, cluster_conf="", log=3)
-%presto_home = "", workers=TRUE, rmt_home="", rmt_uid = "")
+distributedR_start (inst = 0, mem=0, cluster_conf="", log=2)
 }
 \arguments{
 
-  \item{inst}{ number of R instances to launch at each
-    worker. Setting this to zero will automatically start R instances one less than
-    the number of CPU cores in each machine. This value is ignored if
-    Executors field is defined in cluster_conf file}
+  \item{inst}{ number of R instances to launch at each worker. Default
+    value is zero and will automatically start R instances equal to the
+    number of CPU cores in each machine. This default value (zero) is
+    ignored if Executors field is defined in cluster_conf file}
 
-  \item{mem}{ allocated memory size of a worker node. This value is
-    ignored if SharedMemory field is defined in cluster_conf file}
+  \item{mem}{ allocated memory size of a worker node. The default
+    value is zero and will use all the space present in /dev/shm on
+    each worker. The default value (zero) is ignored if SharedMemory
+    field is defined in cluster_conf file}
 
     \item{cluster_conf}{path to XML file describing configuration of
-      master and workers. File should contain hostname (or IP address) and
-      port number of master and workers. In Workers field, 
-      Executors field determines the number of executors in a worker,
-      and SharedMemory determines the size of shared memory. 
-      Executors and SharedMemory fileds are optional, and default value (0) will be used
-      unless inst or mem are specified in the arguments.
-      Example configuration file is in $distributedR_HOME /conf/cluster_conf.xml}
+      master and workers. In the XML file, ServerInfo contains the IP address (hostname)
+      and port number range of the master.  StartPortRange and EndPortRange
+      specifies the port number range that will be used by a master.
+      The runtime will select a random open port within the range.
+      In a master, the port number range has to contain
+      at least two open ports.
+
+      Within the Workers field, information about multiple workers can be included.
+      The worker field contains IP address (hostname) and port
+      range. In a multi-worker cluster, loop-back address (127.0.0.1
+      or localhost) should not be used as it prohibits inter-node
+      communication. StartPortRange and EndPortRange specifies the
+      port number range that will be used by a worker.  This range
+      should contain at least 2*(number of workers)+1 open ports.
+
+     The Executor field sets the number of R instances. If the value
+     is 0, the runtime will automatically start as many instances as the
+     number of cores in each machine.  SharedMemory determines the
+     memory size assigned to each worker in MB. For the default value of 0, the runtime
+     will automatically use the size of mounted shared memory region.
+     Currently, memory constraints are not enforced.  
+
+     An example configuration file is present in
+     /opt/hp/distributedR/conf/cluster_conf.xml}
 
    \item{log}{sets level of information generated in log files. 
     The four severity levels are: 0 (ERROR), 1 (WARNING), 2
@@ -90,7 +108,7 @@ Review the Master and Executor Master logs for complete exception details if an 
   AuYoung, A., and Schreiber, R. (2013) Presto: Distributed Machine
   Learning and Graph Processing with Sparse Matrices. \emph{EuroSys'13},
   197--210.
-  \item Homepage: http://www.hpl.hp.com/research/distributedr.htm
+  \item Homepage: http://www.vertica.com/distributedr
 %  \item Mailing list: presto-dev@external.groups.hp.com
 }
 }

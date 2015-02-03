@@ -41,7 +41,7 @@ nFiles == ceiling(nVertices / verticesInSplit) where nFiles is the number of fil
 }
 
 \author{
-Arash Fard <afard@vertica.com>
+    HP Vertica Analytics Team
 }
 
 \examples{

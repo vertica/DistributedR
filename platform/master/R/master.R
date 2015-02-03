@@ -115,10 +115,49 @@ start_workers <- function(cluster_conf,
   worker_conf <- conf2df(cluster_conf)
   master_addr <- get_pm_object()$get_master_addr()
   master_port <- get_pm_object()$get_master_port()
+
+  #clean strings TODO move to function
+  master_addr <-  gsub(" ","", master_addr , fixed=TRUE)
+  master_addr <-  gsub("\n","", master_addr , fixed=TRUE)
+  master_addr <-  gsub("\r","", master_addr , fixed=TRUE)
+  master_addr <-  gsub("\t","", master_addr , fixed=TRUE)
+
+  master_port <-  gsub(" ","", master_port , fixed=TRUE)
+  master_port <-  gsub("\n","", master_port , fixed=TRUE)
+  master_port <-  gsub("\r","", master_port , fixed=TRUE)
+  master_port <-  gsub("\t","", master_port , fixed=TRUE)
+
   env_variables <- .pass_env_var()
   tryCatch({
     for(i in 1:nrow(worker_conf)) {
       r <- worker_conf[i,]
+
+      #clean strings
+      r$Hostname <-  gsub(" ","", r$Hostname , fixed=TRUE)
+      r$Hostname <-  gsub("\n","", r$Hostname , fixed=TRUE)
+      r$Hostname <-  gsub("\r","", r$Hostname , fixed=TRUE)
+      r$Hostname <-  gsub("\t","", r$Hostname , fixed=TRUE)
+
+      r$StartPortRange <-  gsub(" ","", r$StartPortRange , fixed=TRUE)
+      r$StartPortRange <-  gsub("\n","", r$StartPortRange , fixed=TRUE)
+      r$StartPortRange <-  gsub("\r","", r$StartPortRange , fixed=TRUE)
+      r$StartPortRange <-  gsub("\t","", r$StartPortRange , fixed=TRUE)
+
+      r$EndPortRange <-  gsub(" ","", r$EndPortRange , fixed=TRUE)
+      r$EndPortRange <-  gsub("\n","", r$EndPortRange , fixed=TRUE)
+      r$EndPortRange <-  gsub("\r","", r$EndPortRange , fixed=TRUE)
+      r$EndPortRange <-  gsub("\t","", r$EndPortRange , fixed=TRUE)
+      
+      r$SharedMemory <-  gsub(" ","", r$SharedMemory , fixed=TRUE)
+      r$SharedMemory <-  gsub("\n","", r$SharedMemory , fixed=TRUE)
+      r$SharedMemory <-  gsub("\r","", r$SharedMemory , fixed=TRUE)
+      r$SharedMemory <-  gsub("\t","", r$SharedMemory , fixed=TRUE)
+
+      r$Executors <-  gsub(" ","", r$Executors , fixed=TRUE)
+      r$Executors <-  gsub("\n","", r$Executors , fixed=TRUE)
+      r$Executors <-  gsub("\r","", r$Executors , fixed=TRUE)
+      r$Executors <-  gsub("\t","", r$Executors , fixed=TRUE)
+
       m <- ifelse(as.numeric(mem)>0, mem, ifelse(is.na(r$SharedMemory), 0, r$SharedMemory))
       e <- ifelse(as.numeric(inst)>0, inst, ifelse(is.na(r$Executors), 0, r$Executors))	
       if (as.numeric(e)>64)
@@ -128,10 +167,12 @@ start_workers <- function(cluster_conf,
       }
       sp_opt <- getOption("scipen")  # This option value determines whether exponentional or fixed expression will be used (m and e should not not be expressed using exponentional expression)
       options("scipen"=100000)
+
       cmd <- paste("ssh -n", paste(rmt_uid,"@",r$Hostname,sep=""), "'cd",rmt_home,";", bin_path, 
                    "-m", m, "-e", e, "-p", r$StartPortRange, "-q", r$EndPortRange, "-l", log, "-a", master_addr, "-b", master_port,
                    "-w", r$Hostname, env_variables, "'", sep=" ")
       options("scipen"=sp_opt)
+      #print(sprintf("cmd: %s",cmd))
       system(cmd, wait=FALSE, ignore.stdout=TRUE, ignore.stderr=TRUE)
     }
   }, error = handle_presto_exception)
@@ -140,17 +181,24 @@ start_workers <- function(cluster_conf,
 
 distributedR_start <- function(inst=0, mem=0,
                          cluster_conf="",
-                         presto_home="",
-                         workers=TRUE,
-                         rmt_home="",
-                         rmt_uid="", log=2) {
+                         log=2) {
+  
   gcinfo(FALSE)
   gc()
+  ret<-TRUE
+  #helpful for debugging. Developers can set differnt values.
+  presto_home=""
+  workers=TRUE
+  rmt_home=""
+  rmt_uid=""
+  yarn=FALSE
+  if(!(is.numeric(inst) && floor(inst)==inst && inst>=0)) stop("Argument 'inst' should be a non-negative integral value")
+  if(!(is.numeric(mem) && mem>=0)) stop("Argument 'mem' should be a non-negative number")
+
   pm <- NULL
   tryCatch(pm <- get_pm_object(), error=function(e){})
   if (!is.null(pm)){
-    cat("distributedR instance is already running. Call distributedR_shutdown() to terminate the running session\n")
-    return(FALSE)
+    stop("distributedR is already running. Call distributedR_shutdown() to terminate existing session\n")
   }
   if(presto_home==""){
     presto_home<-ifelse(Sys.getenv(c("DISTRIBUTEDR_HOME"))=="", "/opt/hp/distributedR", Sys.getenv(c("DISTRIBUTEDR_HOME")))
@@ -175,21 +223,35 @@ distributedR_start <- function(inst=0, mem=0,
       start_workers(cluster_conf=cluster_conf, bin_path=bin_path, 
         inst=inst, mem=mem, rmt_home=rmt_home, rmt_uid=rmt_uid, log=log)
     }
+    else if (yarn){
+      dr_path <- system.file(package = "distributedR")
+      full_path <- paste(dr_path,'/yarn/yarn.R', sep='')
+      source(full_path)
+
+    }
+
     pm$start(log)
   },error = function(excpt){    
     pm <- get_pm_object()
     distributedR_shutdown(pm)
     gcinfo(FALSE)
     gc()
+    ret<-FALSE
     stop(excpt$message)})
   cat(paste("Master address:port - ", pm$get_master_addr(),":",pm$get_master_port(),"\n",sep=""))
-  TRUE
+  ret<-ret && (check_dr_version_compatibility())
 }
 
 conf2df <- function(cluster_conf) {
   tryCatch({
     library(XML)
+    if(file.access(cluster_conf,mode=4)==-1) stop("Cannot read configuration file. Check file permissions.")
     conf_xml <- xmlToList(cluster_conf)
+    ## xmlToList adds a comment in a list element with a NULL value and we need to remove them.
+    conf_xml$Workers[which(names(conf_xml$Workers) %in% c("comment"))] <- NULL
+    for(i in 1:length(conf_xml$Workers)) {
+        conf_xml$Workers[[i]][which(names(conf_xml$Workers[[i]]) %in% c("comment"))] <- NULL
+    }
     conf_df <- lapply(conf_xml$Workers, data.frame, stringsAsFactors=FALSE)
     conf_df <- lapply(conf_df, function(X){
       nms <- c("Hostname", "StartPortRange", "EndPortRange", "Executors", "SharedMemory")
@@ -214,6 +276,7 @@ conf2df <- function(cluster_conf) {
 }
 
 distributedR_shutdown <- function(pm=NA, quiet=FALSE) {
+  ret<-TRUE
   if(class(pm) != "Rcpp_PrestoMaster"){
     tryCatch(pm <- get_pm_object(), error=function(e){})
     if (is.null(pm)){
@@ -221,8 +284,7 @@ distributedR_shutdown <- function(pm=NA, quiet=FALSE) {
     }
   }
   tryCatch(pm$shutdown(),error = function(e){})
-  clear_presto_r_objs(FALSE)
-  TRUE
+  ret<-ret && clear_presto_r_objs(FALSE)
 }
 
 clear_presto_r_objs <- function(darray_only=TRUE) {
@@ -285,7 +347,7 @@ distributedR_status <- function(help=FALSE){
   stat_df
 }
 
-distributedR_ls <- function(){
+.distributedR_ls <- function(){
   tryCatch({
     pm <- get_pm_object()
     if (!is.null(pm)) {
@@ -322,3 +384,25 @@ handle_presto_exception <- function (excpt){
     stop(excpt$message)
   }
 }
+
+#Check that the master and workers run the same version of distributed R
+check_dr_version_compatibility<-function(){
+  #Create dframe with num partitions = num workers. This can be buggy if scheduler does not create partitions in round robin
+  #Correct, but higher overhead solution, is to create partitions=total_no_executors
+  nworkers<-get_pm_object()$get_num_workers()
+  temp<-dframe(c(nworkers,1),c(1,1))
+  foreach(i, 1:npartitions(temp), function(x=splits(temp,i)){
+  	 x=data.frame(v=packageVersion("distributedR"))
+	 update(x)
+  }, progress=FALSE)
+  vers<-getpartition(temp)
+  master_version<-packageVersion("distributedR")
+  bad_workers<-which(master_version != vers$v)
+  if(length(bad_workers)>0){
+    cat(paste("Error: Incompatible distributedR versions in the cluster (master=",master_version,", worker(s)=",vers$v[(bad_workers[1])],")\nInstall same version across cluster. Shutting down session.\n", sep=""))
+    distributedR_shutdown() 
+    return (FALSE)
+  }
+  return (TRUE)
+}
+

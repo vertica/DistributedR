@@ -41,10 +41,10 @@ setMethod("initialize", "splits",
             .Object
           })
 
-splits <- function(x, y, z, ...)
+splits <- function(x, y,...)
     UseMethod("splits")
 
-setMethod("splits", signature("dobject", "missing", "missing"),
+setMethod("splits", signature("dobject", "missing"),
           function(x, ...) {
             n <- x@dobject_ptr$num_splits()
             split_ids <- as.vector(0:(n-1))
@@ -53,7 +53,7 @@ setMethod("splits", signature("dobject", "missing", "missing"),
             new("splits", split_ids, dobject)
           })
 
-setMethod("splits", signature("dobject", "numeric", "missing"),
+setMethod("splits", signature("dobject", "numeric"),
           function(x, y, ...) {
             if (y<=0||y>x@dobject_ptr$num_splits()) {
                 stop("Split index must be larger than 0 and smaller than # of Splits")
@@ -63,15 +63,15 @@ setMethod("splits", signature("dobject", "numeric", "missing"),
             new("splits", split_ids, dobject)
           })
 
-setMethod("splits", signature("dobject", "numeric", "numeric"),
-          function(x, y, z, ...) {
-            num.splits <- ceiling(x@dim/x@blocks)
-            if (y<=0||y>num.splits[1]||z<=0||z>num.splits[2]) {
-		stop("split index must be larger than 0 and smaller than # splits")
-	    }
-            idx <- (y-1)*num.splits[2] + z
-            splits(x, idx)
-          })
+#setMethod("splits", signature("dobject", "numeric", "numeric"),
+#          function(x, y, z, ...) {
+#            num.splits <- ceiling(x@dim/x@blocks)
+#            if (y<=0||y>num.splits[1]||z<=0||z>num.splits[2]) {
+#		stop("split index must be larger than 0 and smaller than # splits")
+#	    }
+#            idx <- (y-1)*num.splits[2] + z
+#            splits(x, idx)
+#          })
 
 setMethod("length", signature("splits"),
   function(x) {
@@ -109,9 +109,19 @@ getpartition <- function(x, y, z, ...){
 
 setMethod("getpartition", signature("darray", "missing", "missing"),
           function(x, ...) {
-            if(all(x@dim<=.Machine$integer.max) == FALSE) {
-                stop(paste("Cannot perform getpartition on a matrix with dimension larger than",.Machine$integer.max))
+            if(((dim(x)[1]*dim(x)[2] > .Machine$integer.max) && !x@sparse) || all(dim(x)<=.Machine$integer.max) == FALSE) {
+                stop(paste("Cannot perform getpartition on whole darray with dimension larger than", .Machine$integer.max,
+                           "or number of elements more than",.Machine$integer.max))
             }
+	    #If the array has not been initialized, let's just return 0 dim arrays.
+	    if(is.invalid(x)){
+		if(x@sparse){ 
+			     return (new("dgCMatrix", i=as.integer({}),
+                                      x=as.numeric({}), 
+                                      p=as.integer(rep(0,1)),
+                                      Dim=as.integer(c(0,0))))
+    		}else{ return (array(dim=c(0,0)))}
+	    }
             foreach(i, 1:1, function(comp = splits(x)) {}, progress=FALSE)
             tryCatch({
               pm <- get_pm_object()
@@ -130,10 +140,11 @@ setMethod("getpartition", signature("darray", "missing", "missing"),
 
 setMethod("getpartition", signature("dframe", "missing", "missing"),
           function(x, ...) {
-            if(all(x@dim<=.Machine$integer.max) == FALSE) {
-                stop(paste("Cannot perform getpartition on a matrix with dimension larger than",.Machine$integer.max))
+            if(all(dim(x)<=.Machine$integer.max) == FALSE) {
+                stop(paste("Cannot perform getpartition on a dframe with dimension larger than",.Machine$integer.max))
             }
-            darr <- dframe(x@dim, x@dim)
+	    if(is.invalid(x)){ return (data.frame())}
+            darr <- dframe(dim(x), dim(x))
             foreach(i, 1:1,
                     createcomposite <- function(comp = splits(x),
                                                 da = splits(darr,1)) {
@@ -207,12 +218,14 @@ setMethod("getpartition", signature("darray", "numeric", "missing"),
     tryCatch({
       pm <- get_pm_object()
       ret <- .Call("DistributedObject_Get", pm, new("splits", as.integer(y-1), x@dobject_ptr))
+      poffset<-dobject.getPartitionOffsets(x,y)
+      psize<-partitionsize(x,y)
       tryCatch({
         if(!is.null(x@dimnames[[1]]) && length(x@dimnames[[1]]) != 0) {
-          rownames(ret) <- (x@dimnames[[1]])[((dobject.getoffsets(x@dim, x@blocks, y))[1]+1):((dobject.getoffsets(x@dim, x@blocks, y))[1]+dobject.getdims(x@dim, x@blocks, y)[1])]
+          rownames(ret) <- (x@dimnames[[1]])[(poffset[1,1]+1):(poffset[1,1]+psize[1,1])]
         }
         if(!is.null(x@dimnames[[2]]) && length(x@dimnames[[2]]) != 0) {
-          colnames(ret) <- (x@dimnames[[2]])[((dobject.getoffsets(x@dim, x@blocks, y))[2]+1):((dobject.getoffsets(x@dim, x@blocks, y))[2]+dobject.getdims(x@dim, x@blocks, y)[2])]
+          colnames(ret) <- (x@dimnames[[2]])[(poffset[1,2]+1):(poffset[1,2]+psize[1,2])]
         }
       }, error=function(e){})
       ret
@@ -261,7 +274,6 @@ setMethod("rcall", signature("character", "list", "list", "list", "list"),
 
 # foreach generic definition 
 foreach <- function(index, range, func, progress=TRUE, scheduler=0, inputs=integer(0)) {
-#foreach <- function(index, range, func, progress=TRUE, inputs=integer(0)) {
   options(error=dump.frames) #for debugging
 
   if (class(range) != "numeric" && class(range) != "integer") {
@@ -315,11 +327,20 @@ st <- proc.time()[3]
 	if (length(range)>1 && is.numeric(args[[a]][[3]]))  update_args = append(update_args, all_arg_names[[a]][1])
 
         nparts = eval(args[[a]][[2]], envir=parent.frame())@dobject_ptr$num_splits()  #validate splits arguments
-	max.split <- max(unlist(arg_vals[[length(arg_vals)]]))+1
-        if (nparts < max.split)  {
-           stop(paste("splits() failure: Object ",args[[a]][[2]]," does not have as many partitions as specified\n",sep=""))
+	range.split<-(unlist(arg_vals[[length(arg_vals)]]))+1
+        if (nparts < max(range.split))  {
+           stop(paste("splits() failure: Object ",args[[a]][[2]]," does not have as many partitions as specified.\n",sep=""))
+	}
+        if (min(range.split)<1)  {
+           stop(paste("splits() failure: Object ",args[[a]][[2]]," refers to partition with id < 1.\n",sep=""))
 	}
       } else { # composite
+        dobj <- eval(args[[a]][2][[1]], envir=parent.frame())
+        if(is.darray(dobj)) {
+           if(((dim(dobj)[1]*dim(dobj)[2] > .Machine$integer.max) && !dobj@sparse) || all(dim(dobj)<=.Machine$integer.max) == FALSE)
+              stop(paste("splits() failure: Cannot execute function on whole darray with dimension larger than", .Machine$integer.max,
+                         "or number of elements more than",.Machine$integer.max))
+        }
         if (length(range)>1)  update_args = append(update_args, all_arg_names[[a]][1])
 
         num.splits <- eval(args[[a]][2][[1]], envir=parent.frame())@dobject_ptr$num_splits()
@@ -412,5 +433,5 @@ st <- proc.time()[3]
         DUP=FALSE)
   },error = handle_presto_exception)
 
-  return(status)
+  #return(status)
 }

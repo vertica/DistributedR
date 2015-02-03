@@ -41,8 +41,8 @@
 #include "shared.pb.h"
 #include "worker.pb.h"
 
-using namespace std;
-using namespace boost;
+//using namespace std;
+//using namespace boost;
 using boost::multi_index_container;
 using namespace Rcpp;
 
@@ -74,7 +74,8 @@ enum SplitDistribution {
 */
  enum DobjectSubType {
    STD = 1,  //standard dobject. Sizes cannot be changed.
-   UNINIT,   //uninitialized object
+   UNINIT_DECLARED,   //uninitialized object declared for the first time as empty (e.g., darray with empty flag
+   UNINIT,   //uninitialized object (i.e, initialized to 0 by the system). The user can write to it in future
    FLEX_DECLARED,  //object with flexible or unequal partition sizes. This is the first time it is declared, so no values in it
    FLEX_UNINIT  //object with flexible or unequal partition sizes but has been initialized to 0 by the system. The user can update the sizes once and only once after this point.
 };
@@ -82,8 +83,8 @@ enum SplitDistribution {
 struct WorkerIdxInfo {
   int idx;
   int worker_client_idx;
-  unordered_map<int32_t, uint64_t> worker_npartitions_map;
-  vector<int32_t> loader_workers;
+  boost::unordered_map<int32_t, uint64_t> worker_npartitions_map;
+  std::vector<int32_t> loader_workers;
 };
 
 class DistributedObject {
@@ -97,9 +98,9 @@ class DistributedObject {
   void ClearWorkerIdxInfo();
 
   // Creates the distributed array in the workers.
-  bool Create(const string& name,
-              const vector<int64_t> dimensions,
-              const vector<int64_t> blocks);
+  bool Create(const std::string& name,
+              const std::vector< ::int64_t> dimensions,
+              const std::vector< ::int64_t> blocks);
 
   /** Get the number of splits with given version
     * @version the version number
@@ -125,7 +126,7 @@ class DistributedObject {
   int32_t GenerateSplitId() {
     // TODO(shivaram): Use an atomic inc and get ?
     int32_t ret = 0;
-    unique_lock<mutex> d_lock(*mutex_);
+    boost::unique_lock<boost::mutex> d_lock(*mutex_);
     ret = next_split_id_;
     next_split_id_++;
     d_lock.unlock();
@@ -135,7 +136,7 @@ class DistributedObject {
   /** Get name of the darray
     * @return name of a darray
     */
-  string Name() {
+  std::string Name() {
     return name_;
   }
 
@@ -156,16 +157,22 @@ class DistributedObject {
     return ((dobject_subtype_ == FLEX_DECLARED) ||(dobject_subtype_ == FLEX_UNINIT));
   }
 
+  //Return if the object is currently invalid. This can occur if the object has subtype UNINT_* or FLEX_* type, i.e, 
+  //contencts have not been written to the partitions by the user
+  bool isObjectInvalid() {
+    return ((dobject_subtype_ == FLEX_DECLARED) ||(dobject_subtype_ == FLEX_UNINIT)|| (dobject_subtype_ == UNINIT) || (dobject_subtype_ == UNINIT_DECLARED));
+   }
+
   /** Get a dimension (total size) of this darray
-    * @return dimension expressed in the vector
+    * @return dimension expressed in the std::vector
     */
-  vector<int64_t> GetDims() {
+  std::vector<int64_t> GetDims() {
     return GetDimensions(-1);
   }
   /** Get a block size of this darray
-    * @return block size expressed in the vector
+    * @return block size expressed in the std::vector
     */
-  vector<int64_t> GetBlocks() {
+  std::vector<int64_t> GetBlocks() {
     return blocks_;
   }
 
@@ -176,28 +183,28 @@ class DistributedObject {
     return split_type_;
   }
 
-  vector<int64_t> GetBoundary(int32_t split,
+  std::vector<int64_t> GetBoundary(int32_t split,
       int32_t version = -1) {
     int32_t version_to_use = version == -1 ? version_ : version;
     if (version_split_map.find(version_to_use) ==
         version_split_map.end() ||
         split >= version_split_map[version_to_use].size()) {
-      return vector<int64_t>();
+      return std::vector<int64_t>();
     }
     return version_split_map[version_to_use][split]->start_offset;
   }
 
   //iR: return the dimensions stored in the class field. version is unused as it is the latest version.
-  vector<int64_t> GetDimensions(int32_t version = -1) {
+  std::vector<int64_t> GetDimensions(int32_t version = -1) {
     return dimensions_;
   }
 
   /*(TODO) This code is outdated. Remove. We explicitly store dimensions_
-  vector<int64_t> GetDimensions(int32_t version = -1) {
+  std::vector<int64_t> GetDimensions(int32_t version = -1) {
     int32_t version_to_use = version == -1 ? version_ : version;
     DistributedObjectSplit* last_split =
       version_split_map[version_to_use].back().get();
-    vector<int64_t> dimensions_to_return;
+    std::vector<int64_t> dimensions_to_return;
     if (last_split != NULL) {
       // Dimensions is start_offset of last split + last split
       // dimensions
@@ -219,8 +226,8 @@ class DistributedObject {
   // Details of each split
   struct DistributedObjectSplit {
     int32_t id;
-    vector<int64_t> start_offset;
-    shared_ptr<Array> array;
+    std::vector<int64_t> start_offset;
+    boost::shared_ptr<Array> array;
   };
 
   // tags
@@ -231,7 +238,7 @@ class DistributedObject {
   // a. The positions are maintained in a sequence/random-access
   // b. The ids are maintend as a hash index
   typedef multi_index_container<
-    shared_ptr<DistributedObjectSplit>,
+    boost::shared_ptr<DistributedObjectSplit>,
     boost::multi_index::indexed_by<
       boost::multi_index::random_access<boost::multi_index::tag<pos> >,
       boost::multi_index::hashed_unique<boost::multi_index::tag<id>,
@@ -240,7 +247,7 @@ class DistributedObject {
     >
   > VersionSplits;
 
-  // Map of version number to split
+  // std::map of version number to split
   // Every version number has a list of pointers to Splits
   //
   // NOTE: When any new split is created in a new version,
@@ -256,12 +263,12 @@ class DistributedObject {
   //
   // TODO(shivaram): Check how much memory this uses and optimize
   // if neccessary
-  map<int32_t, VersionSplits> version_split_map;
+  std::map<int32_t, VersionSplits> version_split_map;
 
   bool created;
-  string name_;
-  vector<int64_t> blocks_;
-  vector<int64_t> dimensions_; //iR: explicitly store the dimensions
+  std::string name_;
+  std::vector<int64_t> blocks_;
+  std::vector<int64_t> dimensions_; //iR: explicitly store the dimensions
 
   // Right now this is the largest version of the different splits
   int32_t version_;
@@ -272,7 +279,7 @@ class DistributedObject {
 
   // Mutex to be locked when updating clients or splits
   //
-  shared_ptr<mutex> mutex_;
+  boost::shared_ptr<boost::mutex> mutex_;
 
   SplitType split_type_;
 

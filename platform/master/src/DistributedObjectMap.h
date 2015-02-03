@@ -31,7 +31,7 @@
 #include <string>
 
 using namespace std;
-using namespace boost;
+//using namespace boost;
 
 namespace presto {
 
@@ -47,8 +47,8 @@ class DistributedObjectMap {
   DistributedObject* GetDistributedObject(const string& name);
 
  private:
-  shared_ptr<unordered_map<string, DistributedObject*> > dobject_map_;
-  shared_ptr<mutex> mutex_;
+  boost::shared_ptr<boost::unordered_map<string, DistributedObject*> > dobject_map_;
+  boost::shared_ptr<boost::mutex> mutex_;
 };
 
 }  // namespace presto

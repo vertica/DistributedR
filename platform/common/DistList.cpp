@@ -75,7 +75,7 @@ DistList::DistList(const std::string &name, const SEXP sexp_from,
 /** Get dimension of the list(number of rows/columns)
  * @return a pair of number of rows/columns
  */
-pair<size_t, size_t> DistList::GetDims() const {
+pair<std::int64_t, std::int64_t> DistList::GetDims() const {
   return make_pair(header->dims[0], header->dims[1]);
 }
 
@@ -111,5 +111,6 @@ void DistList::LoadInR(RInside &R, const std::string &varname){
 }
 
 DistList::~DistList(){
+  delete header_region;
 }
 }

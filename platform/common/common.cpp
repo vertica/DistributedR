@@ -245,5 +245,14 @@ std::vector<std::string> get_ipv4_addresses() {
   if (ifAddrStruct!=NULL) freeifaddrs(ifAddrStruct);
   return ips;
 }
+
+void strip_string(string &s) {
+    boost::algorithm::erase_all(s, " ");
+    boost::algorithm::erase_all(s, "\t");
+    boost::algorithm::erase_all(s, "\r");
+    boost::algorithm::erase_all(s, "\n");
+
+}
+
 }  // namespace presto
 

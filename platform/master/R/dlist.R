@@ -18,32 +18,33 @@
 
 ##
 # dlist.R : Definition of distributed lists
-# @partitions : Number of parts list should be partitioned into
-# block size is always (1*1) while dimension is is (#dlist partitions*1)
+# @npartitions : Number of parts list should be partitioned into
+# block size is always (1*1) while dimension is is (#dlist npartitions*1)
 ##
 
 require(Rcpp)
 
 NAMESPACE <- environment()
        
-dlist <- function(partitions) {
-  if (missing(partitions)) stop("argument \"partitions\" is missing, with no default")
-  if (length(partitions) > 1) stop("argument 'partitions' should be of length one")
-  if (!is.numeric(partitions)) stop("argument 'partitions' should be numeric") 
-  else if (round(partitions)!=partitions) stop("argument 'partitions' should be an integer")
+dlist <- function(npartitions) {
+  if (missing(npartitions)) stop("argument 'npartitions' is missing, with no default")
+  if (length(npartitions) > 1) stop("argument 'npartitions' should be of length one")
+  if (!is.numeric(npartitions)) stop("argument 'npartitions' should be numeric") 
+  else if (round(npartitions)!=npartitions) stop("argument 'npartitions' should be an integer")
   
   blocks <- c(1, 1)
-  dim <- c(partitions, 1)
+  dim <- c(npartitions, 1)
   tryCatch({
   d <- new ("dlist", dim, blocks)
 
-  foreach(i,1:npartitions(d),
+  success <- foreach(i,1:npartitions(d),
           initdata <- function(dhs = splits(d,i)) {
             dhs <- list()
             update(dhs)
           }, progress=FALSE)
   },error = handle_presto_exception)
-  d
+  if(!success) { rm(d); gc(); NULL }
+  else d
 }
 
 setClass("dlist", representation(dim="numeric", blocks="numeric", dimnames="list"), 

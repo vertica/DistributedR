@@ -18,6 +18,7 @@ more details use help function on each command.
 \item \code{\link{distributedR_start}} - start session 
 \item \code{\link{distributedR_shutdown}} - end session
 \item \code{\link{distributedR_status}} - obtain worker node information
+\item \code{\link{distributedR_master_info}} - obtain master host details
 %\item \code{\link{presto_ls}} – get information of existing darray instances
 }
 }
@@ -30,6 +31,7 @@ more details use help function on each command.
   \item \code{\link{as.darray}} - create darray object from matrix object
   \item \code{\link{is.darray}} - check if object is distributed array
   \item \code{\link{npartitions}} - obtain total number of partitions
+  \item \code{\link{partitionsize}} - obtain dimensions of partitions
   \item \code{\link{getpartition}} - fetch darray, dframe or dlist object
   \item \code{\link{clone}} - clone or deep copy of a darray 
 }
@@ -69,7 +71,7 @@ more details use help function on each command.
     \item Venkataraman, S., Bodzsar, E., Roy, I., AuYoung, A., and Schreiber,
     R. (2013) Presto: Distributed Machine Learning and Graph Processing
     with Sparse Matrices. \emph{EuroSys'13}, 197--210.
-    \item Homepage: http://www.hpl.hp.com/research/distributedr.htm 
+    \item Homepage: http://www.vertica.com/distributedr
 %    \item Mailing list: presto-dev@external.groups.hp.com
 }
 }

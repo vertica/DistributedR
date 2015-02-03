@@ -26,7 +26,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <set>
-
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -45,12 +45,12 @@
 #include "PrestoException.h"
 #include "ResourceManager.h"
 
-
+using namespace boost;
 using namespace google::protobuf;
 
 namespace presto {
 
-uint64_t abs_start_time;
+::uint64_t abs_start_time;
 
 sighandler_t r_sigint_handler;
 
@@ -101,8 +101,8 @@ PrestoMaster::PrestoMaster(const string& config_file)
   dobject_map_.reset(new DistributedObjectMap());
 //  LOG_INFO("Distributed Object Map Created.");
   ParseXMLConfig(config_file, &master_, &workers_);
-  CheckMasterAddrSanity();
-  CheckWorkerConfigSanity();
+  CheckMasterWorkerAddrSanity();
+
 #ifdef OOC_SCHEDULER
   scheduler_ = new OOCScheduler(master_.name(), this);
 #else
@@ -183,6 +183,12 @@ void PrestoMaster::Shutdown() {
     delete lrg_chunk_trnfr_thr_ptr;
     lrg_chunk_trnfr_thr_ptr = NULL;
   }
+
+  if (NULL != dataloader_manager_) {
+    delete dataloader_manager_;
+    dataloader_manager_ = NULL;
+    LOG_DEBUG("Killed DataLoaderManager");
+  }
   // kill handler
   try {
     if (NULL != resource_manager_thread_) {
@@ -219,8 +225,8 @@ void PrestoMaster::Shutdown() {
           try {
             ret = handler_thread_->try_join_for(boost::chrono::seconds(10));
             if (ret == false) {
-              LOG_ERROR("distributedR failed to SHUTDOWN Master Message Handler thread. Recommend to restart");
-              fprintf(stderr, "\n%sdistributedR failed to shutdown a thread. Recommend to restart R\n", exception_prefix.c_str());
+              LOG_ERROR("distributedR failed to SHUTDOWN Master Message Handler thread. Recommend restart");
+              fprintf(stderr, "\n%sdistributedR failed to shutdown a thread. We recommend restarting R\n", exception_prefix.c_str());
             }
           } catch (...) {}
         }
@@ -235,11 +241,6 @@ void PrestoMaster::Shutdown() {
     delete scheduler_;
     scheduler_ = NULL;
     LOG_DEBUG("Killed Scheduler");
-  }
-  if (NULL != dataloader_manager_) {
-    delete dataloader_manager_;
-    dataloader_manager_ = NULL;
-    LOG_DEBUG("Killed DataLoaderManager");
   }
   ClearClientInfo();  // to clear buffered packets to workers!!
   LOG_INFO("distributedR shutdown complete.");
@@ -411,7 +412,7 @@ void PrestoMaster::ConnectWorkers(const vector<ServerInfo>& workers) {
 
   for (int i = 0; i < workers.size(); ++i) {
     if (workers[i].presto_port() == 0) continue;
-    shared_ptr<WorkerInfo> w_info(new WorkerInfo(workers[i].name(),
+    boost::shared_ptr<WorkerInfo> w_info(new WorkerInfo(workers[i].name(),
           workers[i].presto_port(), &zmq_ctx_, i));
     string w_info_key =
       string(w_info->hostname() + ":" + int_to_string(w_info->port()));
@@ -442,7 +443,7 @@ void PrestoMaster::ConnectWorkers(const vector<ServerInfo>& workers) {
   LOG_INFO("Master awaiting HELLO handshaking with Workers.");
   for (i = 0; i < workers.size(); i++) {
     if (i == 0) {
-      fprintf(stdout, "Workers registered - 0/%d. Wait upto %d seconds.",
+      fprintf(stdout, "Workers registered - 0/%d. Will wait upto %d seconds.",
         workers.size(), WORKER_CONNECT_WAIT_SECS);
       fflush(stdout);
     }
@@ -452,7 +453,7 @@ void PrestoMaster::ConnectWorkers(const vector<ServerInfo>& workers) {
     memset(out_msg, 0x00, sizeof(out_msg));
     sprintf(out_msg, "\rWorkers registered - %d/%d.",(i+1), workers.size());
     if ((i+1) < workers.size()) {
-      sprintf(out_msg, "%s Wait upto %d seconds.", out_msg, WORKER_CONNECT_WAIT_SECS);
+      sprintf(out_msg, "%s Will wait upto %d seconds.", out_msg, WORKER_CONNECT_WAIT_SECS);
     } else {
       sprintf(out_msg, "%s                                      ", out_msg);
     }
@@ -466,7 +467,7 @@ void PrestoMaster::ConnectWorkers(const vector<ServerInfo>& workers) {
     LOG_INFO("All %d workers are registered. Master Started.", workers.size());
   } else {    
     if(reg_workers.size() == 0) {
-      map<int32_t, shared_ptr<WorkerInfo> >::iterator wit = worker_infos.begin();
+      map<int32_t, boost::shared_ptr<WorkerInfo> >::iterator wit = worker_infos.begin();
       for(; wit != worker_infos.end(); ++wit) {
         wit->second.reset();
       }
@@ -525,7 +526,7 @@ void PrestoMaster::HandleHelloReply(HelloReplyRequest reply) {
     // If this worker is not in the table, ignore it
     // iterate the map
     WorkerInfo *wi = NULL;
-    map<int32_t, shared_ptr<WorkerInfo> >::iterator wit = worker_infos.begin();
+    map<int32_t, boost::shared_ptr<WorkerInfo> >::iterator wit = worker_infos.begin();
     for (; wit != worker_infos.end(); ++wit) {
       if(key.compare(wit->second->get_hostname_port_key()) == 0) {
         wi = wit->second.get();
@@ -533,7 +534,7 @@ void PrestoMaster::HandleHelloReply(HelloReplyRequest reply) {
       }
     }
     if (NULL == wi) {
-      shared_ptr<WorkerInfo> w_info(new WorkerInfo(worker_addr.name(),
+      boost::shared_ptr<WorkerInfo> w_info(new WorkerInfo(worker_addr.name(),
             worker_addr.presto_port(), &zmq_ctx_, worker_infos.size()));
       worker_infos.insert(make_pair(worker_infos.size(), w_info));
       wi = w_info.get();
@@ -567,50 +568,71 @@ int32_t PrestoMaster::ParseXMLConfig(const string& config,
     ServerInfo* master,
     vector<ServerInfo>* workers) {
   property_tree::ptree pt;
-  read_xml(config, pt);
+  try {
+    read_xml(config, pt, boost::property_tree::xml_parser::no_comments);
+  } catch(...) {
+      throw PrestoShutdownException("While parsing XML configuration file. Check file permissions and content.\n");
+  }
 
   property_tree::ptree master_conf = pt.get_child("MasterConfig");
   property_tree::ptree server_conf = master_conf.get_child("ServerInfo");
   try {
-    master->set_name(server_conf.get_child("Hostname").data());
+    string master_hostname = server_conf.get_child("Hostname").data();
+    presto::strip_string(master_hostname);
+    master->set_name(master_hostname);
   } catch (...) {
     throw PrestoShutdownException("Cluster configuration error.\n"
       "Under ServerInfo (master node) field, the hostname of a master node has to specified with <Hostname> element.");
   }
   try {
-    master->set_presto_port(atoi(server_conf.get_child("StartPortRange").data().c_str()));
+    string master_start_port = server_conf.get_child("StartPortRange").data();
+    presto::strip_string(master_start_port);
+    master->set_presto_port(atoi(master_start_port.c_str()));
   } catch (...) {
     throw PrestoShutdownException("Cluster configuration error.\n"
       "Under ServerInfo (master node) field, <StartPortRange> element has to be specified to determine the port number range");
   }
   master->set_start_port_range(atoi(server_conf.get_child("StartPortRange").data().c_str()));
   try {
-    master->set_end_port_range(atoi(server_conf.get_child("EndPortRange").data().c_str()));    
+    string master_end_port = server_conf.get_child("EndPortRange").data();
+    presto::strip_string(master_end_port);
+    master->set_end_port_range(atoi(master_end_port.c_str()));    
   } catch (...) {
     throw PrestoShutdownException("Cluster configuration error.\n"
       "Under ServerInfo (master node) field, <EndPortRange> element has to be specified to determine the port number range");
   }
-  
-  property_tree::ptree workers_conf = master_conf.get_child("Workers");
+
+  property_tree::ptree workers_conf;   
+  try {
+      workers_conf = master_conf.get_child("Workers");
+    } catch (...) {
+      throw PrestoShutdownException("Cluster configuration error. Could not parse Workers field.\n");
+  }
   for (property_tree::ptree::iterator it = workers_conf.begin();
        it != workers_conf.end(); it++) {
     property_tree::ptree info = it->second;
     ServerInfo worker;
     try {
-      worker.set_name(info.get_child("Hostname").data());      
+      string worker_name = info.get_child("Hostname").data();
+      presto::strip_string(worker_name);
+      worker.set_name(worker_name);      
     } catch (...) {
       throw PrestoShutdownException("Cluster configuration error.\n"
         "Under Worker field, the hostname of a worker node has to specified with <Hostname> element.");
     }
     try {
-      worker.set_presto_port(atoi(info.get_child("StartPortRange").data().c_str()));
+      string worker_start_port = info.get_child("StartPortRange").data();
+      presto::strip_string(worker_start_port);
+      worker.set_presto_port(atoi(worker_start_port.c_str()));
     } catch (...) {
       throw PrestoShutdownException("Cluster configuration error.\n"
         "Under Worker field, <StartPortRange> element has to be specified to determine the port number range");
     }
     worker.set_start_port_range(atoi(info.get_child("StartPortRange").data().c_str()));
     try {
-      worker.set_end_port_range(atoi(info.get_child("EndPortRange").data().c_str()));      
+      string worker_end_port = info.get_child("EndPortRange").data();
+      presto::strip_string(worker_end_port);
+      worker.set_end_port_range(atoi(worker_end_port.c_str()));      
     } catch (...) {
       throw PrestoShutdownException("Cluster configuration error.\n"
         "Under Worker field, <EndPortRange> element has to be specified to determine the port number range");
@@ -635,97 +657,147 @@ bool PrestoMaster::CheckIfHandlerRunning(int wait_time_sec) {
   return !ret;
 }
 
-/** Check if a master address in the configuration file is same as the real master address
- * @return return True if the master address seems to be correct. Otherwise, return false and print an warning message
+/** Check if a master address in the configuration file is same as the real master address. Check is workers have duplicate entries.
+ * @return return True if the master and worker addresses seems to be correct. Otherwise, return false and print an warning message
  */
-bool PrestoMaster::CheckMasterAddrSanity() {
+bool PrestoMaster::CheckMasterWorkerAddrSanity() {
   string master_conf = master_.name();
   vector<string> ips = get_ipv4_addresses();
+  string master_ip_address;
+  bool result = false;
   if (master_.end_port_range() > 65536 || master_.start_port_range() < 1024) {
-    fprintf(stderr, "[WARNING] The master node port range is advised to be larger than 1024 (StartPortRange) and less than 65536 (EndPortRange).\n");
+    fprintf(stderr, "[WARNING] The master node port range should be larger than 1024 (StartPortRange) and less than 65536 (EndPortRange).\n");
   }
   // there should be at least two ports - one master handler and one large chunk data transfer
   if ((master_.end_port_range() - master_.start_port_range() + 1) < 2) {
     throw PrestoShutdownException
-      ("The master node does not have enough port numbers configured.\n"
+      ("The master node does not have enough port numbers.\n"
        "At least two port numbers have to be available between StartPortRange and EndPortRange.");
   }
-  for(int i = 0;i<ips.size();++i) {
+  /*for(int i = 0;i<ips.size();++i) {
     if(ips[i].find(master_conf) != std::string::npos) {
       return true;
     }
-  }
+    }*/
 
-  hostent* record = gethostbyname(master_conf.c_str());
-  if(record == NULL) {
-    fprintf(stderr, "[WARNING] The master node address in the configuration seems to be different from a real master node address.\n"
-      "Please check the cluster configuration file\nMaster node address in the configuration: %s\n", master_conf.c_str());
+
+  //LOG_INFO("Master hostname: '%s'", master_conf.c_str());
+  hostent* master_record = gethostbyname(master_conf.c_str());
+  if(master_record == NULL) {
+    fprintf(stderr, "[WARNING] Could not map master hostname (%s) to ip address for configuration checks.\n", master_conf.c_str());
     return false;
   } else {
-    in_addr* address = (in_addr*)record->h_addr;
-    string ip_address = inet_ntoa(* address);
+    in_addr* address = (in_addr*)master_record->h_addr;
+    master_ip_address = inet_ntoa(* address);
     for(int i = 0;i<ips.size();++i) {
-      if(ips[i].find(ip_address) != std::string::npos) {
-        return true;
+      if(ips[i].find(master_ip_address) != std::string::npos) {
+	result = true;
       }
     }
   }
-  fprintf(stderr, "[WARNING] The master node address in the configuration seems to be different from a real master node address.\n"
-    "Please check the cluster configuration file\nMaster node address in the configuration: %s\n", master_conf.c_str());
-  return false;
-}
+  if(!result){
+    fprintf(stderr, "[WARNING] The master node address in the configuration seems to be different from the IP address of this server.\n"
+    "Please check the hostname on cluster configuration file: %s\n", master_conf.c_str());
+  }
 
-/** Check if there is duplicate worker in a config file
- * @return return True if the config is correct. Otherwise, remove duplicate worker.
- */
-bool PrestoMaster::CheckWorkerConfigSanity() {
+  // Check if there is duplicate worker in a config file
   set<string> worker_addrs;
   vector<ServerInfo>::iterator it;
+  hostent* record;
   // per each worker, there should be two ports for data loader and fetch thread for every other worekrs.
-  // One port to have a messaing server
+  // One port to have a messaging server
   int req_port_range = (workers_.size() * 2) + 1; 
   for (it = workers_.begin(); it != workers_.end();) {
+    string worker_hostname = it->name();
+    //remove whitespace and other problematic chars
+
     if (it->end_port_range() > 65536 || it->start_port_range() < 1024) {
-      fprintf(stderr, "[WARNING] A worker node (%s) port range is advised to be larger than 1024 (StartPortRange) and less than 65536 (EndPortRange).\n", it->name().c_str());
+      fprintf(stderr, "[WARNING] Worker node's (%s) port number should be larger than 1024 (StartPortRange) and less than 65536 (EndPortRange).\n", worker_hostname.c_str());
     }
     if ((it->end_port_range() - it->start_port_range() + 1) < req_port_range) {
       ostringstream msg;
-      msg << "A worker " << it->name() << " does not have enough port numbers configured." << endl
+      msg << "Worker " << worker_hostname << " does not have enough port numbers." << endl
           << "At least " << req_port_range << " port numbers have to be available between StartPortRange and EndPortRange.";
       throw PrestoShutdownException(msg.str());      
     }
-    
-    if (worker_addrs.count(it->name()) > 0) { // already registered worker
-      fprintf(stderr, "Remove duplicate worker - %s:%d\n", it->name().c_str(), it->presto_port());
-      fflush(stderr);
-      it = workers_.erase(it);
-    } else {
-      worker_addrs.insert(it->name());
+
+    //LOG_INFO("Worker hostname: '%s'", worker_hostname.c_str());
+    record = gethostbyname(worker_hostname.c_str());
+    if(record == NULL) {
+      fprintf(stderr, "[WARNING] Could not map worker hostname (%s) to ip address for configuration checks.\n", worker_hostname.c_str());
       ++it;
+    } else {
+      in_addr* address = (in_addr*)record->h_addr;
+      string ip_address = inet_ntoa(* address);
+
+      //If the master and worker are on the same node, check availability of ports when ranges overlap
+      if(master_ip_address.compare(ip_address)==0){
+	bool violation=false;
+	if( (master_.end_port_range() >= it->start_port_range()) && (master_.start_port_range() <= it->end_port_range())){
+	  //Now we are sure that master and worker port ranges overlap
+	  int overlap = std::min(master_.end_port_range(),it->end_port_range()) - std::max(master_.start_port_range(),it->start_port_range()) +1;
+	  //Does the worker have enough ports if the master picks ports from the overlap region?
+	  int residual = (overlap -2) > 0 ?  (overlap-2) : 0;
+	  if((it->end_port_range() - it->start_port_range() + 1 -overlap + residual) < req_port_range) violation = true;
+	  //Does the master have enough ports if the worker picks ports from the overlap region?
+	  residual = (overlap - req_port_range) > 0 ?  (overlap- req_port_range) : 0;
+	  if((master_.end_port_range() - master_.start_port_range() + 1 -overlap + residual) < req_port_range) violation = true;
+	}
+	if(violation){
+	  fprintf(stderr, "[WARNING] Master and worker on %s have overlapping port ranges, and may contend for ports. Need 2 ports for Master, %d for Worker.\n", worker_hostname.c_str(), req_port_range);
+	}
+      }
+
+      if (worker_addrs.count(ip_address) > 0) { // already registered worker
+	ostringstream msg;
+	msg << "Remove duplicate worker " << worker_hostname << ":" << it->presto_port() <<" in configuration file, and retry." << endl;
+	throw PrestoShutdownException(msg.str());      
+      } else {
+	worker_addrs.insert(ip_address);
+	++it;
+      }
     }
   }
-  return true;
+
+  if ((worker_addrs.count("127.0.0.1") > 0) && (workers_.size() >1)) { // localhost or 127.0.0.1 used in multi-worker configuration file
+   ostringstream msg;
+    msg << "Specify IP address of Worker instead of localhost (127.0.0.1) in the configuration file." << endl;
+    throw PrestoShutdownException(msg.str());  
+  }
+  
+  if ((master_ip_address.compare("127.0.0.1")== 0) && ((workers_.size()>1) || (workers_.size()==1 && worker_addrs.count("127.0.0.1")==0))) { // localhost used in multi-server case
+   ostringstream msg;
+    msg << "Specify IP address of Master instead of localhost (127.0.0.1). Change 'ServerInfo' in the configuration file." << endl;
+    throw PrestoShutdownException(msg.str());  
+  }
+
+  return result;
 }
 
 
-bool PrestoMaster::StartDataLoader(uint64_t split_size) {
+bool PrestoMaster::StartDataLoader(::uint64_t split_size, string split_prefix) {
   if(NULL != dataloader_manager_) {
-    fprintf(stderr, "A session of data loading is already running.\nPlease wait for it to finish before starting another load process.\n");
+    fprintf(stderr, "<DataLoader> A session of data loading is already running.\nPlease wait for it to finish before starting another load process.\n");
     return false;
   }
   dataloader_manager_ = new DataLoaderManager(this, split_size);
-  for(map<int32_t, shared_ptr<WorkerInfo> >::iterator itr = worker_infos.begin();
+  for(map<int32_t, boost::shared_ptr<WorkerInfo> >::iterator itr = worker_infos.begin();
       itr!=worker_infos.end(); ++itr) {
     WorkerInfo* wi = itr->second.get();
-    scheduler_->InitiateDataLoader(wi, split_size);
+    scheduler_->InitiateDataLoader(wi, split_size, split_prefix);
   }
 
   for(int i = 0; i<worker_infos.size(); i++)
     dataloader_manager_->LoaderSemaWait();
 
-  if(dataloader_manager_->InvalidPorts()) {
-    fprintf(stderr, "One of the Worker could not open ports for loading data from Vertica.\nPlease check Worker log files for more informaton.\n");
-    StopDataLoader();
+  if(NULL != dataloader_manager_ && IsRunning()) {
+    if (dataloader_manager_->InvalidPorts()) {
+       fprintf(stderr, "<DataLoader> One of the Worker could not open ports for loading data from Vertica.\nPlease check Worker log files for more informaton.\n");
+       StopDataLoader();
+       return false;
+    }
+  } else {
+    fprintf(stderr, "<DataLoader> Vertica Connector process could not be initiated. This may be caused by Distributed R shutdown.\n");
     return false;
   }
 
@@ -734,17 +806,18 @@ bool PrestoMaster::StartDataLoader(uint64_t split_size) {
 
 
 void PrestoMaster::StopDataLoader() {
-  
-  for(map<int32_t, shared_ptr<WorkerInfo> >::iterator itr = worker_infos.begin();
+
+  LOG_INFO("<DataLoader> Data Loader execution completed.");
+  for(map<int32_t, boost::shared_ptr<WorkerInfo> >::iterator itr = worker_infos.begin();
       itr!=worker_infos.end(); ++itr) {
     WorkerInfo* wi = itr->second.get();
     scheduler_->StopDataLoader(wi);
   } 
 
-  if (NULL != dataloader_manager_) {
+  if (NULL != dataloader_manager_ && IsRunning()) {
     delete dataloader_manager_;
     dataloader_manager_ = NULL;
-    LOG_INFO("Stopped Data Loader Manager");
+    LOG_DEBUG("<DataLoader> Stopped Data Loader Manager");
   }
 }
 
@@ -757,7 +830,7 @@ void PrestoMaster::SetResMgrInterrupt(volatile bool* var_addr) {
 RCPP_MODULE(master_module) {
   class_<presto::PrestoMaster>("PrestoMaster")
     .constructor<string>()
-    .method("num_clients", &presto::PrestoMaster::NumClients)
+    .method("get_num_workers", &presto::PrestoMaster::NumClients)
     .method("worker_hosts", &presto::PrestoMaster::WorkerHosts)
     .method("worker_start_port_range", &presto::PrestoMaster::WorkerStartPortRange)
     .method("worker_end_port_range", &presto::PrestoMaster::WorkerEndPortRange)

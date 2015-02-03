@@ -28,6 +28,7 @@
 #include "common.h"
 #include "PrestoException.h"
 
+using namespace boost;
 namespace presto {
 
 PrestoMasterHandler::PrestoMasterHandler(
@@ -110,6 +111,10 @@ void PrestoMasterHandler::Run(context_t* ctx, int port_start, int port_end) {
             bool ret = HandleTaskDone(master_req.taskdone());
             // If an error happens during HandlingTaskDone message, shutdown the whole session
             if (ret == false) {
+	      LOG_ERROR("Error during processing task at worker (HandleTaskDone). Shutting down.");
+	      fprintf(stderr, 
+                    "Error while processing task at worker."
+		      " We will shutdown the whole session. Use Ctrl-C to return to R console.\n");
               thread thr(boost::bind(&PrestoMaster::Shutdown,
                                      presto_master_));
               thr.detach();
@@ -181,16 +186,15 @@ bool PrestoMasterHandler::ValidateUpdates(TaskDoneRequest* req) {
 
      // Return validation failure if darray split is not updated with defined size
      Tuple split_dim = d->GetSplitFromId(split_id)->dim();
-     //(TODO) Change size check from > to != 
 
-     if(d->Type()== DARRAY && (req->row_dim(i) > 0 && req->col_dim(i) > 0) &&
-       (req->row_dim(i) > split_dim.val(0) || req->col_dim(i) > split_dim.val(1))) {
- 
+     if((d->Type()== DARRAY || d->Type() == DFRAME)&& (req->row_dim(i) > 0 && req->col_dim(i) > 0) &&
+       (req->row_dim(i) != split_dim.val(0) || req->col_dim(i) != split_dim.val(1))) {
        //For flexible arrays we can modify the split dimensions the first time data is updated (i.e. init dimension is 1x1). So it is not an error.
-       if(!(d->SubType() == FLEX_UNINIT && (split_dim.val(0)==1 && split_dim.val(1)==1))) {
+       //if(!(d->SubType() == FLEX_UNINIT && (split_dim.val(0)==1 && split_dim.val(1)==1))) {
+       if(d->SubType() != FLEX_UNINIT) {
 	 ostringstream msg;
 	 msg << "attempt to set partition (ID:" << (split_id+1) << ") size to (" << req->row_dim(i) << "," << req->col_dim(i)<<
-	   "), larger than declared size (" << split_dim.val(0) << "," << split_dim.val(1) <<")";
+	   "), different from declared size (" << split_dim.val(0) << "," << split_dim.val(1) <<")";
 	 scheduler_->TaskErrorMsg(msg.str().c_str());
 	 return false;
        }
@@ -225,6 +229,7 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
   std::set<string> updatedObjects;
   int32_t split_id;
   string object_name;
+  bool success= true;
 
   if (scheduler_->IsExecTask(task_done->uid())) {
      LOG_INFO("EXECUTE TaskID %14d - Execution complete in Worker", task_done->uid());
@@ -242,7 +247,7 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
      bool foreach_error = foreach_result.second;
      
      if (foreach_complete){
-       unordered_map<uint64_t, TaskDoneRequest*>::iterator itr = scheduler_->taskdones_.begin();
+       unordered_map< ::uint64_t, TaskDoneRequest*>::iterator itr = scheduler_->taskdones_.begin();
        int num_tasks = scheduler_->taskdones_.size();   
        int cur_task=1;
 
@@ -281,16 +286,20 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
 	       //Now update the dimensions and offsets of all flexible dobjets
 	       //(TODO) iR: we currently don't do anything if there were errors while updating (result=false).
 	       bool result = UpdateFlexObjectSizes(updatedObjects);
+	       if(!result) scheduler_->SetForeachError(true);
 	     }
           }
          scheduler_->Done(i_done);
        }
     }
   } else {
-    scheduler_->Done(task_done);
+    //For non-exec tasks we check if there was an error and propogate it up. Note that if there is an error
+    //session shutdown will be enforced. Shutdown is not required if there is an error in foreach 
+    //(above case of calling scheduler->done
+    success = scheduler_->Done(task_done);
   }
 
-  return true;
+  return success;
 }
 
 //Update sizes of flexible dobjects whose sizes changed
@@ -304,8 +313,16 @@ bool PrestoMasterHandler::UpdateFlexObjectSizes(std::set<string> names){
       scheduler_->TaskErrorMsg(msg.str().c_str());
       return false;
     }
+    //If this is an empty array that was updated by system make it UNINIT
+    //If the user updated it, let's make it a standard object
+    if((d->Type() == DARRAY || d->Type() == DFRAME)){
+      if(d->SubType() == UNINIT_DECLARED){
+	d->setSubType(UNINIT); 
+      } else if(d->SubType() == UNINIT){ d->setSubType(STD);} 
+    }
+
     // Return validation failure if darray split is not updated with defined size 
-    if(d->Type() == DARRAY && (d->isSubTypeFlex())) {
+    if((d->Type() == DARRAY || d->Type() == DFRAME)&& (d->isSubTypeFlex())) {
       LOG_DEBUG("Updating split sizes of flex object: %s", (*it).c_str());
       result = d->UpdateDimAndBoundary();
       if(result){
@@ -329,7 +346,7 @@ bool PrestoMasterHandler::UpdateFlexObjectSizes(std::set<string> names){
 
 
 bool PrestoMasterHandler::NewUpdate(NewUpdateRequest update) {
-
+   boost::this_thread::interruption_point();// check if interrupted
    int32_t split_id;
    string darray_name;
    ParseSplitName(update.name(), &darray_name, &split_id);

@@ -24,7 +24,7 @@ hpdpagerank(dgraph, niter = 1000, eps = 0.001, damping=0.85,
     the damping factor
   }
   \item{personalized}{
-    optional personalization vector (of type darray). When NULL, a constant value of 1/N will be used where N is the number of vertices. This darray should have a single row and the number of its columns should be equal to the number of vertices. Number of partitions should be the same as dgraph.
+    optional personalization vector (of type darray). When NULL, a constant value of 1/N will be used where N is the number of vertices. This darray should be dense and have a single row. The number of its columns should be equal to the number of vertices. Number of partitions should be the same as dgraph.
   }
   \item{weights}{
     optional edge weights (of type darray). When NULL, a constant value of 1 will be used. The dimensions, sparsity, and partitioning of this darray should be the same as dgraph.
@@ -46,7 +46,7 @@ Sergey Brin and Larry Page: The Anatomy of a Large-Scale Hypertextual Web Search
 \url{http://www-db.stanford.edu/~backrub/google.html}
 }
 \author{
-Arash Fard <afard@vertica.com>
+    HP Vertica Analytics Team
 }
 
 \examples{
@@ -56,9 +56,9 @@ Arash Fard <afard@vertica.com>
     distributedR_start()
     
     graph <- matrix(0, 6,6)
-    graph[2,1] <- 1; graph[2,3] <- 1; graph[3,1] <- 1; graph[3,2] <- 1;
-    graph[3,4] <- 1; graph[4,5] <- 1; graph[4,6] <- 1; graph[5,4] <- 1; 
-    graph[5,6] <- 1; graph[6,4] <- 1
+    graph[2,1] <- 1L;graph[2,3] <- 1L;graph[3,1] <- 1L;graph[3,2] <- 1L;
+    graph[3,4] <- 1L;graph[4,5] <- 1L;graph[4,6] <- 1L;graph[5,4] <- 1L; 
+    graph[5,6] <- 1L;graph[6,4] <- 1L
 
     dgraph <- as.darray(graph, c(6,3))
     pr <- hpdpagerank(dgraph)

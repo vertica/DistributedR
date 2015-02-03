@@ -5,14 +5,14 @@
 \code{splitGraphFile} function is an example for splitting an edge-list file of a graph, and distributing the results among the active nodes of a cluster system. The result of this function can be fed to \code{file2dgraph} function to create a darray for adjacency matrix. The input edge-list is assumed zero-based; i.e., the id of the first edge is zero. The total number of vertices will be calculated according to the maximum vertex id in the input file, and for any missed vertex id a dummy vertex will be assumed; i.e., a vertex with no connected edge.
 }
 \usage{
-splitGraphFile(inputFile, nSplits, outputPath, isNFS = FALSE)
+splitGraphFile(inputFile, npartitions, outputPath, isNFS = FALSE)
 }
 
 \arguments{
   \item{inputFile}{
     the input file which contains the complete adjacency list of a graph. An absolute path should be used.
   }
-  \item{nSplits}{
+  \item{npartitions}{
     the desired number of partitions in the graph. It may change based on the total number of vertices. It will be translated to the number of split files.
   }
   \item{outputPath}{
@@ -30,7 +30,7 @@ splitGraphFile(inputFile, nSplits, outputPath, isNFS = FALSE)
 
   The ID of the vertices starts from 0. The maximum ID number will be used to find the number of vertices in the graph. All missed ID numbers between the first ID (0) and the maximum ID will be assumed as vertices without any connected edge.
 
- The number of files at the result might not be exactly the same as desired number, but it will be close to it. The final number of files can be determined by the following routine. When a positive integer number is specified for nSplits, the number of vertices in each split file will be calculated as verticesInSplit <- ceiling(nVertices/nSplits) where nVertices is the number of vertices in the input graph. Then, the final number of files will be nFiles <- ceiling(nVertices/verticesInSplit) which might be different from nSplits. The files will be indexed from \code{0} to \code{nFiles - 1}.
+ The number of files at the result might not be exactly the same as desired number, but it will be close to it. The final number of files can be determined by the following routine. When a positive integer number is specified for npartitions, the number of vertices in each split file will be calculated as verticesInSplit <- ceiling(nVertices/npartitions) where nVertices is the number of vertices in the input graph. Then, the final number of files will be nFiles <- ceiling(nVertices/verticesInSplit) which might be different from npartitions. The files will be indexed from \code{0} to \code{nFiles - 1}.
 }
 
 \value{
@@ -42,7 +42,7 @@ splitGraphFile(inputFile, nSplits, outputPath, isNFS = FALSE)
 }
 
 \author{
-Arash Fard <afard@vertica.com>
+    HP Vertica Analytics Team
 }
 
 \examples{
@@ -53,7 +53,7 @@ Arash Fard <afard@vertica.com>
     # Wiki-Vote graph can be found in SNAP's repository
     # http://snap.stanford.edu/data/index.html
     ret <- splitGraphFile(inputFile=
-            "/graphs/Wiki-Vote.txt", nSplits=7, 
+            "/graphs/Wiki-Vote.txt", npartitions=7, 
             outputPath="/home/afard/temp/test", isNFS=TRUE)
  }
 }

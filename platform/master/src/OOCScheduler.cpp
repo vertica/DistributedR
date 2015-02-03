@@ -101,7 +101,7 @@ OOCScheduler::OOCScheduler(const std::string &hostname, PrestoMaster* presto_mas
 
 // --- LOGIC ---
 
-void OOCScheduler::ChildDone(uint64_t taskid, void *task, TaskType type) {
+void OOCScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) {
   TIMING_START(childdone)
 
       // fprintf(stderr, "done type is %d\n", static_cast<int>(type));
@@ -196,7 +196,7 @@ void OOCScheduler::ChildDone(uint64_t taskid, void *task, TaskType type) {
     TIMING_END(execdone)
         } else if (type == FETCH || type == LOAD) {
     // a corresponding fetch/load is done
-    unordered_set<uint64_t> dep_tasks = dependencies_[make_pair(worker, split)];
+    unordered_set< ::uint64_t> dep_tasks = dependencies_[make_pair(worker, split)];
     dependencies_.erase(make_pair(worker, split));
 
     if (contains_key(locked_on_[split], worker)) {
@@ -223,9 +223,9 @@ void OOCScheduler::ChildDone(uint64_t taskid, void *task, TaskType type) {
     }
     lock.unlock();
 
-    for (unordered_set<uint64_t>::iterator i = dep_tasks.begin();
+    for (unordered_set< ::uint64_t>::iterator i = dep_tasks.begin();
          i != dep_tasks.end(); i++) {
-      uint64_t dep_task_id = *i;
+      ::uint64_t dep_task_id = *i;
 
       lock.lock();
       if (contains_key(tasks_, dep_task_id)) {
@@ -247,7 +247,7 @@ void OOCScheduler::ChildDone(uint64_t taskid, void *task, TaskType type) {
           LOG("all dependencies of task %zu satisfied, "
               "trying to execute\n", dep_task_id);
           TryExecTasks(taskdata.worker);
-          // uint64_t new_task_id = Exec(taskdata.worker, taskdata.task);
+          // ::uint64_t new_task_id = Exec(taskdata.worker, taskdata.task);
           // tasks_[new_task_id] = tasks_[dep_task_id];
           // tasks_.erase(dep_task_id);
           lock.unlock();
@@ -262,7 +262,7 @@ void OOCScheduler::ChildDone(uint64_t taskid, void *task, TaskType type) {
             taskdata.num_dependencies == 0) {  // all fetches done
           // create composite
           unique_lock<recursive_mutex> metalock(metadata_mutex);
-          uint64_t cc_id = CreateComposite(taskdata.worker,
+          ::uint64_t cc_id = CreateComposite(taskdata.worker,
                                            taskdata.name,
                                            *taskdata.arg);
           // copy over dependencies to new id
@@ -299,14 +299,14 @@ void OOCScheduler::ChildDone(uint64_t taskid, void *task, TaskType type) {
     CCTask *t = reinterpret_cast<CCTask*>(task);
     cctask_ids_.erase(make_pair(t->worker, t->name));
 
-    unordered_set<uint64_t> dep_tasks = dependencies_cc[taskid];
+    unordered_set< ::uint64_t> dep_tasks = dependencies_cc[taskid];
     dependencies_cc.erase(taskid);
     lock.unlock();
 
     // handle
-    for (unordered_set<uint64_t>::iterator i = dep_tasks.begin();
+    for (unordered_set< ::uint64_t>::iterator i = dep_tasks.begin();
          i != dep_tasks.end(); i++) {
-      uint64_t dep_task_id = *i;
+      ::uint64_t dep_task_id = *i;
 
       lock.lock();
       tasks_[dep_task_id].num_dependencies--;
@@ -330,7 +330,7 @@ void OOCScheduler::ChildDone(uint64_t taskid, void *task, TaskType type) {
 
         waiting_tasks_exec_[taskdata.worker].push_back(dep_task_id);
         TryExecTasks(taskdata.worker);
-        // uint64_t new_task_id = Exec(taskdata.worker, taskdata.task);
+        // ::uint64_t new_task_id = Exec(taskdata.worker, taskdata.task);
         // tasks_[new_task_id] = tasks_[dep_task_id];
         // tasks_.erase(dep_task_id);
         lock.unlock();
@@ -471,7 +471,7 @@ void OOCScheduler::AddTask(const vector<TaskArg*> &tasks,
       skipped.push_back(ti);
       continue;
     }
-    uint64_t task_id = GetNewTaskID();
+    ::uint64_t task_id = GetNewTaskID();
 
     unique_lock<recursive_mutex> lock(mutex_);
     tasks_[task_id] = TaskData();
@@ -591,7 +591,7 @@ void OOCScheduler::AddTask(const vector<TaskArg*> &tasks,
   //   ScheduleTask(&taskdata, worker, task_id);
 
   //   if (taskdata.num_dependencies == 0) {
-  //     uint64_t new_task_id = Exec(worker, t);
+  //     ::uint64_t new_task_id = Exec(worker, t);
   //     tasks_[new_task_id] = tasks_[task_id];
   //     tasks_.erase(task_id);
   //   }
@@ -610,7 +610,7 @@ void OOCScheduler::AddTask(const vector<TaskArg*> &tasks,
 
 void OOCScheduler::ScheduleTask(TaskData *td,
                                 Worker *worker,
-                                uint64_t task_id) {
+                                ::uint64_t task_id) {
   TIMING_START(scheduletask)
 
       LOG("task %d being scheduled on %s\n",
@@ -672,11 +672,11 @@ void OOCScheduler::ScheduleTask(TaskData *td,
         }
 
         TIMING_START(issplitbeingacquired);
-        uint64_t beingacquired = IsSplitBeingAcquired(split, worker);
+        ::uint64_t beingacquired = IsSplitBeingAcquired(split, worker);
         TIMING_END(issplitbeingacquired);
         if (beingacquired == 0) {  // we need to get the split
           TIMING_START(scheduleacquire);
-          // uint64_t acquire_task_id = GetSplit(split, worker);
+          // ::uint64_t acquire_task_id = GetSplit(split, worker);
           if (!contains_key(waiting_splits_set_[worker], split)) {
             waiting_splits_[worker].push_back(split);
             waiting_splits_set_[worker].insert(split);
@@ -714,7 +714,7 @@ void OOCScheduler::ScheduleTask(TaskData *td,
           current_composite[splitname] = name;
 
           // we need to create the composite
-          uint64_t cc_id = GetNewTaskID();
+          ::uint64_t cc_id = GetNewTaskID();
           dependencies_cc[cc_id].insert(task_id);
           cctasks_[cc_id] = CCTaskData();
           cctask_ids_[key] = cc_id;
@@ -745,9 +745,9 @@ void OOCScheduler::ScheduleTask(TaskData *td,
             if (!IsSplitOnWorker(split, worker)) {
               cc.num_dependencies++;
 
-              uint64_t beingacquired = IsSplitBeingAcquired(split, worker);
+              ::uint64_t beingacquired = IsSplitBeingAcquired(split, worker);
               if (beingacquired == 0) {  // we need to get the split
-                // uint64_t acquire_task_id = GetSplit(split, worker);
+                // ::uint64_t acquire_task_id = GetSplit(split, worker);
                 if (!contains_key(waiting_splits_set_[worker], split)) {
                   waiting_splits_[worker].push_back(split);
                   waiting_splits_set_[worker].insert(split);
@@ -763,7 +763,7 @@ void OOCScheduler::ScheduleTask(TaskData *td,
           if (cc.num_dependencies == 0) {  // all fetches done
             // create composite
             unique_lock<recursive_mutex> metalock(metadata_mutex);
-            uint64_t cc_id2 = CreateComposite(cc.worker,
+            ::uint64_t cc_id2 = CreateComposite(cc.worker,
                                               cc.name,
                                               *cc.arg);
 
@@ -808,9 +808,9 @@ void OOCScheduler::ScheduleTask(TaskData *td,
     //       taskdata.num_dependencies++;
     //     }
 
-    //     uint64_t beingacquired = IsSplitBeingAcquired(split, worker);
+    //     ::uint64_t beingacquired = IsSplitBeingAcquired(split, worker);
     //     if (beingacquired == 0) {  // we need to get the split
-    //       // uint64_t acquire_task_id = GetSplit(split, worker);
+    //       // ::uint64_t acquire_task_id = GetSplit(split, worker);
     //       if (!contains_key(waiting_splits_set_[worker], split)) {
     //         waiting_splits_[worker].push_back(split);
     //         waiting_splits_set_[worker].insert(split);
@@ -830,7 +830,7 @@ void OOCScheduler::ScheduleTask(TaskData *td,
   TIMING_START(st7);
   lock.lock();
   if (taskdata.num_dependencies == 0) {
-    // uint64_t new_task_id = Exec(worker, t);
+    // ::uint64_t new_task_id = Exec(worker, t);
     // tasks_[new_task_id] = tasks_[task_id];
     // tasks_.erase(task_id);
     waiting_tasks_exec_[worker].push_back(task_id);
@@ -848,11 +848,11 @@ void OOCScheduler::TryExecTasks(Worker *worker) {
       unique_lock<recursive_mutex> lock(metadata_mutex);
   unique_lock<recursive_mutex> lock2(mutex_);
   while (!waiting_tasks_exec_[worker].empty()) {
-    uint64_t id = waiting_tasks_exec_[worker].front();
+    ::uint64_t id = waiting_tasks_exec_[worker].front();
     Worker *worker = tasks_[id].worker;
     // TODO(erik): good multiplier here?
     if (worker->exectasks.size() < 2*worker->executors) {
-      uint64_t new_task_id = Exec(worker, tasks_[id].task);
+      ::uint64_t new_task_id = Exec(worker, tasks_[id].task);
       LOG("execing task %d as %d\n",
           static_cast<int>(id),
           static_cast<int>(new_task_id));
@@ -1093,7 +1093,7 @@ void OOCScheduler::FlushUnlockedSplits(Worker *worker, size_t flush_size) {
         LOG("flushing split %s\n", (*i)->name.c_str());
         ArrayStore *store = worker->arraystores.begin()->second;
         if (!contains_key(store->splits, *i)) {
-          uint64_t id = MoveToStore(*i, store);
+          ::uint64_t id = MoveToStore(*i, store);
           // #ifdef PROFILING
           //     fprintf(profiling_output_, "%8.5lf %6zu MOVE  STRT\n",
           //     abs_time()/1e6,
@@ -1132,10 +1132,10 @@ void OOCScheduler::FlushUnlockedSplit(Worker *worker) {
   lock.unlock();
 }
 
-uint64_t OOCScheduler::GetSplit(Split *split, Worker *worker) {
+::uint64_t OOCScheduler::GetSplit(Split *split, Worker *worker) {
   LOG("getting split %s\n", split->name.c_str());
   unique_lock<recursive_mutex> lock(metadata_mutex);
-  uint64_t acquire_task_id = 0;
+  ::uint64_t acquire_task_id = 0;
   if (!split->workers.empty()) {  // we can fetch
     acquire_task_id = Fetch(worker,
                             *split->workers.begin(),
@@ -1174,7 +1174,7 @@ void OOCScheduler::TryScheduleTasks(Worker *worker) {
   TIMING_START(tryscheduletasks)
       unique_lock<recursive_mutex> lock(metadata_mutex);
   unique_lock<recursive_mutex> mylock(mutex_);
-  list<uint64_t>::iterator i;
+  list< ::uint64_t>::iterator i;
   int checked = 0;  // TODO(erik): make this nicer
   for (i = waiting_tasks_[worker].begin();
        i != waiting_tasks_[worker].end(); i++) {  // BIGFOR (??)

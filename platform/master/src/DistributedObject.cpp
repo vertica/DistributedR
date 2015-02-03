@@ -38,6 +38,7 @@
 #include "DataLoaderManager.h"
 #include "PrestoException.h"
 
+using namespace boost;
 namespace presto {
 /** A constructor of DistributedArray (darray).
  * This object is created in the R sessio
@@ -49,7 +50,7 @@ namespace presto {
   mutex_.reset(new mutex());
   split_type_ = ROW;
   dobject_type_ = (type=="darray") ? DARRAY : ((type=="dframe") ? DFRAME : ((type=="dlist") ? DLIST : DOBJECT));
-  dobject_subtype_ = (subtype=="UNINIT") ? UNINIT : ((subtype=="FLEX_DECLARED") ? FLEX_DECLARED : STD);
+  dobject_subtype_ = (subtype=="UNINIT_DECLARED") ? UNINIT_DECLARED : ((subtype=="FLEX_DECLARED") ? FLEX_DECLARED : STD);
   split_distribution_ = (distribution=="custom") ? CUSTOM : (distribution=="random") ? RANDOM : ROUNDROBIN;
   info = new WorkerIdxInfo;
 }
@@ -85,8 +86,8 @@ int DistributedObject::NextWorkerIdx(bool initialize) {
     case CUSTOM:
       DataLoaderManager* dataloader_ = pm_->GetDataLoader();
       if(dataloader_ == NULL) {
-        std::string errormsg = "DataLoader is not Running. Unable to generate pre-defined split distribution to workers.\n"
-                                "  Try with Random or RoundRobin split distribution";
+        std::string errormsg = "Unable to gather pre-defined partition distribution to workers.\n"
+                                "  Try with roundrobin distribution policy";
         LOG_ERROR(errormsg);
         throw PrestoWarningException(errormsg);
       }
@@ -137,8 +138,8 @@ int DistributedObject::NextWorkerIdx(bool initialize) {
  * @return indicates if this action succeed
  */
 bool DistributedObject::Create(const string& name,
-                              const vector<int64_t> dimensions,
-                              const vector<int64_t> blocks) {
+                              const vector< ::int64_t> dimensions,
+                              const vector< ::int64_t> blocks) {
   // Calculate number of splits first
   if (dimensions.size() != blocks.size()) {
     fprintf(stderr, "object \"%s\": number of blocks and dimensions should be same\n", name.c_str());
@@ -158,29 +159,29 @@ bool DistributedObject::Create(const string& name,
   int32_t num_splits = 1;
 
   // TODO(shivaram): Surely this can be made more efficient ?
-  vector<vector<int64_t> > boundaries;
-  vector<vector<int64_t> > current_boundaries;
-  deque<int64_t> boundary;
-  vector<int64_t> boundary_vec;
+  vector<vector< ::int64_t> > boundaries;
+  vector<vector< ::int64_t> > current_boundaries;
+  deque< ::int64_t> boundary;
+  vector< ::int64_t> boundary_vec;
   for (int i = blocks.size() - 1; i >= 0; --i) {
     double num_splits_in_dim =
       static_cast<double>(dimensions[i]) / static_cast<double>(blocks[i]);
     num_splits = num_splits * ceil(num_splits_in_dim);
     boundaries.clear();
-    for (int64_t j = 0; j < dimensions[i]; j = j + blocks[i]) {
+    for (::int64_t j = 0; j < dimensions[i]; j = j + blocks[i]) {
       boundary.clear();
       if (i != blocks.size() - 1) {
-        for (int64_t k = 0; k < current_boundaries.size(); ++k) {
-          boundary = deque<int64_t>(current_boundaries[k].begin(),
+        for (::int64_t k = 0; k < current_boundaries.size(); ++k) {
+          boundary = deque< ::int64_t>(current_boundaries[k].begin(),
                            current_boundaries[k].end());
           boundary.push_front(j);
-          boundaries.push_back(vector<int64_t>(
+          boundaries.push_back(vector< ::int64_t>(
                 boundary.begin(), boundary.end()));
         }
       } else {
         boundary.push_front(j);
         // current_boundaries.push_back(boundary);
-        boundaries.push_back(vector<int64_t>(boundary.begin(),
+        boundaries.push_back(vector< ::int64_t>(boundary.begin(),
               boundary.end()));
       }
     }
@@ -192,7 +193,7 @@ bool DistributedObject::Create(const string& name,
   VersionSplits splits_created;
   version_ = 0;  // set version to zero when create is called
   for (int i = 0; i < num_splits; ++i) {
-    shared_ptr<Array> arr(new Array());
+    boost::shared_ptr<Array> arr(new Array());
     // Split name is:
     // <darray_name> + "_" + <split number> + "_" + <version_number>
     // TODO(shivaram): Create a utility function for this and share it
@@ -223,7 +224,7 @@ bool DistributedObject::Create(const string& name,
         arr->name(), 0, "",
         info->hostname()+":"+int_to_string(info->port()));
 
-    shared_ptr<DistributedObjectSplit> split(new DistributedObjectSplit());
+    boost::shared_ptr<DistributedObjectSplit> split(new DistributedObjectSplit());
     split->start_offset = boundaries[i];
     split->array = arr;
     split->id = i;
@@ -267,8 +268,8 @@ Array* DistributedObject::GetSplitFromPos(uint32_t split, int32_t version) {
   } else {
     if (split >= version_split_map[version_to_use].get<pos>().size()) {
       ostringstream msg;
-      msg << "returning null as split is missing. " << (version_split_map.find(version_to_use) == version_split_map.end())
-        << " split " << split << ", name \"" << name_ << "\", version " << version;
+      msg << "returning null as split is missing. Split " << split << ", name \"" << name_ << "\", version " << version;
+      LOG_ERROR(msg.str());
       throw PrestoShutdownException(msg.str());
     } else {
       ret = version_split_map[version_to_use].get<pos>()[split]->array.get();
@@ -337,8 +338,8 @@ Array* DistributedObject::GetSplitFromId(uint32_t split_id,
       //    split, version_to_use, ret->name().c_str());
     } else {
       ostringstream msg;
-      msg << "returning null as split is missing. " << (version_split_map.find(version_to_use) == version_split_map.end())
-        << " split " << split_id << ", name \"" << name_ << "\", version " << version;
+      msg << "returning null as split is missing. Split " << split_id << ", name \"" << name_ << "\", version " << version;
+      LOG_ERROR(msg.str());
       throw PrestoShutdownException(msg.str());
     }
   }
@@ -404,7 +405,7 @@ void DistributedObject::PutSplitWithId(uint32_t split_id,
   VersionSplits& splits_for_version = version_split_map[version_ - 1];
 #endif
 
-  shared_ptr<DistributedObjectSplit> new_split(new DistributedObjectSplit());
+  boost::shared_ptr<DistributedObjectSplit> new_split(new DistributedObjectSplit());
 
   // Set the start_offset based on previous version
   // Assumes the same split exists before
@@ -413,7 +414,7 @@ void DistributedObject::PutSplitWithId(uint32_t split_id,
 
   new_split->id = split_id;
 
-  shared_ptr<Array> new_arr(new Array());
+  boost::shared_ptr<Array> new_arr(new Array());
   new_split->array = new_arr;
   new_split->array->CopyFrom(*old_split_version->array.get());
   new_split->array->set_name(arr.name());
@@ -454,7 +455,7 @@ void DistributedObject::PutSplitWithId(uint32_t split_id,
     while (pos_iter != splits_for_version.get<pos>().end()) {
       // Pre-increment as we don't want to change pos_iter
       ++pos_iter;
-      shared_ptr<DistributedObjectSplit> s = *pos_iter;
+      boost::shared_ptr<DistributedObjectSplit> s = *pos_iter;
       s->start_offset[0] += diff;
       splits_for_version.replace(pos_iter, s);
     }
@@ -466,7 +467,7 @@ void DistributedObject::PutSplitWithId(uint32_t split_id,
     while (pos_iter != splits_for_version.get<pos>().end()) {
       // Pre-increment as we don't want to change pos_iter
       ++pos_iter;
-      shared_ptr<DistributedObjectSplit> s = *pos_iter;
+      boost::shared_ptr<DistributedObjectSplit> s = *pos_iter;
       s->start_offset[1] += diff;
       splits_for_version.replace(pos_iter, s);
     }
@@ -502,12 +503,12 @@ bool DistributedObject::UpdateDimAndBoundary(int32_t version) {
   }
   
   //Initially the dimensions are equal to the number for logical blocks in each direction                                                                       
-  int64_t rdim = dimensions_[0];
-  int64_t cdim = dimensions_[1];
+  ::int64_t rdim = dimensions_[0];
+  ::int64_t cdim = dimensions_[1];
   
-  int64_t row,col,split_id, split_rdim, split_cdim, new_rdim =0, new_cdim=0, c_offset=0, r_offset=0;
-  int64_t prev_cdim=0;
-  int64_t prev_rdim[rdim];
+  ::int64_t row,col,split_id, split_rdim, split_cdim, new_rdim =0, new_cdim=0, c_offset=0, r_offset=0;
+  ::int64_t prev_cdim=0;
+  ::int64_t prev_rdim[rdim];
   DistributedObjectSplit *ret;
 
   
@@ -525,9 +526,10 @@ bool DistributedObject::UpdateDimAndBoundary(int32_t version) {
 	ret->start_offset[0] = r_offset;
 	ret->start_offset[1] = c_offset;
       } else {
-	msg << "returning null as split is missing. " << (version_split_map.find(version_to_use) == version_split_map.end()) << " split " << split_id << ", nam\
-e \"" << name_ << "\", version " << version;
-	throw PrestoShutdownException(msg.str());
+	msg << "returning null as split is missing. Split " << split_id << ", nam\
+e \"" << name_ << "\", version " << version <<": rdim="<<rdim<<" :cdim="<<cdim;
+	//throw PrestoShutdownException(msg.str());
+	throw PrestoWarningException(msg.str());
       }
       
       //Column sum only requires the blocks from first row
@@ -544,27 +546,36 @@ e \"" << name_ << "\", version " << version;
       //Columns on each split should match splits just above it        
       if(prev_cdim!=split_cdim){
 	result = false;
+	if(split_rdim == split_cdim ==1){
+	sprintf(err_msg,"Split %d was either not updated or updated with size (%d,%d). Mismatch with adjacent partition's column size (=%d)", (split_id+1),split_rdim, split_cdim, prev_cdim);
+	}else{
 	sprintf(err_msg,"Update to split %d with size (%d,%d). Mismatch with adjacent partition's column size (=%d)", (split_id+1),split_rdim, split_cdim, prev_cdim);
+	}
 	LOG_ERROR(err_msg);
       }
       //Rows on each split should match those of the leftmost split   
       if(prev_rdim[row]!=split_rdim){
 	result = false;
-	sprintf(err_msg,"Update to split %d with size (%d,%d). Mismatch with adjacent partition's row size (=%d)", (split_id+1),split_rdim, split_cdim, prev_rdim[row]);
+	if(split_rdim == split_cdim ==1){
+	  //The user probably did not update the split. Provide more information in the error message.
+	 sprintf(err_msg,"Split %d was either not updated or updated with size (%d,%d). Mismatch with adjacent partition's row size (=%d)", (split_id+1),split_rdim, split_cdim, prev_rdim[row]);
+	}else{
+	  sprintf(err_msg,"Update to split %d with size (%d,%d). Mismatch with adjacent partition's row size (=%d)", (split_id+1),split_rdim, split_cdim, prev_rdim[row]);
+	}
 	LOG_ERROR(err_msg);
       }
       r_offset = r_offset + split_rdim;
     }
       c_offset = c_offset + split_cdim;
   }
-  //Set the new dimensions of the object. Since this code is run at the end of foreach loop. It should be threadsafe
-
-  dimensions_[0] = new_rdim;
-  dimensions_[1] = new_cdim;
 
   if(!result){
     //We print only the last error message
     fprintf(stderr, "\n%s%s. Redo object update to avoid unintended behavior later on.\n", exception_prefix.c_str(), err_msg);
+  }else{
+    //Set the new dimensions of the object. Since this code is run at the end of foreach loop. It should be threadsafe
+    dimensions_[0] = new_rdim;
+    dimensions_[1] = new_cdim;
   }
   return result;
 }
@@ -577,6 +588,7 @@ RCPP_MODULE(dobject_module) {
     .method("name", &DistributedObject::Name)
     .method("dim", &DistributedObject::GetDims)
     .method("blocks", &DistributedObject::GetBlocks)
+    .method("is_object_invalid", &DistributedObject::isObjectInvalid)
       ;  // NOLINT(whitespace/semicolon)
 }
 

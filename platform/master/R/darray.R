@@ -21,22 +21,33 @@ require(Rcpp)
 NAMESPACE <- environment()
 
 setClass("darray", representation(dim="numeric", blocks="numeric",
-                                  sparse="logical", dimnames="list", split_distribution="character"),
+                                  sparse="logical", dimnames="list", distribution_policy="character"),
                    prototype(dim=c(0,0), sparse=FALSE, blocks=c(0,0)),
                    contains=("dobject"),
                    S3methods=TRUE)
 
 setMethod("initialize", "darray",
-          function(.Object, dim, blocks, sparse=FALSE, npartitions, subtype, split_distribution) {
-            .Object <- callNextMethod(.Object, dim=dim, blocks=blocks, npartitions=npartitions, subtype=subtype, split_distribution=split_distribution)
+          function(.Object, dim, blocks, sparse=FALSE, npartitions, subtype, distribution_policy) {
+            .Object <- callNextMethod(.Object, dim=dim, blocks=blocks, npartitions=npartitions, subtype=subtype, 
+                                      distribution_policy=distribution_policy)
             .Object@sparse = sparse
             .Object
           })
 
-darray <- function(dim = NA, blocks = NA, sparse=FALSE, data=0, npartitions=NA, empty=FALSE, split_distribution="roundrobin") {
+darray <- function(dim = NA, blocks = NA, sparse=FALSE, data=0, npartitions=NA, empty=FALSE, distribution_policy="roundrobin") {
   tryCatch({
-   #Check if the user declared a flexible array, i.e., defined npartitions
    stype="STD"
+   data_class<-class(data)
+   if(data_class != "numeric" && data_class != "integer" && data_class != "logical") stop("Argument 'data' should be a number or logical value.")
+   if(length(data)>1) stop("Argument 'data' should be a number, character, or logical value.")
+   if(is.na(data) || data!=0){
+      #For empty arrays, data does not make sense.
+      if(!all(is.na(npartitions)) || empty) stop("Argument 'data' cannot be used with 'npartitions' or 'empty'.")
+      #For sparse matrices we always initialize with 0 as they don't take space.
+      if(sparse) stop("Initializing a sparse matrix with all non-zero elements makes it dense. Set 'data=0'.")
+   }
+
+   #Check if the user declared a flexible array, i.e., defined npartitions
    if(!all(is.na(npartitions))){
    #(TODO) Move most of these checks to dobject.R
    if(!is.na(dim) || !is.na(blocks)) stop("'dim' and 'blocks' cannot be declared when 'npartitions' is used")
@@ -50,18 +61,14 @@ darray <- function(dim = NA, blocks = NA, sparse=FALSE, data=0, npartitions=NA, 
         empty=TRUE
         stype="FLEX_DECLARED"
    }else{
-      #For sparse matrices we always initialize with 0 as they don't take space.
-      if(sparse){
-        if(data!=0) stop("Initializing a sparse matrix with all non-zero elements makes it dense. Set 'data =0'.")
-        empty=FALSE
-      }
-      if(empty) stype="UNINIT"
+      if(empty) stype="UNINIT_DECLARED"
    }
 
-   d <- new ("darray", dim, blocks, sparse, npartitions, subtype=stype, split_distribution=split_distribution)
+   d <- new ("darray", dim, blocks, sparse, npartitions, subtype=stype, distribution_policy=distribution_policy)
+   success <- FALSE
 
   if (!sparse) {
-    foreach(i,1:npartitions(d),
+    success <- foreach(i,1:npartitions(d),
             initdata <- function(dhs = splits(d,i),
                                  val = data,
                                  fulldim = d@dim,
@@ -73,19 +80,23 @@ darray <- function(dim = NA, blocks = NA, sparse=FALSE, data=0, npartitions=NA, 
 	      if(isempty){
 			dhs <- array(0,dim=c(0,0))              
               }else{
-  	                dhs <- array(data=as.numeric(val), dim=dobject.getdims(fulldim, blockdim, ii))
+			dim=dobject.getdims(fulldim, blockdim, ii)
+  	                dhs <- matrix(data=as.numeric(val), nrow=dim[1], ncol=dim[2])
               }
               update(dhs)
             }, progress=FALSE)
   } else {
-    foreach(i,1:npartitions(d),
+    success <- foreach(i,1:npartitions(d),
             initdata <- function(dhs = splits(d,i),
                                  val = data,
                                  fulldim = d@dim,
                                  blockdim = d@blocks,
-                                 ii = i
+                                 ii = i,
+				 isempty= empty
                                  ) {
+			
               dim_d <- dobject.getdims(fulldim, blockdim, ii)
+	      if(isempty) dim_d <-c(0,0)
               dhs <- new("dgCMatrix", i=as.integer({}),
                                       x=as.numeric({}), 
                                       p=as.integer(rep(val, dim_d[2] + 1)),
@@ -94,7 +105,8 @@ darray <- function(dim = NA, blocks = NA, sparse=FALSE, data=0, npartitions=NA, 
             }, progress=FALSE)
   }
   },error = handle_presto_exception)
-  d
+  if(!success) { rm(d); gc(); NULL }
+  else d
 }
 
 load.darray <- function(x, filename, triplet=TRUE, transpose=FALSE, progress=TRUE) {
@@ -250,15 +262,17 @@ setMethod("save", signature("darray"),
 #}
 setMethod("*", signature("numeric", "darray"),
           da_scaling <- function(e1, e2) {
-            c <- darray(dim=e2@dim, blocks=e2@blocks, sparse=e2@sparse)
-            foreach(i,1:numSplits(e2),
+            if(is.invalid(e2)) stop("Operation not supported on empty arrays.")	
+            c <- darray(npartitions=npartitions2D(e2), sparse=e2@sparse)    #(*) between numeric and sparse array returns sparse array
+            success <- foreach(i,1:numSplits(e2),
               function(ys = splits(e2,i),
                        cs = splits(c,i),
                        s = e1) {
                 cs <- ys*s
                 update(cs)
               }, progress=FALSE)
-            c
+            if(!success) { rm(c); gc(); NULL }
+            else c
           }
         )
 setMethod("*", signature("darray", "numeric"),
@@ -267,81 +281,129 @@ setMethod("*", signature("darray", "numeric"),
           }
          )
 
-
-
-setMethod("+", signature("darray", "darray"),
+setMethod("+", signature("darray", "numeric"),
           function(e1, e2) {
-            if(e1@dim[1]!=e2@dim[1] || e1@dim[2]!=e2@dim[2]){
-              stop("Dimension of input darray does not match for + operation")
-            }
-            c <- NA
-            sameBlckSize <- FALSE
-            if(e1@blocks[1]==e2@blocks[1] && e1@blocks[2]==e2@blocks[2]){  #if blocks matches
-              c <- darray(dim=e1@dim, blocks=e1@blocks, sparse=e1@sparse)  #calculate per blocks
-              sameBlckSize <- TRUE
-            }else{                                                         #if block does not match
-              c <- darray(dim=e1@dim, blocks=e1@dim, sparse=e1@sparse)     #calcuate the whole matrix
-            }
-            if (sameBlckSize == TRUE){
-              foreach(i,1:numSplits(e1),
+	   if(is.invalid(e1)) stop("Operation not supported on empty arrays.")
+	   c<-darray(npartitions=npartitions2D(e1))     #(+) between numeric and sparse array returns dense array
+           success <- foreach(i,1:npartitions(e1),
                 function(xs = splits(e1,i),
-                         ys = splits(e2,i),
+                         ys = e2,
                          cs = splits(c, i)) {
                   cs <- xs + ys
                   update(cs)
                 })
-  
-            }else{
-              foreach(i,1:1,
-                function(xs = splits(e1),
-                         ys = splits(e2),
-                         cs = splits(c)) {
-                  cs <- xs + ys
-                  update(cs)
-                }, progress=FALSE) 
+            if(!success) { rm(c); gc(); NULL }
+            else c
+          }
+   )
+
+setMethod("+", signature("numeric", "darray"),
+          function(e1, e2) {
+	  return (e2+e1)
+ }
+)
+
+setMethod("+", signature("darray", "darray"),
+          function(e1, e2) {
+	   if(is.invalid(e1) || is.invalid(e2)) stop("Operation not supported on empty arrays.")
+	   if(!all(dim(e1)==dim(e2))){
+	      print(dim(e1))
+	      print(dim(e2))
+              stop("non-conformable arrays. Check dimensions of input arrays.")
             }
-            c
+	   e1_psize<-partitionsize(e1)
+	   e2_psize<-partitionsize(e2)
+
+	   if(!all(e1_psize==e2_psize)){
+              stop("non-conformable partitions of arrays. Partition sizes are not same for the arrays.")
+           }
+           
+           #(+) between dense and sparse array can return either dense or sparse array
+           # depending on number of non-zero elements after the operation
+           # Storing results as dense array for mixed darray types
+           sparse <- e1@sparse && e2@sparse
+	   c<-darray(npartitions=npartitions2D(e1), sparse=sparse)
+           success <- foreach(i,1:npartitions(e1),
+                function(xs = splits(e1,i),
+                         ys = splits(e2,i),
+                         cs = splits(c, i),
+                         sparse = sparse) {
+                  cs <- xs + ys
+                  #Result can be sparse sometimes for mixed darray types
+                  if(inherits(cs, "dgCMatrix") && !sparse)
+                    cs <- as(cs, "matrix")
+                  update(cs)
+                })
+            if(!success) { rm(c); gc(); NULL }
+            else c
           }
         )
 
 setMethod("-", signature("darray", "darray"),
           function(e1, e2) {
-            if(e1@dim[1]!=e2@dim[1] || e1@dim[2]!=e2@dim[2]){
-              stop("Dimension of input darray does not match for - operation")
+	   if(is.invalid(e1) || is.invalid(e2)) stop("Operation not supported on empty arrays.")
+	   if(!all(dim(e1)==dim(e2))){
+	      print(dim(e1))
+	      print(dim(e2))
+	      print(class(e2))
+              stop("non-conformable arrays. Check dimensions of input arrays.")
             }
-            c <- NA
-            sameBlckSize <- FALSE
-            if(e1@blocks[1]==e2@blocks[1] && e1@blocks[2]==e2@blocks[2]){  #if blocks matches
-              c <- darray(dim=e1@dim, blocks=e1@blocks, sparse=e1@sparse)  #calculate per blocks
-              sameBlckSize <- TRUE
-            }else{                                                         #if block does not match
-              c <- darray(dim=e1@dim, blocks=e1@dim, sparse=e1@sparse)     #calcuate the whole matrix
-            }
-            if (sameBlckSize == TRUE){
-              foreach(i,1:numSplits(e1),
+	   e1_psize<-partitionsize(e1)
+	   e2_psize<-partitionsize(e2)
+
+	   if(!all(e1_psize==e2_psize)){
+              stop("non-conformable partitions of arrays. Partition sizes are not same for the arrays.")
+           }
+
+           #(-) between dense and sparse array can return either dense or sparse array
+           # depending on number of non-zero elements after the operation
+           # Storing results as dense array for mixed darray types
+           sparse <- e1@sparse && e2@sparse
+	   c<-darray(npartitions=npartitions2D(e1), sparse=sparse)
+           success <- foreach(i,1:npartitions(e1),
                 function(xs = splits(e1,i),
                          ys = splits(e2,i),
-                         cs = splits(c, i)) {
+                         cs = splits(c, i),
+                         sparse = sparse) {
                   cs <- xs - ys
+                  # Results can be sparse sometimes for mixed darray types
+                  if(inherits(cs, "dgCMatrix") && !sparse)
+                    cs <- as(cs, "matrix") 
                   update(cs)
-                }, progress=FALSE)
-
-            }else{
-              foreach(i,1:1,
-                function(xs = splits(e1),
-                         ys = splits(e2),
-                         cs = splits(c)) {
-                  cs <- xs - ys
-                  update(cs)
-                }, progress=FALSE)
-            }
-            c
+                })
+            if(!success) { rm(c); gc(); NULL }
+            else c
           }
         )
 
+setMethod("-", signature("darray", "numeric"),
+          function(e1, e2) {
+	  e2<-(-1*e2)
+	  return (e1+e2)
+ }
+)
+
+setMethod("-", signature("numeric", "darray"),
+          function(e1, e2) {
+	   if(is.invalid(e2)) stop("Operation not supported on empty arrays.")
+	   c<-darray(npartitions=npartitions2D(e2))     #(-) between numeric and sparse array returns dense array
+           success <- foreach(i,1:npartitions(e2),
+                function(xs = splits(e2,i),
+                         ys = e1,
+                         cs = splits(c, i)) {
+                  cs <-  ys-xs
+                  update(cs)
+                })
+            if(!success) { rm(c); gc(); NULL }
+            else c
+          }
+   )
+
+#Prints the Frobenius norm
 setMethod("norm", signature("darray", "missing"),
           function(x) {
-            norms <- darray(dim=ceiling(x@dim/x@blocks), blocks=c(1,1), sparse=FALSE)
+	    if(is.invalid(x)) stop("Operation not supported on empty arrays.")
+            norms <- darray(npartitions=npartitions2D(x), sparse=FALSE)
             foreach(i,1:length(splits(norms)),
                     localnorm <- function(v=splits(x,i),
                                           res=splits(norms,i)) {
@@ -355,45 +417,47 @@ setMethod("norm", signature("darray", "missing"),
 
 setMethod("%*%", signature("darray", "darray"),
   function(x, y) {
-    # Dimension of m*n times n*p is m*p
-    if (x@dim[2] != y@dim[1]) {
-      stop("Array indices do not match for %*% operation")
+  if(is.invalid(x) || is.invalid(y)) stop("Operation not supported on empty arrays.")
+  #Dimension of m*n times n*p is m*p
+    if (dim(x)[2] != dim(y)[1]) {
+      stop("Array sizes do not match for %*% operation")
     }
     c <- NA
-    if(x@dim[2]==x@blocks[2] && y@dim[1]!=y@blocks[1]){ #x is row-partitioned but y is not column-partitioned
-      c <- darray(c(x@dim[1], y@dim[2]), c(x@blocks[1], y@dim[2]),
-                    x@sparse && y@sparse)
-      foreach(i, 1:numSplits(x), function(row = splits(x,i),
+    success <- FALSE
+    if(npartitions2D(x)[2]==1 && npartitions2D(y)[1]!=1){ #x is row-partitioned but y is not column-partitioned
+      c <- darray(npartitions=npartitions2D(x), sparse=(x@sparse && y@sparse))
+      success <- foreach(i, 1:numSplits(x), function(row = splits(x,i),
                                           col = splits(y),
                                           tmp = splits(c,i)){
         tmp <- row %*% col
         update(tmp)
       }, progress=FALSE)
-    }else if(x@dim[2]!=x@blocks[2] && y@dim[1]==y@blocks[1]){ # x is not row-partitioned but y is column-partitioned
-      c <- darray(c(x@dim[1], y@dim[2]), c(x@dim[1], y@blocks[2]),
-                    x@sparse && y@sparse)
-      foreach(i, 1:numSplits(y), function(row = splits(x),
+    }else if(npartitions2D(x)[2]!=1 && npartitions2D(y)[1]==1){ # x is not row-partitioned but y is column-partitioned
+      c <- darray(npartitions=npartitions2D(y), sparse=(x@sparse && y@sparse))
+      success <- foreach(i, 1:numSplits(y), function(row = splits(x),
                                           col = splits(y,i),
                                           tmp = splits(c,i)){
         tmp <- row %*% col
         update(tmp)
       }, progress=FALSE)      
-    }else if(x@dim[2]==x@blocks[2] && y@dim[1]==y@blocks[1]){ # x is row-partitioned and y is column-partitioned. best parallellism!
-      c <- darray(c(x@dim[1], y@dim[2]), c(x@blocks[1], y@blocks[2]),
-                    x@sparse && y@sparse)
-      for(r in 1:numSplits(x)){
-        foreach(i, 1:numSplits(y), function(row = splits(x,r),
-                                            col = splits(y,i),
-                                            tmp = splits(c,(r-1)*numSplits(y)+i)){
+    }else if(npartitions2D(x)[2]==1 && npartitions2D(y)[1]==1){ # x is row-partitioned and y is column-partitioned. best parallellism!
+      c <- darray(npartitions=c(npartitions2D(x)[1],npartitions2D(y)[2]), sparse=(x@sparse && y@sparse))
+      #Multiplication happens for each block of c (left to right), take x's row and y's column partition 
+      #If we don't update all unitialized flex partitions in one foreach, error can occur (different partition error, as some partitions will be empty)
+      nc<-npartitions2D(c)[2]
+       success <- foreach(i, 1:npartitions(c), function(col = splits(y,((i-1)%%nc)+1),
+       		  		             row = splits(x,floor((i-1)/nc)+1),
+                                             tmp = splits(c,i)){
           tmp <- row %*% col
           update(tmp)
         }, progress=FALSE)
-      }
     }else{
-      stop("Darray partition does not conform to multiplication. x%*%y: At least, either x is row-partitioned or y is column-partitioned")
+      stop("Darray partition sizes do not conform to multiplication. x%*%y: Either x should be row-partitioned or y should be column-partitioned")
     }
-    c
+    if(!success) { rm(c); gc(); NULL }
+    else c
   })
+
 # return subset of matrix given the block size and the index
 # the block is counted from left to right. then top to down
 # For example, (1,1)(1,2)(2,1)(2,2) is index of 1,2,3,4, respectively
@@ -411,35 +475,51 @@ get_sub_matrix <- function(in_mat, b_size, index){
   return (matrix(in_mat[b_row_idx:e_row_idx, b_col_idx:e_col_idx], nrow=(e_row_idx-b_row_idx+1), ncol=(e_col_idx-b_col_idx+1)))
 }
 
-setGeneric("as.darray", function(input, blocks) standardGeneric("as.darray"))
+
 # input: an input matrix that will be filled into the darray
-# da_dim: block dimension of a created darray. if missing, block dim is same as input dim
-# out_darray: an output darray. If this is missing, new darray is created.
-# if out_darray and da_dim co-exist, da_dim is ignored.
+# blocks: block dimension of a created darray. if missing, block dim is calculated so that the darray is striped across executors
+
+setGeneric("as.darray", function(input, blocks) standardGeneric("as.darray"))
+#setMethod("as.darray", signature(input="matrix", blocks="missing"),
+#  function(input, blocks) {
+#    as.darray(input, dim(input))
+#})
+
+#If blocks is missing partition the matrix rowwise, and stripe the partitions across executors.
+#Note that the number of partitions may not exactly equal the number of executors. 
+#E.g, M=15x4 matrix, and nexecutors=6. No. of partitions of darray will be =5
 setMethod("as.darray", signature(input="matrix", blocks="missing"),
   function(input, blocks) {
-    as.darray(input, dim(input))
+    ninst<-sum(distributedR_status()$Inst)
+    blocks<-dim(input)
+    blocks[1]<-ceiling(blocks[1]/ninst)
+    as.darray(input, blocks)
 })
 
 setMethod("as.darray", signature(input="matrix", blocks="numeric"),
   function(input, blocks) {
     mdim <- dim(input)
     out_dobject <- darray(mdim, blocks, FALSE)
-    da_blocks = out_dobject@dim
-    bdim = out_dobject@blocks
-    if(bdim[1]>mdim[1] || bdim[2]>mdim[2] || da_blocks[1]!=mdim[1] || da_blocks[2]!=mdim[2]){
-      ## check if input block dimension is larger than input matrix
-      ## check if input darray dimension is same as input matrix dimension
-      stop("input darray and matrix dimensions do not conform")
-    }
-    foreach(i, 1:numSplits(out_dobject), function(idx=i,
+
+    if (! is.null(out_dobject)) {
+      da_blocks = out_dobject@dim
+      bdim = out_dobject@blocks
+      if(bdim[1]>mdim[1] || bdim[2]>mdim[2] || da_blocks[1]!=mdim[1] || da_blocks[2]!=mdim[2]){
+        ## check if input block dimension is larger than input matrix
+        ## check if input darray dimension is same as input matrix dimension
+        stop("input darray and matrix dimensions do not conform")
+      }
+      foreach(i, 1:numSplits(out_dobject), function(idx=i,
                                                  mtx=get_sub_matrix(input, out_dobject@blocks, i),
                                                  ds=splits(out_dobject,i)){
-      ds <- mtx
-      update(ds)
-    }, progress=FALSE)
+        ds <- mtx
+        update(ds)
+      }, progress=FALSE)
+
+      if(is.null(dimnames(input)) == FALSE)
+        dimnames(out_dobject) <- dimnames(input)
+    }
+
     return (out_dobject)
 })
-
-
 

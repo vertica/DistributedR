@@ -35,7 +35,7 @@ class DistDataFrame : public ArrayData {
   DistDataFrame(const std::string &name, const SEXP sexp,
       size_t size);
   virtual void LoadInR(RInside &R, const std::string &varname);
-  virtual std::pair<size_t, size_t> GetDims() const;
+  virtual std::pair<std::int64_t, std::int64_t> GetDims() const;
   virtual ~DistDataFrame();
 
  private:

@@ -17,7 +17,9 @@
 
 
 NAME = vertica-distributedR
-VERSION = 0.7.0
+VERSION = 1.0.0
+
+SVNREVISION   = $(shell svn info | grep "^Revision" | cut -f2 -d' ')
 
 # This allows the Jenkins build number to be included in the RPM release value.
 BUILD_NUMBER  ?= 1
@@ -25,6 +27,5 @@ BUILD_NUMBER  ?= 1
 WORKSPACE     = $(CURDIR)
 SOURCE_BASE   = $(WORKSPACE)/..
 RPMBASE       = $(WORKSPACE)/rpmbuild
-DEBIANBASE    = $(WORKSPACE)/debbuild
 TEMPDIR       = /tmp/distributedR-tarball-stage
 TARBALL_STAGE = $(TEMPDIR)/$(NAME)-$(VERSION)

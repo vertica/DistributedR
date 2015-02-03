@@ -109,7 +109,7 @@ struct TaskArg {
 // an exec task that is currently being executed
 struct ExecTask {
   Worker* worker;  // worker executing the task
-  unordered_set<Split*> splits;  // all splits used by the task
+  boost::unordered_set<Split*> splits;  // all splits used by the task
 
   TaskArg *args;  // task arguments
   uint64_t id;
@@ -118,7 +118,7 @@ struct ExecTask {
 // a create composite task that is currently being executed
 struct CCTask {
   Worker* worker;  // worker executing the task
-  // unordered_set<Split*> splits;  // all splits used by the task
+  // boost::unordered_set<Split*> splits;  // all splits used by the task
   std::string name;  // name of the composite
 
   uint64_t id;
@@ -163,12 +163,12 @@ struct ClearTask {
 
 // a split
 struct Split {
-  unordered_set<Worker*> workers;  // workers that have the split in their DRAM
-  unordered_set<ArrayStore*> arraystores;  // array stores that have the split
-  /* unordered_set<ExecTask*> exectasks; */
-  /* unordered_set<FetchTask*> fetchtasks; */
-  /* unordered_set<SaveTask*> savetasks; */
-  /* unordered_set<LoadTask*> loadtasks; */
+  boost::unordered_set<Worker*> workers;  // workers that have the split in their DRAM
+  boost::unordered_set<ArrayStore*> arraystores;  // array stores that have the split
+  /* boost::unordered_set<ExecTask*> exectasks; */
+  /* boost::unordered_set<FetchTask*> fetchtasks; */
+  /* boost::unordered_set<SaveTask*> savetasks; */
+  /* boost::unordered_set<LoadTask*> loadtasks; */
 
   std::string name;
   size_t size;
@@ -178,9 +178,9 @@ struct Split {
 // an array store (for storing arrays on disk)
 struct ArrayStore {
   Worker *worker;  // worker where the array store is
-  unordered_set<Split*> splits;  // splits stored
-  unordered_set<SaveTask*> savetasks;  // save tasks being served
-  unordered_set<LoadTask*> loadtasks;  // load tasks being served
+  boost::unordered_set<Split*> splits;  // splits stored
+  boost::unordered_set<SaveTask*> savetasks;  // save tasks being served
+  boost::unordered_set<LoadTask*> loadtasks;  // load tasks being served
 
   size_t size;  // total size
   size_t used;  // currently used
@@ -189,14 +189,14 @@ struct ArrayStore {
 
 // a worker
 struct Worker {
-  unordered_map<std::string, ArrayStore*> arraystores;  // array stores
-  unordered_set<ExecTask*> exectasks;  // exec tasks being executed
-  unordered_set<CCTask*> cctasks;  // create composite tasks being executed
-  unordered_set<Split*> splits_dram;  // splits in DRAM
-  unordered_set<FetchTask*> fetchtasks;  // fetch tasks being executed
-  unordered_set<FetchTask*> sendtasks;  // fetch responses being executed
-  unordered_set<SaveTask*> savetasks;  // save tasks being executed
-  unordered_set<LoadTask*> loadtasks;  // load tasks being executed
+  boost::unordered_map<std::string, ArrayStore*> arraystores;  // array stores
+  boost::unordered_set<ExecTask*> exectasks;  // exec tasks being executed
+  boost::unordered_set<CCTask*> cctasks;  // create composite tasks being executed
+  boost::unordered_set<Split*> splits_dram;  // splits in DRAM
+  boost::unordered_set<FetchTask*> fetchtasks;  // fetch tasks being executed
+  boost::unordered_set<FetchTask*> sendtasks;  // fetch responses being executed
+  boost::unordered_set<SaveTask*> savetasks;  // save tasks being executed
+  boost::unordered_set<LoadTask*> loadtasks;  // load tasks being executed
 
   ServerInfo server;
   // DRAM size (not actual, but according to worker config)
@@ -256,7 +256,7 @@ class Scheduler {
   virtual void Flush(Worker *worker, size_t size) {}
 
   // handle a task done notification: parent version! (bookkeeping)
-  void Done(TaskDoneRequest* req);
+  bool Done(TaskDoneRequest* req);
 
 
   // --- bookkeeping ---
@@ -285,11 +285,11 @@ class Scheduler {
   static std::string CompositeName(vector<string>& array_names);
   void DeleteSplit(const string& split_name);
 
-  unordered_map<std::string, Worker*>& GetWorkerInfo() {
+  boost::unordered_map<std::string, Worker*>& GetWorkerInfo() {
     return workers;
   }
 
-  unordered_map<std::string, Split*>& GetSplitInfo() {
+  boost::unordered_map<std::string, Split*>& GetSplitInfo() {
     return splits;
   }
 
@@ -305,7 +305,7 @@ class Scheduler {
 
   // -- data loader --
   
-  void InitiateDataLoader(WorkerInfo* wi, uint64_t split_size);
+  void InitiateDataLoader(WorkerInfo* wi, uint64_t split_size, string split_prefix);
   void FetchLoaderStatus(WorkerInfo* wi, std::vector<std::string>vnodes);
   void StopDataLoader(WorkerInfo* wi);
 
@@ -314,6 +314,7 @@ class Scheduler {
   std::pair<bool, bool> UpdateTaskResult(TaskDoneRequest* req, bool validated);
   void PurgeUpdates(TaskDoneRequest* req);
   bool IsExecTask(uint64_t taskid);
+  void SetForeachError(bool value);
 
   void TaskErrorMsg(const char* error_msg) {
     foreach_status_->error_stream.str(std::string()); 
@@ -322,7 +323,7 @@ class Scheduler {
   }
 
   void ResetForeach() {
-    unordered_map<uint64_t, TaskDoneRequest*>::iterator i = taskdones_.begin();
+    boost::unordered_map<uint64_t, TaskDoneRequest*>::iterator i = taskdones_.begin();
     for(; i != taskdones_.end(); ++i) {
       delete i->second;
     }
@@ -342,7 +343,7 @@ class Scheduler {
   // Current implementation is basedon assumption that 
   // atmost 1 foreach() will run at time
   ForeachStatus *foreach_status_;
-  unordered_map<uint64_t, TaskDoneRequest*> taskdones_;
+  boost::unordered_map<uint64_t, TaskDoneRequest*> taskdones_;
 
  protected:
   // get new unique task id
@@ -397,19 +398,19 @@ class Scheduler {
   Worker* GetMostMemWorker();
 
   // map of splitsnames to splits
-  unordered_map<std::string, Split*> splits;
+  boost::unordered_map<std::string, Split*> splits;
 
   // map of hostname:port to worker
-  unordered_map<std::string, Worker*> workers;
+  boost::unordered_map<std::string, Worker*> workers;
 
   // mutex to protect all scheduler metadata
   boost::recursive_mutex metadata_mutex;
 
   // ooc stuff
-  unordered_map<Split*, unordered_set<Worker*> > locked_on_;
-  unordered_map<Worker*, unordered_map<Split*, int> > locked_splits_;
-  unordered_map<Worker*, size_t> locked_size_;
-  unordered_map<Worker*, size_t> locked_loaded_size_;
+  boost::unordered_map<Split*, boost::unordered_set<Worker*> > locked_on_;
+  boost::unordered_map<Worker*, boost::unordered_map<Split*, int> > locked_splits_;
+  boost::unordered_map<Worker*, size_t> locked_size_;
+  boost::unordered_map<Worker*, size_t> locked_loaded_size_;
 
   // timer
   Timer scheduler_time_;
@@ -417,7 +418,7 @@ class Scheduler {
   double total_scheduler_time_;
   double total_child_scheduler_time_;
 
-  mutex single_threading_mutex;
+  boost::mutex single_threading_mutex;
 
  private:
   // do simple garbage collection on worker
@@ -428,21 +429,21 @@ class Scheduler {
 
 
   // map of task ids to tasks
-  unordered_map<uint64_t, FetchTask*> fetchtasks;
+  boost::unordered_map<uint64_t, FetchTask*> fetchtasks;
   // a mapping of taskID to ExecTask pointer
-  unordered_map<uint64_t, ExecTask*> exectasks;
-  unordered_map<uint64_t, CCTask*> cctasks;
-  unordered_map<uint64_t, SaveTask*> savetasks;
-  unordered_map<uint64_t, LoadTask*> loadtasks;
+  boost::unordered_map<uint64_t, ExecTask*> exectasks;
+  boost::unordered_map<uint64_t, CCTask*> cctasks;
+  boost::unordered_map<uint64_t, SaveTask*> savetasks;
+  boost::unordered_map<uint64_t, LoadTask*> loadtasks;
   // NOTE(erik): only cleartasks coming from a move are put in this
-  unordered_map<uint64_t, ClearTask*> cleartasks;
+  boost::unordered_map<uint64_t, ClearTask*> cleartasks;
 
   // set of move task ids (these are the copy task ids,
   // so we need to issue a delete when the copy is done)
-  unordered_set<uint64_t> movetasks;
+  boost::unordered_set<uint64_t> movetasks;
 
   // is the split currently being moved?
-  unordered_map<Split*, int> split_moving_;
+  boost::unordered_map<Split*, int> split_moving_;
 
   // -- data loader --
   map<uint64_t, WorkerInfo*> dataloadereq;
@@ -502,24 +503,24 @@ class InMemoryScheduler : public Scheduler {
     const Arg *arg;
   };
 
-  recursive_mutex mutex_;
+  boost::recursive_mutex mutex_;
   // maping of taskID to TaskData for execution
-  unordered_map<uint64_t, TaskData> tasks_;
+  boost::unordered_map<uint64_t, TaskData> tasks_;
   // mapping of task ID to a list of other taskIDs
   // that is dependent on the key taskID
   // This is generally used when an Exec task initiatres Fetch tasks
-  unordered_map<uint64_t, unordered_set<uint64_t> > dependencies_;
+  boost::unordered_map<uint64_t, boost::unordered_set<uint64_t> > dependencies_;
   // mapping of taskID to timer
-  unordered_map<uint64_t, Timer> timers_;
+  boost::unordered_map<uint64_t, Timer> timers_;
 
-  /* unordered_map<uint64_t, unordered_set<uint64_t> > cc_dependencies_; */
+  /* boost::unordered_map<uint64_t, boost::unordered_set<uint64_t> > cc_dependencies_; */
   // mapping of taskID to create composite task data
-  unordered_map<uint64_t, CCTaskData> cctasks_;
-  unordered_map<pair<Worker*, std::string>, uint64_t> cctask_ids_;
+  boost::unordered_map<uint64_t, CCTaskData> cctasks_;
+  boost::unordered_map<pair<Worker*, std::string>, uint64_t> cctask_ids_;
 
   // current composite (if any) of a split
   // darrayname with corresponding composite array
-  unordered_map<string, string> current_composite;
+  boost::unordered_map<string, string> current_composite;
 
   Timer timer_;
   FILE *profiling_output_;
@@ -551,16 +552,16 @@ class OOCScheduler : public Scheduler {
     const Arg *arg;
   };
 
-  recursive_mutex mutex_;
-  unordered_map<uint64_t, TaskData> tasks_;
-  unordered_map<pair<Worker*, Split*>, unordered_set<uint64_t> > dependencies_;
-  unordered_map<uint64_t, unordered_set<uint64_t> > dependencies_cc;
+  boost::recursive_mutex mutex_;
+  boost::unordered_map<uint64_t, TaskData> tasks_;
+  boost::unordered_map<pair<Worker*, Split*>, boost::unordered_set<uint64_t> > dependencies_;
+  boost::unordered_map<uint64_t, boost::unordered_set<uint64_t> > dependencies_cc;
 
   // composites
-  unordered_map<uint64_t, CCTaskData> cctasks_;
-  unordered_map<pair<Worker*, std::string>, uint64_t> cctask_ids_;
+  boost::unordered_map<uint64_t, CCTaskData> cctasks_;
+  boost::unordered_map<pair<Worker*, std::string>, uint64_t> cctask_ids_;
   // current composite (if any) of a split
-  unordered_map<string, string> current_composite;
+  boost::unordered_map<string, string> current_composite;
 
   // ooc
   void LockSplit(Split *split, Worker *worker);
@@ -581,15 +582,15 @@ class OOCScheduler : public Scheduler {
   /* bool TryLoadSplit(Worker *worker); */
   void TryExecTasks(Worker *worker);
 
-  //  unordered_map<Worker*, uint64_t> scheduled_tasks_;
-  unordered_map<Worker*, list<uint64_t> > waiting_tasks_;
-  unordered_map<Worker*, list<Split*> > waiting_splits_;
-  unordered_map<Worker*, unordered_set<Split*> > waiting_splits_set_;
-  unordered_map<Worker*, list<uint64_t> > waiting_tasks_exec_;
+  //  boost::unordered_map<Worker*, uint64_t> scheduled_tasks_;
+  boost::unordered_map<Worker*, list<uint64_t> > waiting_tasks_;
+  boost::unordered_map<Worker*, list<Split*> > waiting_splits_;
+  boost::unordered_map<Worker*, boost::unordered_set<Split*> > waiting_splits_set_;
+  boost::unordered_map<Worker*, list<uint64_t> > waiting_tasks_exec_;
   // what workers the splits are locked on
 
 
-  unordered_map<uint64_t, Timer> timers_;
+  boost::unordered_map<uint64_t, Timer> timers_;
   Timer timer_;
   FILE *profiling_output_;
   FILE *ooc_log_;

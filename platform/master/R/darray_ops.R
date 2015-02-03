@@ -37,6 +37,7 @@ setMethod("split", signature("darray"), function(x,...)
 #Max of all elements in the array
 setMethod("max", signature("darray"),function(x, na.rm = FALSE)
           {
+	      if(is.invalid(x)) stop("Operation not supported on empty arrays.")
               temp <- darray(dim=c(1,numSplits(x)), blocks=c(1,1), sparse=FALSE)
               foreach(i,1:numSplits(x),
               localmax <- function(v=splits(x,i),res=splits(temp,i), flag=na.rm) {
@@ -46,8 +47,9 @@ setMethod("max", signature("darray"),function(x, na.rm = FALSE)
                   #it may return the negative number instead of zero. We adjust for the error.
                   #E.g., a<-Matrix(c(-1,0,0,0,0), sparse=TRUE), max(t(a)) is -1. 
                   #But, a<-Matrix(c(-1,0,0,0,-2), sparse=TRUE), max(t(a)) is 0. 
-		  if((class(v)=="dgCMatrix") && res<0){
-		     res[1,1]<-0			     
+		  if((class(v)=="dgCMatrix") && !is.na(res)) {
+                     if(length(v)-nnzero(v)>0 && res<0)
+		       res[1,1]<-0	     
 		  }
                   update(res)
               }, progress=FALSE)
@@ -59,6 +61,7 @@ setMethod("max", signature("darray"),function(x, na.rm = FALSE)
 #Min of all elements in the array
 setMethod("min", signature("darray"),function(x, na.rm=FALSE)
           {
+	      if(is.invalid(x)) stop("Operation not supported on empty arrays.")
               temp <- darray(dim=c(1,numSplits(x)), blocks=c(1,1), sparse=FALSE)
               foreach(i,1:numSplits(x),
               localmin <- function(v=splits(x,i),res=splits(temp,i), flag=na.rm) {
@@ -68,8 +71,9 @@ setMethod("min", signature("darray"),function(x, na.rm=FALSE)
                   #E.g., a<-Matrix(c(1,0,0,0,0), sparse=TRUE), min(t(a)) is 1. 
                   #But, a<-Matrix(c(1,0,0,0,2), sparse=TRUE), min(t(a)) is 0. 
 
-		  if((class(v)=="dgCMatrix") && res>0){
-		     res[1,1]<-0			     
+		  if((class(v)=="dgCMatrix") && !is.na(res)) {
+                     if(length(v)-nnzero(v)>0 && res>0)
+		       res[1,1]<-0		     
 		  }
                   update(res)
               }, progress=FALSE)
@@ -81,6 +85,7 @@ setMethod("min", signature("darray"),function(x, na.rm=FALSE)
 #Sum of all elements in the array
 setMethod("sum", signature("darray"),function(x, na.rm=FALSE)
           {
+	      if(is.invalid(x)) stop("Operation not supported on empty arrays.")
               temp <- darray(dim=c(1,numSplits(x)), blocks=c(1,1), sparse=FALSE)
               foreach(i,1:numSplits(x),
               localsum <- function(v=splits(x,i),res=splits(temp,i), flag=na.rm) {
@@ -96,12 +101,15 @@ setMethod("sum", signature("darray"),function(x, na.rm=FALSE)
 #Mean of a darray
 setMethod("mean", signature("darray"),function(x, trim=0, na.rm=FALSE)
           {
+	      if(is.invalid(x)) stop("Operation not supported on empty arrays.")
               if(trim!=0) stop("non-zero trim value is not supported\n")
               #Store sum and number of elements
               temp <- darray(dim=c(2,numSplits(x)), blocks=c(2,1), sparse=FALSE)
               foreach(i,1:numSplits(x),
               localmean <- function(v=splits(x,i),res=splits(temp,i), flag=na.rm) {
                   res[1,1] <- sum(v, na.rm=flag)
+		  #For really large numbers sum can overflow with integer addition.
+		  if(is.na(res[1,1])) {res[1,1] <- sum(as.numeric(v), na.rm=flag)}
                   res[2,1] <- length(v)
                   if(flag){
                       res[2,1] <- res[2,1] - sum(is.na(v))
@@ -109,7 +117,8 @@ setMethod("mean", signature("darray"),function(x, trim=0, na.rm=FALSE)
                   update(res)
               }, progress=FALSE)
           res <- getpartition(temp)
-          return(sum(res[1,])/sum(res[2,]))
+	  #First divide and then add to ensure that overflows can be better handled.
+          return(sum(res[1,]/sum(res[2,])))
       }
 )
 
@@ -117,6 +126,7 @@ setMethod("mean", signature("darray"),function(x, trim=0, na.rm=FALSE)
 #Column sums of a darray
 setMethod("colSums", signature("darray"),function(x, na.rm=FALSE, dims=1)
           {
+	      if(is.invalid(x)) stop("Operation not supported on empty arrays.")
               #For each partition we will store the column sums as
               #a vector of (1x ncols-of-partition)
               if(dims!=1) stop("only dims=1 is supported\n")
@@ -136,6 +146,7 @@ setMethod("colSums", signature("darray"),function(x, na.rm=FALSE, dims=1)
 #Row sums of a darray
 setMethod("rowSums", signature("darray"),function(x, na.rm=FALSE, dims=1)
           {
+	      if(is.invalid(x)) stop("Operation not supported on empty arrays.")
               #For each partition we will store the row sums as
               #a vector of (ncols-of-partition x 1)
               if(dims!=1) stop("only dims=1 is supported\n")
@@ -154,6 +165,7 @@ setMethod("rowSums", signature("darray"),function(x, na.rm=FALSE, dims=1)
 #Column mean of a darray
 setMethod("colMeans", signature("darray"),function(x, na.rm=FALSE, dims=1)
           {
+	      if(is.invalid(x)) stop("Operation not supported on empty arrays.")
               #For each partition we will store the column sums and number of 
               #rows in a col, in vectors of (1x ncols-of-partition)
               if(dims!=1) stop("only dims=1 is supported\n")
@@ -180,6 +192,7 @@ setMethod("colMeans", signature("darray"),function(x, na.rm=FALSE, dims=1)
 #Row mean of a darray
 setMethod("rowMeans", signature("darray"),function(x, na.rm=FALSE, dims=1)
           {
+	      if(is.invalid(x)) stop("Operation not supported on empty arrays.")
               #For each partition we will store the row sums and length as
               #a vector of (1 x nrows-of-partition)
               if(dims!=1) stop("only dims=1 is supported\n")
@@ -203,6 +216,7 @@ setMethod("rowMeans", signature("darray"),function(x, na.rm=FALSE, dims=1)
 )
 
 head.darray <- function(x, n=6L,...){
+	      if(is.invalid(x)) stop("Operation not supported on empty arrays.")
               if(is.na(n)) return (0)
               n <- floor(n)   #round off fractions
               num.splits <- ceiling(x@dim/x@blocks)
@@ -251,11 +265,20 @@ head.darray <- function(x, n=6L,...){
                   nr <- nr+1
                   nprocessed <- nprocessed+nrow(temp)
              }
+
+              if(!is.null(dimnames(x)[[1]]) && length(dimnames(x)[[1]]) != 0 && length(dimnames(x)[[1]]) == nrow(res)) {
+                 rownames(res) <- dimnames(x)[[1]]
+              }   
+              if(!is.null(dimnames(x)[[2]]) && length(dimnames(x)[[2]]) != 0 && length(dimnames(x)[[2]]) == ncol(res)) {
+                 colnames(res) <- dimnames(x)[[2]]
+              }
+
               return(res)
           }
 
 #Tail of the darray
 tail.darray <- function(x, n=6L,...) {
+	      if(is.invalid(x)) stop("Operation not supported on empty arrays.")
               if(is.na(n)) return (0)
               n <- floor(n)   #round of fractions
               num.splits <- ceiling(x@dim/x@blocks)
@@ -304,6 +327,14 @@ tail.darray <- function(x, n=6L,...) {
                   nr <- nr-1
                   nprocessed <- nprocessed+nrow(temp)
               }
+  
+              if(!is.null(dimnames(x)[[1]]) && length(dimnames(x)[[1]]) != 0 && length(dimnames(x)[[1]]) == nrow(res)) {
+                 rownames(res) <- dimnames(x)[[1]]
+              }   
+              if(!is.null(dimnames(x)[[2]]) && length(dimnames(x)[[2]]) != 0 && length(dimnames(x)[[2]]) == ncol(res)) {
+                 colnames(res) <- dimnames(x)[[2]]
+              }
+
               return(res)
           }
 
@@ -323,7 +354,7 @@ setMethod("nrow", signature("darray"), function(x)
                   update(res)
               }, progress=FALSE)
         res <- getpartition(temp)
-        return(sum(res))
+        return(sum(as.numeric(res)))
     })
 
 setMethod("NROW", signature("darray"), function(x)
@@ -345,7 +376,7 @@ setMethod("ncol", signature("darray"), function(x)
                   update(res)
               }, progress=FALSE)
         res <- getpartition(temp)
-        return(sum(res))
+        return(sum(as.numeric(res)))
     })
 
 setMethod("NCOL", signature("darray"), function(x)

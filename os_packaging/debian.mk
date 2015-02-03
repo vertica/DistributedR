@@ -21,62 +21,64 @@ include package_vars.mk
 
 SDK?=/opt/vertica/sdk
 
-INSTALLBASE   = $(DEBIANBASE)/SPEC/opt/hp/distributedR
-THIRD_PARTY   = $(DEBIANBASE)/SOURCE/third_party
-VERTICA_PKGS  = $(DEBIANBASE)/SOURCE/algorithms
-DISTR_PKGS    = $(DEBIANBASE)/SOURCE
-CONFIG_FILES  = $(DEBIANBASE)/SPEC
+PLATFORM     ?= DEBIAN6
+
+DEBIANBASE    = $(WORKSPACE)/debbuild
+BUILD         = $(DEBIANBASE)/build
+INSTALLBASE   = $(DEBIANBASE)/install/opt/hp/distributedR
+
+THIRD_PARTY   = $(BUILD)/SOURCE/third_party
+VERTICA_PKGS  = $(BUILD)/SOURCE/algorithms
+DISTR_PKGS    = $(BUILD)/SOURCE
 
 debian: deb-clean deb-prep deb-build deb-install deb-pkg
 
 deb-prep:
 	@echo "Preparing the debian build area"
-	@mkdir -pv $(DEBIANBASE)/SOURCE $(DEBIANBASE)/DEBS
-	@rsync -ax --exclude='os_packaging' --exclude='.svn' $(SOURCE_BASE)/* $(DEBIANBASE)/SOURCE
-	@chmod 755 $(DEBIANBASE)/SOURCE
+	@mkdir -pv $(BUILD)
+	@chmod 755 $(BUILD)
+	@rsync -ax --exclude='os_packaging' --exclude='.svn' $(SOURCE_BASE)/* $(BUILD)/
 
 deb-build:
 	@echo "Building source"
-	cd $(DEBIANBASE)/SOURCE; \
+	cd $(BUILD); \
         $(MAKE) SDK=$(SDK)
 
 deb-install:
-	@echo "Installing source into debian package"
-	@rm -rf $(DEBIANBASE)/SPEC/opt
+	@echo "Installing source into debian package staging area"
+	@rm -rf $(INSTALLBASE)
 	@install -d $(INSTALLBASE)
+	@install -d $(DEBIANBASE)/install/etc/ld.so.conf.d/
 	@install -d $(INSTALLBASE)/third_party/R_addons
 	@install -d $(INSTALLBASE)/third_party/lib/atomicio
-	
-	@install -m 444 $(THIRD_PARTY)/RInside_0.2.10.tar.gz         $(INSTALLBASE)/third_party/R_addons/
-	@install -m 444 $(THIRD_PARTY)/Rcpp_0.10.6.tar.gz            $(INSTALLBASE)/third_party/R_addons/
-	@install -m 444 $(THIRD_PARTY)/XML_3.98-1.1.tar.gz           $(INSTALLBASE)/third_party/R_addons/
-	@install -m 444 $(THIRD_PARTY)/data.table_1.8.10.tar.gz      $(INSTALLBASE)/third_party/R_addons/
-	@install -m 444 $(THIRD_PARTY)/randomForest_4.6-7.tar.gz     $(INSTALLBASE)/third_party/R_addons/
-	@rsync -axv --exclude=.svn $(THIRD_PARTY)/boost_threadpool   $(INSTALLBASE)/third_party/
 
-	@rsync -axv --exclude=.svn $(VERTICA_PKGS)/HPDGLM            $(INSTALLBASE)/third_party/R_addons/
-	@rsync -axv --exclude=.svn $(VERTICA_PKGS)/HPdcluster        $(INSTALLBASE)/third_party/R_addons/
-	@rsync -axv --exclude=.svn $(VERTICA_PKGS)/HPdgraph          $(INSTALLBASE)/third_party/R_addons/
-	@rsync -axv --exclude=.svn $(VERTICA_PKGS)/HPdclassifier     $(INSTALLBASE)/third_party/R_addons/
-	@rsync -axv --exclude=.svn $(VERTICA_PKGS)/HPdata            $(INSTALLBASE)/third_party/R_addons/
+        # Add Debian control files	
+	@rsync -ax --exclude='.svn' $(DEBIANBASE)/DEBIAN $(DEBIANBASE)/install
+	@sed -i "s/@@SCM_VERSION@@/$(SVNREVISION)/" $(DEBIANBASE)/install/DEBIAN/control
 
-	@rsync -axv --exclude=.svn $(DISTR_PKGS)/install             	$(INSTALLBASE)
-	@rsync -axv --exclude=.svn $(DISTR_PKGS)/bin			$(INSTALLBASE)
-	@rsync -axv --exclude=.svn $(DISTR_PKGS)/lib			$(INSTALLBASE)
-	@rsync -axv --exclude=.svn $(DISTR_PKGS)/conf			$(INSTALLBASE)
-	@rsync -axv --exclude=.svn $(THIRD_PARTY)/install/*		$(INSTALLBASE)/third_party	
+	# Add Distributed R code
+	@rsync -ax --exclude=.svn $(BUILD)/third_party/boost_threadpool $(INSTALLBASE)/third_party/
+	@rsync -ax --exclude=.svn $(BUILD)/algorithms/HPdregression     $(INSTALLBASE)/third_party/R_addons/
+	@rsync -ax --exclude=.svn $(BUILD)/algorithms/HPdcluster        $(INSTALLBASE)/third_party/R_addons/
+	@rsync -ax --exclude=.svn $(BUILD)/algorithms/HPdgraph          $(INSTALLBASE)/third_party/R_addons/
+	@rsync -ax --exclude=.svn $(BUILD)/algorithms/HPdclassifier     $(INSTALLBASE)/third_party/R_addons/
+	@rsync -ax --exclude=.svn $(BUILD)/algorithms/HPdata            $(INSTALLBASE)/third_party/R_addons/
 
-	@install -m 755 $(THIRD_PARTY)/atomicio/libatomicio.so 	     $(INSTALLBASE)/third_party/lib/atomicio
-	@install -m 444 $(THIRD_PARTY)/atomicio/LICENSE        	     $(INSTALLBASE)/third_party/lib/atomicio
+	@rsync -ax --exclude=.svn $(BUILD)/install                      $(INSTALLBASE)
+	@rsync -ax --exclude=.svn $(BUILD)/bin		                $(INSTALLBASE)
+	@rsync -ax --exclude=.svn $(BUILD)/lib		                $(INSTALLBASE)
+	@rsync -ax --exclude=.svn $(BUILD)/conf		                $(INSTALLBASE)
+	@rsync -ax --exclude=.svn $(BUILD)/third_party/install/*        $(INSTALLBASE)/third_party	
+
+	@install -m 755 $(BUILD)/third_party/atomicio/libatomicio.so    $(INSTALLBASE)/third_party/lib/atomicio
+	@install -m 444 $(BUILD)/third_party/atomicio/LICENSE     	$(INSTALLBASE)/third_party/lib/atomicio
+
+	@install    $(WORKSPACE)/$(NAME)-x86_64.conf                    $(DEBIANBASE)/install/etc/ld.so.conf.d/
 
 deb-pkg:
 	@echo "Building debian package"
-	@rm -rf $(DEBIANBASE)/DEBS
-	@mkdir -p $(DEBIANBASE)/DEBS
-	@rm -rf $(CONFIG_FILES)/.svn $(CONFIG_FILES)/DEBIAN/.svn $(CONFIG_FILES)/etc/.svn
-	@sudo dpkg -b $(DEBIANBASE)/SPEC $(DEBIANBASE)/DEBS/vertica-distributedR-$(VERSION)-0.$(BUILD_NUMBER).0.$(PLATFORM).x86_64.deb
+	@sudo dpkg -b $(DEBIANBASE)/install $(DEBIANBASE)/vertica-distributedR-$(VERSION)-0.$(BUILD_NUMBER).$(PLATFORM).amd.deb
 
 deb-clean:
-	@rm -rf $(DEBIANBASE)/SOURCE
-	@rm -rf $(DEBIANBASE)/SPEC/opt
-	@rm -rf $(DEBIANBASE)/DEBS
+	@rm -rf $(BUILD)
+	@rm -rf $(DEBIANBASE)/install

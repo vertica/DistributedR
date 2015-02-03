@@ -35,7 +35,7 @@ class DistList : public ArrayData {
   DistList(const std::string &name, const SEXP sexp,
       size_t size, int split_len);
   virtual void LoadInR(RInside &R, const std::string &varname);
-  virtual std::pair<size_t, size_t> GetDims() const;
+  virtual std::pair<std::int64_t, std::int64_t> GetDims() const;
   virtual ~DistList();
 
  private:

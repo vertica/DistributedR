@@ -18,11 +18,36 @@
 
 update <- function(x,empty=FALSE) {
   name <- deparse(substitute(x))
-  assign(name, x, globalenv())
-#  l <- length(.updates.list)
-#  length(.updates.list) <<- l + 1
-#  .updates.list[[l+1]] <<- name
-  .Call("NewUpdate", get("updates.ptr..."), name, empty,
+  if(inherits(x, "dsCMatrix")) {
+    coerce_x <- as(x, "dgCMatrix")
+    assign(name, coerce_x, globalenv())
+  } else if(inherits(x, "dgeMatrix")) { #dgeMatrix is a dense matrix type
+    coerce_x <- as(x, "matrix")
+    assign(name, coerce_x, globalenv())
+  } else 
+    assign(name, x, globalenv())
+
+  #Find dimension of object  
+  objdim<-as.numeric(dim(x))
+  if(is.null(objdim) || length(objdim)==0) objdim <-c(0,0) #For lists, numeric values, and non-matrix types etc.
+  if(length(objdim)==1) objdim<-c(1,objdim) #Vectors have one dimension
+  if(length(objdim)!=2) stop("Executor error: Can't figure out dimension of updated object")
+
+  if(inherits(x, "matrix") || inherits(x, "numeric")) {
+     if((objdim[1]*objdim[2] > .Machine$integer.max) || all(objdim<=.Machine$integer.max) == FALSE)
+        stop(paste("Executor error: Cannot create darray partition with dimension larger than", .Machine$integer.max,
+                   "or number of elements more than",.Machine$integer.max))
+  } else if (inherits(x, "dgTMatrix") || inherits(x, "dgCMatrix")) {
+     # Get non-zero elements of the sparse matrix using its 'i' slot
+     if((length(x@i) > .Machine$integer.max) || all(objdim<=.Machine$integer.max) == FALSE)
+        stop(paste("Executor error: Cannot create sparse darray partition with dimension larger than", .Machine$integer.max,
+                    "or number of elements more than", .Machine$integer.max))
+  } else if(inherits(x, "data.frame")) {
+     if(all(objdim<=.Machine$integer.max) == FALSE)
+        stop(paste("Executor error: Cannot create dframe partition with dimension larger than", .Machine$integer.max))
+  }  
+
+  .Call("NewUpdate", get("updates.ptr..."), name, empty, objdim,
         DUP=FALSE)
 }
 

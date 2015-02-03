@@ -21,6 +21,7 @@
 #include "Rdefines.h"
 
 namespace presto{
+
 // to keep track of SEXP object that is malloced by Presto malloc_hook
 extern map<void*, size_t> *freemap;
 
@@ -45,6 +46,7 @@ DistDataFrame::DistDataFrame(const std::string &name, const SEXP sexp_from,
   if (Rf_isNull(sexp_from)) {
     throw PrestoWarningException("DistDataFrame: updated value of split is NULL");
   }
+
   // the size of input array (header + data size)
   size_t m_size = mapped_size(size);
   if (m_size < INMEM_UPDATE_SIZE_LIMIT) {
@@ -72,7 +74,7 @@ DistDataFrame::DistDataFrame(const std::string &name, const SEXP sexp_from,
 /** Get dimension of the dense array data (number of rows/columns)
  * @return a pair of number of rows/columns
  */
-pair<size_t, size_t> DistDataFrame::GetDims() const {
+pair<std::int64_t, std::int64_t> DistDataFrame::GetDims() const {
   return make_pair(header->dims[0], header->dims[1]);
 }
 
@@ -108,5 +110,6 @@ void DistDataFrame::LoadInR(RInside &R, const std::string &varname){
 }
 
 DistDataFrame::~DistDataFrame(){
+  delete header_region;
 }
 }

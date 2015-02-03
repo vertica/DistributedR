@@ -9,13 +9,19 @@
   space-inefficient, and should be replaced by \code{\link{darray}}
   whereever possible.}
 
-\usage{dframe (dim, blocks)}
+\usage{
+dframe (dim, blocks, distribution_policy='roundrobin')
+dframe (npartitions, distribution_policy='roundrobin')
+}
 
 \arguments{
   \item{dim}{the dim attribute for the data frame to be created. A vector
    specifying number of rows and columns.}
  \item{blocks}{size of each partition as a vector specifying number of
    rows and columns.}
+ \item{npartitions}{vector specifying number of partitions.}
+ \item{distribution_policy}{defines policy to distribute data.frame partitions across the workers.
+  The distribution policy used is 'roundrobin'. Currently, this argument is only for internal use.}
 }     
 
 \details{ Distributed data frame partitions are internally stored as
@@ -25,6 +31,19 @@
   blocks=c(2,5))} has three partitions. The first two partitions have two
   rows each but the last partition has only one row. All three
   partitions have five columns.
+
+ Distributed data frames can also be defined by specifying just the number 
+ of partitions, but not their sizes. This flexibility is useful when
+ the size of an data frame is not known apriori. For example,
+ \code{dframe(npartitions=c(5,1))} is a data frame with five
+ partitions.  Each partition can contain any number of rows, though the
+ number of columns should be same to conform to a well formed data frame.
+
+ Too many partitions increase the overheads of managing distributed
+objects.  We recommend users to create objects with as many partitions
+as the total number of CPU cores in the system.  We restrict users
+from creating objects when the number of partitions is more than
+20,000 or more than 50x the number of CPU cores.
 
   Distributed data frames can be read-shared by multiple concurrent
   tasks, but modified by only a single writer per partition.
@@ -48,7 +67,7 @@
   AuYoung, A., and Schreiber, R. (2013) Presto: Distributed Machine
   Learning and Graph Processing with Sparse Matrices. \emph{EuroSys'13},
   197--210.
-  \item Homepage: http://www.hpl.hp.com/research/distributedr.htm
+  \item Homepage: http://www.vertica.com/distributedr
 %  \item Mailing list: presto-dev@external.groups.hp.com
 }
 }
@@ -83,6 +102,17 @@ getpartition(df)
 name_sample <- as.character(sample(1:4))
 dimnames(df)[[2]] <- name_sample
 getpartition(df)
+
+##Flexible sized data frame. Five partitions, each with variable number of rows.
+dc<-dframe(npartitions=c(5,1))
+foreach(i, 1:npartitions(dc), initArrays<-function(y=splits(dc,i), index=i) {
+     y<-data.frame(matrix(index, nrow=index,ncol=5))
+     update(y)
+})
+cat("value of 2nd partition is: \n")
+getpartition(dc,2)
+getpartition(dc)
+
 distributedR_shutdown()
 }
 }

@@ -1,12 +1,12 @@
 Package: HPdata
 Type: Package
 Title: Distributed Data Package
-Version: 0.7.0
-Date: 2014-01-22
-Author: Arash Fard
-Maintainer: Arash Fard <afard@vertica.com>
-Depends: R (>= 3.0.1), distributedR, MatrixHelper
+Version: 1.0.0
+Date: 2015-01-16
+Author: HP Vertica Analytics Team
+Maintainer: HP Vertica Analytics Team <distributedRTeam@external.groups.hp.com>
+Depends: R (>= 3.0.0), distributedR, MatrixHelper, data.table (>= 1.8.10)
 LinkingTo: Rcpp
-Description: It provides several functions to load distributed data structures available in distributedR. It is written based on the infrastructure created in HP-Lab for distributed computing in R.
+Description: Functions to load data into distributed data structures. Written using HP Vertica Distributed R package.
 License: GPL (>= 2) | file LICENSE
 

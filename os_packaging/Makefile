@@ -19,23 +19,23 @@
 include package_vars.mk
 
 all: rpm
+rpm: rpm-clean rpm-prep rpm-tarball rpm-build
 
-.PHONY: rpm-prep rpm-tarball rpm rpm-clean 
+.PHONY: rpm-prep rpm-tarball rpm rpm-clean rpm-build
+
+svn:
+	@echo "SVN revision: $(SVNREVISION)"
 
 rpm-prep:
 	@echo "Preparing the rpm build area"
 	@mkdir -pv $(RPMBASE)/{BUILD,SOURCES,SRPMS,RPMS}
-	@cp -v $(WORKSPACE)/$(NAME)-x86_64.conf                $(RPMBASE)/SOURCES/
-	@cp -v $(SOURCE_BASE)/third_party/RInside_0.2.10.tar.gz $(RPMBASE)/SOURCES/
-	@cp -v $(SOURCE_BASE)/third_party/Rcpp_0.10.6.tar.gz    $(RPMBASE)/SOURCES/
-	@cp -v $(SOURCE_BASE)/third_party/XML_3.98-1.1.tar.gz  $(RPMBASE)/SOURCES/
-	@cp -v $(SOURCE_BASE)/third_party/data.table_1.8.10.tar.gz  $(RPMBASE)/SOURCES/
-	@cp -v $(SOURCE_BASE)/third_party/randomForest_4.6-7.tar.gz  $(RPMBASE)/SOURCES/
-	@cp -rv $(SOURCE_BASE)/algorithms/HPDGLM  $(RPMBASE)/SOURCES/
-	@cp -rv $(SOURCE_BASE)/algorithms/HPdcluster $(RPMBASE)/SOURCES/
-	@cp -rv $(SOURCE_BASE)/algorithms/HPdgraph $(RPMBASE)/SOURCES/
-	@cp -rv $(SOURCE_BASE)/algorithms/HPdclassifier $(RPMBASE)/SOURCES/
-	@cp -rv $(SOURCE_BASE)/algorithms/HPdata $(RPMBASE)/SOURCES/
+	@mkdir -pv $(RPMBASE)/RPMS/x86_64
+	@cp -r $(WORKSPACE)/$(NAME)-x86_64.conf            $(RPMBASE)/SOURCES/
+	@cp -r $(SOURCE_BASE)/algorithms/HPdregression     $(RPMBASE)/SOURCES/
+	@cp -r $(SOURCE_BASE)/algorithms/HPdcluster        $(RPMBASE)/SOURCES/
+	@cp -r $(SOURCE_BASE)/algorithms/HPdgraph          $(RPMBASE)/SOURCES/
+	@cp -r $(SOURCE_BASE)/algorithms/HPdclassifier     $(RPMBASE)/SOURCES/
+	@cp -r $(SOURCE_BASE)/algorithms/HPdata            $(RPMBASE)/SOURCES/
 
 rpm-tarball: 
 	@echo "Preparing RPM source tarball"
@@ -43,12 +43,12 @@ rpm-tarball:
 	@mkdir -p $(TARBALL_STAGE)
 	@rsync -ax --exclude-from=rsync.excludes $(SOURCE_BASE) $(TARBALL_STAGE)
 	@mkdir -p $(TARBALL_STAGE)/third_party
-	@rsync -ax $(SOURCE_BASE)/third_party/Makefile $(SOURCE_BASE)/third_party/boost*.tar.gz $(SOURCE_BASE)/third_party/atomicio $(SOURCE_BASE)/third_party/boost_threadpool $(TARBALL_STAGE)/third_party/
+	@rsync -ax $(SOURCE_BASE)/third_party/Makefile $(SOURCE_BASE)/third_party/zmq.hpp $(SOURCE_BASE)/third_party/*.tar.gz $(SOURCE_BASE)/third_party/atomicio $(SOURCE_BASE)/third_party/boost_threadpool $(TARBALL_STAGE)/third_party/
 	@tar -C $(TEMPDIR) -czf $(RPMBASE)/SOURCES/$(NAME)-$(VERSION).tar.gz $(NAME)-$(VERSION)
 	@rm -rf $(TEMPDIR)
 
-rpm: rpm-clean rpm-prep rpm-tarball
-	rpmbuild --define "_topdir $(RPMBASE)" --define "build_number $(BUILD_NUMBER)" -ba $(RPMBASE)/SPECS/$(NAME).spec
+rpm-build:
+	rpmbuild --define "_topdir $(RPMBASE)" --define "build_number $(BUILD_NUMBER)" --define "scm_revision $(SVNREVISION)" -ba $(RPMBASE)/SPECS/$(NAME).spec
 
 # This target used for debugging the RPM specfile installation phase
 rpm-install: 

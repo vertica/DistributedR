@@ -31,6 +31,6 @@ PKG_LIBS = `$(R_HOME)/bin/Rscript -e "Rcpp:::LdFlags()"`
 PKG_LIBS += `$(R_HOME)/bin/Rscript -e "RInside:::LdFlags()"`
 
 ## protobuf lib has to be loaded at the end, otherwise boost in the shared lib folder can be loaded
-PKG_LIBS += -lm -L ${PRESTO_LIB_DIR} -Wl,-rpath,${PRESTO_LIB_DIR} -lR-proto -Wl,-rpath,${PRESTO_LIB_DIR} -lR-common -L$(BOOST_LIB_DIR) -Wl,-rpath,${BOOST_LIB_DIR} -lboost_log -lboost_log_setup -lboost_thread -lboost_chrono -L ${ATOMICIO_DIR} -Wl,-rpath,${ATOMICIO_DIR} -latomicio -lzmq -lrt -L ${PROTO_LIB_DIR} -Wl,-rpath,${PROTO_LIB_DIR} -lprotobuf
+PKG_LIBS += -lm -L ${PRESTO_LIB_DIR} -Wl,-rpath,${PRESTO_LIB_DIR} -lR-proto -Wl,-rpath,${PRESTO_LIB_DIR} -lR-common -L$(BOOST_LIB_DIR) -Wl,-rpath,${BOOST_LIB_DIR} -lboost_log -lboost_log_setup -lboost_thread -lboost_chrono -lboost_system -lboost_filesystem -lboost_date_time -L ${ATOMICIO_DIR} -Wl,-rpath,${ATOMICIO_DIR} -latomicio  -lrt -L ${PROTO_LIB_DIR} -Wl,-rpath,${PROTO_LIB_DIR} 
 
 PKG_CPPFLAGS = -I ${PRESTO_COMMON_DIR} -I ${BOOST_DIR} -I ${ZERO_MQ_DIR} -I ${GEN_DIR} -I ${BOOST_THREADPOOL_DIR} -I ${ATOMICIO_DIR} -g -DSTRICT_R_HEADERS 

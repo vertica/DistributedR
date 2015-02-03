@@ -152,9 +152,13 @@ class PrestoWorker {
     return my_location_;
   }
 
-  void CreateLoaderThread(uint64_t split_size, uint64_t uid, uint64_t id);
+  void CreateLoaderThread(uint64_t split_size, string split_prefix, uint64_t uid, uint64_t id);
   int GetStartPortRange() {return start_port_range_;}
   int GetEndPortRange(){return end_port_range_;}
+
+  DataLoader* GetDataLoaderPtr() {
+    return data_loader_;
+  }
 
 protected:
   WorkerRequest* CreateDfCcTask(CreateCompositeRequest& req);
@@ -162,9 +166,9 @@ protected:
   
  private:
   // keep Worker information given string:port information
-  boost::unordered_map<std::string, shared_ptr<WorkerInfo> > client_map;
+  boost::unordered_map<std::string, boost::shared_ptr<WorkerInfo> > client_map;
   // a pointer to master process. We can send message using this
-  shared_ptr<MasterClient> master_;
+  boost::shared_ptr<MasterClient> master_;
   // ZMQ contenxt
   context_t* zmq_ctx_;
 
@@ -180,14 +184,14 @@ protected:
   boost::unordered_map<std::string, ArrayStore*> array_stores_;
   boost::timed_mutex shmem_arrays_mutex_;
   // to keep all shared memory segments name
-  unordered_set<std::string> shmem_arrays_;
+  boost::unordered_set<std::string> shmem_arrays_;
 
   struct compressed_array_t {
     boost::mutex *mutex;
     void *addr;  // NULL means no compression is needed
     size_t size;
   };
-  mutex compressed_arrays_mutex_;
+  boost::mutex compressed_arrays_mutex_;
   boost::unordered_map<std::string, compressed_array_t> compressed_arrays_;
   // a list of threads to handle different type of tasks
   boost::thread **request_threads_[NUM_THREADPOOLS];
@@ -220,7 +224,7 @@ protected:
     }
   };
   boost::unordered_map<std::string, worker_stats> worker_stats_;
-  mutex worker_stat_mutex_;
+  boost::mutex worker_stat_mutex_;
 
   DataLoader* data_loader_;
 };

@@ -15,11 +15,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 ## inputFile: the input file which contains the complete adjacency list of a graph
-## nSplits: the desired number of partitions in the graph. It may change based on the total number of vertices
+## npartitions: the desired number of partitions in the graph. It may change based on the total number of vertices
 ## outputPath: it is the path for storing the output split files, it should be similar for master and workers
 ## isNFS: TRUE indicates that outputPath is on NFS; therefore, only one copy of files will be sent the destination.
 ##          When it is FALSE (defualt) a copy of the files will be sent to every node in the pool
-splitGraphFile <- function(inputFile, nSplits, outputPath, isNFS = FALSE) {
+splitGraphFile <- function(inputFile, npartitions, outputPath, isNFS = FALSE) {
     # validating arguments
     if(!is.character(inputFile))
         stop("The name of the input file should be specified as a string")
@@ -28,9 +28,9 @@ splitGraphFile <- function(inputFile, nSplits, outputPath, isNFS = FALSE) {
         stop("cannot access the input file")
     inputFile <- check # it helps sometimes to make the address of inputFile absolute
 
-    nSplits <- as.integer(nSplits)
-    if(nSplits <= 0)
-        stop("nSplits should be a positive integer number\n")
+    npartitions <- as.integer(npartitions)
+    if(npartitions <= 0)
+        stop("npartitions should be a positive integer number\n")
 
     if(!is.character(outputPath))
         stop("The valid path for the output files should be specified as a string\n")
@@ -53,7 +53,7 @@ splitGraphFile <- function(inputFile, nSplits, outputPath, isNFS = FALSE) {
     tempFile <- paste(tempPath,"/",fileName, sep="")
 
     # calling split function
-    result <- .Call(hpdsplitter, inputFile, 1, nSplits, tempFile)
+    result <- .Call("hpdsplitter", inputFile, 1, npartitions, tempFile, PACKAGE="HPdata")
     if(is.null(result)) stop("Split was unsuccessful")
     nVertices <- result$nVertices   
     nFiles <- result$colsplits    
@@ -68,7 +68,7 @@ splitGraphFile <- function(inputFile, nSplits, outputPath, isNFS = FALSE) {
             thisW <- workers[[w]]
             workerName <- strsplit(thisW,":", fixed=TRUE)[[1]][[1]]
             cat("Sending the files to ", workerName, "\n")
-            if(nSplits == 1) {
+            if(npartitions == 1) {
                 check <- system(paste("ssh ", workerName, " ls ", outputPath, sep=""), intern=TRUE)
                 success <- attributes(check)
                 if(! is.null(success)) break
@@ -90,4 +90,4 @@ splitGraphFile <- function(inputFile, nSplits, outputPath, isNFS = FALSE) {
 }
 
 # Example:
-# splitGraphFile(inputFile=="/home/userName/graph.txt", nSplits=7, outputPath="/home/userName/splitGraph/")
+# splitGraphFile(inputFile=="/home/userName/graph.txt", npartitions=7, outputPath="/home/userName/splitGraph/")

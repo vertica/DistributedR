@@ -44,7 +44,7 @@
 #include <boost/thread/locks.hpp>
 
 
-using namespace boost;
+//using namespace boost;
 using namespace std;
 using namespace zmq;
 
@@ -102,10 +102,10 @@ class WorkerInfo {
 
   string endpoint_;
   bool running_;
-  thread *thr_;
+  boost::thread *thr_;
 
-  mutex message_queue_mutex_;
-  condition_variable message_queue_empty_;
+  boost::mutex message_queue_mutex_;
+  boost::condition_variable message_queue_empty_;
   list<WorkerRequest> message_queue_;
 };
 

@@ -19,7 +19,11 @@
 # Top level Makefile for Presto
 
 include vars.mk
-all: boost ${ATOMICIO_LIB} ${WORKER_BIN} ${MASTER_BIN} ${MASTER_RLIB} ${EXECUTOR_BIN} ${MATRIX_HELPER_RLIB}
+all: third_party ${ATOMICIO_LIB} ${WORKER_BIN} ${MASTER_BIN} ${MASTER_RLIB} ${EXECUTOR_BIN} ${MATRIX_HELPER_RLIB}
+
+install-algo:
+	$(MAKE)
+	Rscript $(PRESTO_INSTALL_LOCALLIB_SCRIPT)
 
 lint:
 	tools/lint.sh ${PRESTO_WORKER_SRC} ${PRESTO_MASTER_SRC} ${PRESTO_WORKER_HEADERS} ${PRESTO_MASTER_HEADERS} ${PRESTO_COMMON_HEADERS} ${PRESTO_COMMON_SRC} ${PRESTO_EXECUTOR_HEADERS} ${PRESTO_EXECUTOR_SRC}
@@ -44,6 +48,9 @@ ${ATOMICIO_LIB}:
 boost:
 	$(MAKE) -C third_party boost
 
+third_party:
+	$(MAKE) -C third_party -j8 all
+
 docs:
 	mkdir -p $(DOC_DIR_PLATFORM)
 	$(MAKE) manual tutorial faq
@@ -67,8 +74,8 @@ faq:
 	mv $(TUTORIAL_DIR)/$(FAQ_FILE).pdf $(DOC_DIR_PLATFORM)/Distributed-R-FAQ.pdf
 
 algorithm_docs:
-	mkdir -p $(DOC_DIR_ALGORITHMS)/HPDGLM
-	R CMD Rd2pdf --no-preview --force --output=$(DOC_DIR_ALGORITHMS)/HPDGLM/HPDGLM-Manual.pdf $(PWD)/algorithms/HPDGLM
+	mkdir -p $(DOC_DIR_ALGORITHMS)/HPdregression
+	R CMD Rd2pdf --no-preview --force --output=$(DOC_DIR_ALGORITHMS)/HPdregression/HPdregression-Manual.pdf $(PWD)/algorithms/HPdregression
 	mkdir -p $(DOC_DIR_ALGORITHMS)/HPdcluster
 	R CMD Rd2pdf --no-preview --force --output=$(DOC_DIR_ALGORITHMS)/HPdcluster/HPdcluster-Manual.pdf $(PWD)/algorithms/HPdcluster
 	mkdir -p $(DOC_DIR_ALGORITHMS)/HPdclassifier
@@ -79,7 +86,7 @@ algorithm_docs:
 	R CMD Rd2pdf --no-preview --force --output=$(DOC_DIR_ALGORITHMS)/HPdata/HPdata-Manual.pdf $(PWD)/algorithms/HPdata
 	
 
-clean:
+clean: clean-installer-tarball
 	$(MAKE) -C third_party/atomicio clean
 	-${R_HOME}/bin/R CMD REMOVE -l ${R_INSTALL_DIR} distributedR
 	-${R_HOME}/bin/R CMD REMOVE -l ${R_INSTALL_DIR} Executor
@@ -91,6 +98,9 @@ clean:
 	rm -rf ${EXECUTOR_RLIB} ${PRESTO_EXECUTOR_OBJS} ${EXECUTOR_BIN} ${PRESTO_EXECUTOR_DIR}/src/*.so
 	rm -rf ${PRESTO_MATRIX_HELPER_OBJS} ${PRESTO_MATRIX_HELPER_DIR}/src/*.so
 	rm -rf ${MAN_OUTPUT}
+
+clean-installer-tarball:
+	rm -rf vertica-distributedR-1.0.0-centos.tar.gz vertica-distributedR-1.0.0-ubuntu.tar.gz installer_exported installer/dr/binaries
 
 #delete everything including boost installation
 distclean: clean
@@ -107,3 +117,51 @@ debian:
 	$(MAKE) -C os_packaging deb-clean
 
 include build.mk
+
+BINARIES=installer_exported/installer/binaries/epel-release-6-8.noarch.rpm installer_exported/installer/binaries/epel-release-7-2.noarch.rpm installer_exported/installer/binaries/R_addons/RInside_0.2.11.tar.gz installer_exported/installer/binaries/R_addons/RODBC_1.3-10.tar.gz installer_exported/installer/binaries/R_addons/RUnit_0.4.27.tar.gz installer_exported/installer/binaries/R_addons/Rcpp_0.11.2.tar.gz installer_exported/installer/binaries/R_addons/XML_3.98-1.1.tar.gz installer_exported/installer/binaries/R_addons/data.table_1.8.10.tar.gz installer_exported/installer/binaries/R_addons/randomForest_4.6-10.tar.gz installer_exported/installer/binaries/vertica-distributedR-latest.rpm installer_exported/installer/binaries/vertica-distributedR-latest.deb  installer_exported/installer/binaries/vRODBC.tar.gz installer_exported/installer/binaries/vertica-odbc-7.1.1-0.x86_64.linux.tar.gz
+VDEV_IP_ADDRESS = 10.10.10.16
+installer-tarball: centos-installer-tarball ubuntu-installer-tarball
+centos-installer-tarball: installer-download-binaries vertica-distributedR-1.0.0-centos.tar.gz
+ubuntu-installer-tarball: installer-download-binaries vertica-distributedR-1.0.0-ubuntu.tar.gz
+
+create-binaries-dir: installer_exported/installer/binaries/R_addons/
+installer_exported/installer/binaries/R_addons/:
+	mkdir -p installer_exported/installer/binaries/R_addons
+
+installer-download-binaries: export-subversion create-binaries-dir $(BINARIES)
+
+installer_exported/installer/binaries/epel-release-6-8.noarch.rpm: 
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/epel-release-6-8.noarch.rpm http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/DependantPackages/epel-release-6-8.noarch.rpm
+installer_exported/installer/binaries/epel-release-7-2.noarch.rpm: 
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/epel-release-7-2.noarch.rpm http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/DependantPackages/epel-release-7-2.noarch.rpm
+installer_exported/installer/binaries/R_addons/RInside_0.2.11.tar.gz: 
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/R_addons/RInside_0.2.11.tar.gz http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/DependantPackages/R_addons/RInside_0.2.11.tar.gz
+installer_exported/installer/binaries/R_addons/RODBC_1.3-10.tar.gz:  
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/R_addons/RODBC_1.3-10.tar.gz  http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/DependantPackages/R_addons/RODBC_1.3-10.tar.gz
+installer_exported/installer/binaries/R_addons/RUnit_0.4.27.tar.gz:  
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/R_addons/RUnit_0.4.27.tar.gz  http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/DependantPackages/R_addons/RUnit_0.4.27.tar.gz 
+installer_exported/installer/binaries/R_addons/Rcpp_0.11.2.tar.gz:  
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/R_addons/Rcpp_0.11.2.tar.gz  http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/DependantPackages/R_addons/Rcpp_0.11.2.tar.gz 
+installer_exported/installer/binaries/R_addons/XML_3.98-1.1.tar.gz: 
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/R_addons/XML_3.98-1.1.tar.gz    http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/DependantPackages/R_addons/XML_3.98-1.1.tar.gz  
+installer_exported/installer/binaries/R_addons/data.table_1.8.10.tar.gz:  
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/R_addons/data.table_1.8.10.tar.gz   http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/DependantPackages/R_addons/data.table_1.8.10.tar.gz 
+installer_exported/installer/binaries/R_addons/randomForest_4.6-10.tar.gz:  
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/R_addons/randomForest_4.6-10.tar.gz   http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/DependantPackages/R_addons/randomForest_4.6-10.tar.gz 
+installer_exported/installer/binaries/vertica-distributedR-latest.rpm:  
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/vertica-distributedR-latest.rpm http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/builds/vertica-distributedR-1.0.0-0.651.el6.x86_64.rpm
+installer_exported/installer/binaries/vertica-distributedR-latest.deb:  
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/vertica-distributedR-latest.deb http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/builds/vertica-distributedR-1.0.0-0.651.DEBIAN7.amd.deb
+installer_exported/installer/binaries/vRODBC.tar.gz: 
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/vRODBC.tar.gz http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/builds/vRODBC_1.0.0-b569.RHEL5.tar.gz
+installer_exported/installer/binaries/vertica-odbc-7.1.1-0.x86_64.linux.tar.gz:
+	http_proxy='' https_proxy='' curl -o installer_exported/installer/binaries/vertica-odbc-7.1.1-0.x86_64.linux.tar.gz http://$(VDEV_IP_ADDRESS)/kits/betas/distributedR/installer/vertica-odbc-7.1.1-0.x86_64.linux.tar.gz
+export-subversion: installer_exported/
+installer_exported/:
+	svn export installer/ installer_exported
+vertica-distributedR-1.0.0-centos.tar.gz:  $(BINARIES)
+	tar cfz vertica-distributedR-1.0.0-centos.tar.gz  --exclude=installer_exported/installer/binaries/r-ubuntu-12.04-64bit.tgz --exclude=installer_exported/installer/binaries/r-centos-6.5-64bit.tgz --exclude=installer_exported/installer/binaries/vertica-distributedR-latest.deb --exclude=.svn installer_exported/
+vertica-distributedR-1.0.0-ubuntu.tar.gz:  $(BINARIES)
+	tar cfz vertica-distributedR-1.0.0-ubuntu.tar.gz  --exclude=installer_exported/installer/binaries/r-ubuntu-12.04-64bit.tgz --exclude=installer_exported/installer/binaries/r-centos-6.5-64bit.tgz --exclude=installer_exported/installer/binaries/vertica-distributedR-latest.rpm --exclude=.svn  installer_exported/
+
+

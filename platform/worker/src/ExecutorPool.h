@@ -50,14 +50,14 @@ class ExecutorPool {
  public:
   ExecutorPool(int n_, ServerInfo *my_location_, MasterClient* master_,
                boost::timed_mutex *shmem_arrays_mutex,
-               unordered_set<std::string> *shmem_arrays,
+               boost::unordered_set<std::string> *shmem_arrays,
                const std::string &spill_dir, int log_level,
                string master_ip, int master_port);
   // Execute task on first available executor (blocks until execution is done!)
   void execute(std::vector<std::string> func,
                std::vector<NewArg> args, std::vector<RawArg> raw_args,
-               std::vector<NewArg> composite_args, uint64_t id,
-               uint64_t uid,
+               std::vector<NewArg> composite_args, ::uint64_t id,
+               ::uint64_t uid,
                Response* res);
   ~ExecutorPool();
   void InsertCompositeArray(std::string name, Composite* comp);

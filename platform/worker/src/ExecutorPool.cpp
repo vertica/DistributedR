@@ -32,6 +32,8 @@
 
 #define MAX_LOG_NAME_SIZE 200
 
+using namespace boost;
+
 namespace presto {
 
 // TODO(erik): master is not actually inited at this point; nicest solution is
@@ -133,7 +135,7 @@ ExecutorPool::ExecutorPool(int n_, ServerInfo *my_location_,
       if (executors[i].send != NULL && executors[i].recv != NULL) {
         executors[i].ready = true;
       }
-      LOG_INFO("Created new Executor %d with Process ID %jd", i,(intmax_t)pid);
+      LOG_INFO("Created new Executor %d with Process ID %jd", i,(::intmax_t)pid);
     }
   }
 
@@ -202,7 +204,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
                            std::vector<NewArg> args,
                            std::vector<RawArg> raw_args,
                            std::vector<NewArg> composite_args,
-                           uint64_t id, uint64_t uid, Response* res) {
+                           ::uint64_t id, ::uint64_t uid, Response* res) {
   LOG_DEBUG("EXECUTE TaskID %18zu - Waiting for an Available Executor", uid);
 
   //Timer timer;

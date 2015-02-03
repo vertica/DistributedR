@@ -31,6 +31,6 @@ R_INCLUDE_FLAGS = `$(R_HOME)/bin/R CMD config --cppflags`
 
 PKG_LIBS = `$(R_HOME)/bin/Rscript -e "Rcpp:::LdFlags()"`
 PKG_LIBS += `$(R_HOME)/bin/Rscript -e "RInside:::LdFlags()"`
-PKG_LIBS += -L ${PROTO_LIB_DIR} -Wl,-rpath,${PROTO_LIB_DIR} -lprotobuf -lm -L ${PRESTO_LIB_DIR} -Wl,-rpath,${PRESTO_LIB_DIR} -lR-proto -Wl,-rpath,${PRESTO_LIB_DIR} -lR-common -L$(BOOST_LIB_DIR) -Wl,-rpath,${BOOST_LIB_DIR} -lboost_thread -lboost_chrono -L ${ATOMICIO_DIR} -Wl,-rpath,${ATOMICIO_DIR} -latomicio -lzmq -lrt
+PKG_LIBS += -L ${PROTO_LIB_DIR} -Wl,-rpath,${PROTO_LIB_DIR}  -lm -L ${PRESTO_LIB_DIR} -Wl,-rpath,${PRESTO_LIB_DIR} -lR-proto -Wl,-rpath,${PRESTO_LIB_DIR} -lR-common -L$(BOOST_LIB_DIR) -Wl,-rpath,${BOOST_LIB_DIR} -lboost_thread -lboost_chrono -L ${ATOMICIO_DIR} -Wl,-rpath,${ATOMICIO_DIR} -latomicio  -lrt
 
 PKG_CPPFLAGS = -I ${PRESTO_COMMON_DIR} -I ${BOOST_DIR} -I ${ZERO_MQ_DIR} -I ${GEN_DIR} -I ${BOOST_THREADPOOL_DIR} -I ${ATOMICIO_DIR} -I ${R_INCLUDE_FLAGS} -g -DSTRICT_R_HEADERS -DCSTACK_DEFNS

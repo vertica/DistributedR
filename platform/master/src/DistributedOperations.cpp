@@ -130,10 +130,11 @@ void RawDataTransferThread (map<string, Rcpp::RawVector>* raw_data_cache,
     try {
       serverfd = CreateBindedSocket(m_port_range.first, m_port_range.second, &n_port);
     } catch (...) {
-      fprintf(stderr, "RawDataTransferThread - fail to open/bind a socket\n");
+      LOG_ERROR("RawDataTransferThread - fail to open/bind a socket\n");
       *port_number = -1;
       return;
     }
+    LOG_DEBUG("RawDataTransferThread socket bind complete. Attached to port: %d", n_port);
     *port_number = n_port;
     int32_t new_fd = -1;
     struct sockaddr_in their_addr;
@@ -301,7 +302,7 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
         arg.add_arrays()->CopyFrom(*d->GetSplitFromPos(split_id));
 
         offset.Clear();
-        const vector<int64_t> &off_vec = d->GetBoundary(split_id);
+        const vector< ::int64_t> &off_vec = d->GetBoundary(split_id);
         for (int32_t i = 0; i < off_vec.size(); ++i) {
           offset.add_val(off_vec[i]);
         }
@@ -311,7 +312,7 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
       args3 += ti.restart()/1e6;
 
       if (arg.arrays_size() > 1) {  // composite
-        vector<int64_t> dim = d->GetDimensions();
+        std::vector< ::int64_t> dim = d->GetDimensions();
         offset.Clear();
         for (int32_t i = 0; i < dim.size(); ++i) {
           offset.add_val(dim[i]);
@@ -436,8 +437,10 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
   bool success = !foreach.is_error;
   if(!success) {
    std::string error_msg = foreach.error_stream.str();
-   LOG_ERROR(error_msg);
-   fprintf(stderr, "\n%s%s\n", exception_prefix.c_str(), error_msg.c_str()); 
+   if(!error_msg.empty()){
+     LOG_ERROR(error_msg);
+     fprintf(stderr, "\n%s%s\n", exception_prefix.c_str(), error_msg.c_str()); 
+   }
   }
 
   if (server_thread != NULL) {
@@ -538,22 +541,27 @@ RcppExport SEXP GetLoaderResult(SEXP presto_master_exp_,
   END_RCPP;
 }
 
-/**
- * Fetch Loader Stats from Workers
- * Executed after UDx is complete
- *
- */
-RcppExport SEXP DataLoaderError(SEXP presto_master_exp_,
-                              SEXP udx_error_) {
+RcppExport SEXP HandleUDxError(SEXP udx_error) {
   BEGIN_RCPP;
-  Rcpp::Environment env(presto_master_exp_);
-  Rcpp::XPtr<PrestoMaster> ptr1(env.get(".pointer"));
-  if(NULL == ptr1->GetDataLoader()) {
-    fprintf(stderr, "Data Loader is not running.\n");
-    return Rcpp::wrap(false);
-  }
+  Rcpp::CharacterVector udx_error_sexp(udx_error); 
+  vector<std::string> error_vec = vector<std::string>(udx_error_sexp.begin(), udx_error_sexp.end());
+  //LOG_ERROR("Error while loading data from Vertica: %s", error_vec[0].c_str());
+  std::string error = error_vec[0];
 
-  return ptr1->GetDataLoader()->DataLoaderError(udx_error_);
+  /*int pos_start = error.find("error code: ");
+    if(pos_start == -1)
+        return Rcpp::List::create(Rcpp::Named("error_code") = Rcpp::wrap(0),
+                                  Rcpp::Named("error_msg") = Rcpp::wrap(error));
+    int error_code = atoi(error.substr(pos_start+strlen("error code: "), 1).c_str());*/
+
+  std::string error_msg;
+  int pos_start = error.find("message: ");
+  if(pos_start == -1) 
+    error_msg = error;
+  else 
+    error_msg = error.substr(pos_start+strlen("message: "));
+
+  return Rcpp::wrap(error_msg);
   END_RCPP;
 }
 

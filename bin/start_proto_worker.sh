@@ -20,11 +20,12 @@
 
 R_LD_LIB_PATH=$(echo "cat(Sys.getenv(\"LD_LIBRARY_PATH\"))" | R --slave --vanilla)
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$R_LD_LIB_PATH
-export R_LIBS_USER=`pwd`/install
-##ODBC file can be put in the path by either using .bashrc or specifying below
-##Any path specified here will override the declartion in .bashrc
-#export ODBCINI=`dirname $0`/<dir>/ODBC.INI
-#export VERTICAINI=`dirname $0`/<dir>/VERTICA.INI 
+
+##For those building from source and using DISTRIBUTEDR_HOME to point to binaries.
+if [ -n "$DISTRIBUTEDR_HOME" ]; then
+    export R_LIBS_USER=$R_LIBS_USER:$DISTRIBUTEDR_HOME/install
+fi 
+
 R_WORKER_BINARY=`dirname $0`/R-worker-bin
 org_arg=$@
 ## parse the arguments and get a list of environemnt variables (-v option)

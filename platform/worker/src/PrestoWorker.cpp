@@ -55,6 +55,7 @@
 #include "timer.h"
 
 using namespace std;
+using namespace boost;
 
 namespace presto {
 // to enable clean worker shutdown (handliing shared memory)
@@ -65,7 +66,7 @@ static boost::timed_mutex kill_lock;
 // to prevent shutdown called multiple times
 static bool shutdown_called = false;
 extern int shared_memory_sem;
-uint64_t abs_start_time;
+::uint64_t abs_start_time;
 
 // for benchmarking
 static bool skip_io = false;
@@ -139,7 +140,16 @@ static void WorkerSigchldHandler(int sig) {
   int executor_id = worker_ptr->GetExecutorID(pid);
   string hostname = worker_ptr->GetHostIp();
 
-  LOG_INFO("SIGCHLD signal called from ExecutorID %d (child process:%d) with status %d", executor_id, pid, status);
+  bool is_dataloader_running = false;
+  DataLoader* dataloaderptr = worker_ptr->GetDataLoaderPtr();
+  if (dataloaderptr != NULL) 
+    is_dataloader_running = !(dataloaderptr->IsTransferComplete());
+
+  if(!is_dataloader_running)
+    LOG_INFO("SIGCHLD signal called from ExecutorID %d (child process:%d) with status %d", executor_id, pid, status);
+  else 
+    LOG_INFO("SIGCHLD signal called during Vertica Connector execution.");
+
   /*fprintf(stderr,
           "%8.3lf : sigchld signal called from child process (%d) with status: %d\n",
           abs_time()/1e6, pid, status);*/
@@ -167,9 +177,13 @@ static void WorkerSigchldHandler(int sig) {
   } catch(...) {return;}
   
   ostringstream msg;
-  msg << hostname << " is exiting as an executor ID (" << executor_id << ") gets killed"
-      << endl << "check a log file in " << hostname << " - /tmp/R_executor_*_" << executor_id <<".log";
-  msg << check_out_of_memory(worker_ptr->GetExecutorPids());
+  if (!is_dataloader_running) {
+    msg << hostname << " is exiting as an executor ID (" << executor_id << ") gets killed"
+        << endl << "check a log file in " << hostname << " - /tmp/R_executor_*_" << executor_id <<".log";
+    msg << check_out_of_memory(worker_ptr->GetExecutorPids());
+  } else
+    msg << "<DataLoader> "<< hostname << " is exiting as it is out of memory to load data from Vertica.";
+
   LOG_ERROR(msg.str().c_str());
   SendAbortMsg(msg.str().c_str());
   // having some time for the packet to be delivered.
@@ -257,8 +271,8 @@ static set<int> check_if_worker_running() {
 * @return NULL
 */
 void PrestoWorker::fetch(string name, ServerInfo location,
-                         size_t size, uint64_t id,
-                         uint64_t uid,
+                         size_t size, ::uint64_t id,
+                         ::uint64_t uid,
                          string store) {
   master_last_contacted_.start();    
   TaskDoneRequest req;
@@ -396,8 +410,8 @@ void PrestoWorker::newtransfer(string name, ServerInfo location,
  * @return NULL
  */
 void PrestoWorker::io(string array_name, string store_name,
-                      IORequest::Type type, uint64_t id,
-                      uint64_t uid) {
+                      IORequest::Type type, ::uint64_t id,
+                      ::uint64_t uid) {
   ArrayStore *store = array_stores_[store_name];
   if (skip_io)
     goto end;
@@ -508,7 +522,6 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
   for (int i = 0; i < req.arraynames_size(); i++) {
     offsets.push_back(make_pair(req.offsets(i).val(0),
                                 req.offsets(i).val(1)));
-  
   }
 
   WorkerRequest* wrk_req = new WorkerRequest;
@@ -520,23 +533,27 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
   exec_req.set_id(req.id());
   exec_req.set_uid(req.uid());
   std::pair<int, int> block_dim (0,0);
+
+  int num_r_split = offsets.size()>0 ? 1:0; //At least one split is present.
+  int num_c_split = num_r_split; 
+  int last_rval=0, last_cval=0;
+
+  //Calculate the number of blocks on the row side and column side
+  //TODO (iR): Currently assumes that the blocks comform by sizes (i.e., can be stiched together without errors). 
+  //E.g. each row of block should have columns of the same sizes.
   for(int i=0;i<offsets.size();++i){
-    if(block_dim.first != 0 && block_dim.second != 0) {
-      break;
+    if(offsets[i].first != last_rval){
+      num_r_split++;
+      last_rval = offsets[i].first;
     }
-    if(block_dim.first == 0) {
-      block_dim.first = offsets[i].first != 0 ? offsets[i].first : 0;
-    }
-    if(block_dim.second == 0) {
-      block_dim.second = offsets[i].second != 0 ? offsets[i].second : 0;
+    //For columns only the splits in the first row block has to be checked
+    if((num_r_split ==1) && (offsets[i].second != last_cval)){
+      num_c_split++;
+      last_cval = offsets[i].second;
     }
   }
-  block_dim.first = block_dim.first == 0 ? dims.first : block_dim.first;
-  block_dim.second = block_dim.second == 0 ? dims.second : block_dim.second;
-  
-  if (block_dim.first != dims.first && block_dim.second != dims.second) {
-    int num_r_split = (int)ceil((double)dims.first/(double)block_dim.first);
-    int num_c_split = (int)ceil((double)dims.second/(double)block_dim.second);
+
+  if (num_r_split>1 && num_c_split>1){
     function_str << "row_combined <- list()\n";
     for (int i = 0; i < num_c_split; ++i) {
       function_str << "row_combined[[" << (i+1) << "]] <- rbind(";
@@ -555,8 +572,8 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
     function_str << ")\n";
     function_str << "update(out_data_frame)";
     // 2-D partitioned!! Most complex one
-  } else if (block_dim.first == dims.first && block_dim.second != dims.second) {
-    int num_c_split = (int)ceil((double)dims.second/(double)block_dim.second);    
+  } 
+  else if (num_c_split>1 && num_r_split <=1) {
     function_str << "out_data_frame <- cbind(";
     for (int i = 0; i < num_c_split; ++i) {
       if (i != 0) function_str << ", ";
@@ -567,7 +584,6 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
     // Column partitioned we can simple build data frame on it
   } else {
     // Row partitioned or single split - rbind
-    int num_r_split = (int)ceil((double)dims.first/(double)block_dim.first); 
     function_str << "out_data_frame <- rbind(";
     for (int i = 0; i < num_r_split; ++i) {
       if (i != 0) function_str << ", ";
@@ -637,7 +653,7 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
   if (arr_type == DATA_FRAME) {
     // deal with the data frame!!
     vector<ArrayData*> splits;
-    vector<pair<int, int> > offsets;
+    vector<pair<std::int64_t, std::int64_t> > offsets;
     for (int i = 0; i<req.arraynames_size(); i++) {
        splits.push_back(ParseShm(req.arraynames(i)));
        offsets.push_back(make_pair(req.offsets(i).val(0), req.offsets(i).val(1)));
@@ -661,7 +677,7 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
   } else if (arr_type == LIST) {
     //Create Composite Array for lists
     vector<ArrayData*> splits;
-    vector<pair<int, int> > offsets;
+    vector<pair<std::int64_t, std::int64_t> > offsets;
     for (int i = 0; i<req.arraynames_size(); i++) {
        splits.push_back(ParseShm(req.arraynames(i)));
        offsets.push_back(make_pair(req.offsets(i).val(0), req.offsets(i).val(1)));
@@ -681,15 +697,14 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
        requests_queue_empty_[EXECUTE].notify_all();
 
   } else {
-    try {  
+    try {
       vector<ArrayData*> splits;
-      vector<pair<int, int> > offsets;
-      pair<int, int> dims;
+      vector<pair<std::int64_t, std::int64_t> > offsets;
+      pair<std::int64_t, std::int64_t> dims;
       for (int i = 0; i < req.arraynames_size(); i++) {
         splits.push_back(ParseShm(req.arraynames(i)));
         offsets.push_back(make_pair(req.offsets(i).val(0),
                                     req.offsets(i).val(1)));
-      
         composite->offsets.push_back(offsets.back());
         composite->dims.push_back(splits.back()->GetDims());
         composite->splitnames.push_back(req.arraynames(i));
@@ -831,7 +846,7 @@ PrestoWorker::~PrestoWorker() {
   try {
     bool ret = client_map_mutex_.timed_lock(boost::get_system_time()+boost::posix_time::milliseconds(2000));
     if(ret  == true) {
-      unordered_map<std::string, shared_ptr<WorkerInfo> >::iterator itr =
+      unordered_map<std::string, boost::shared_ptr<WorkerInfo> >::iterator itr =
           client_map.begin();
       for (; itr != client_map.end(); ++itr) {
         itr->second->Close();
@@ -855,7 +870,7 @@ void PrestoWorker::HandleRequests(int type) {
   vector<string> func;  // string expression of function
   vector<Arg> args;  // a class that wraps all arguments (split/raw/composite)
   vector<RawArg> raw_args;  // arguments not related to splits
-  vector<int64_t> offset_dims;  // offset dimentsions
+  vector< ::int64_t> offset_dims;  // offset dimentsions
 
   vector<NewArg> new_args;  // argument related to shplits
   vector<NewArg> composite_args;  // argument about composite array
@@ -1172,11 +1187,11 @@ WorkerInfo* PrestoWorker::getClient(const ServerInfo& location) {
   string key = location.name() + int_to_string(location.presto_port());
   WorkerInfo* wc = NULL;
   client_map_mutex_.lock();
-  unordered_map<std::string, shared_ptr<WorkerInfo> >::iterator itr =
+  unordered_map<std::string, boost::shared_ptr<WorkerInfo> >::iterator itr =
       client_map.find(key);
   // if the worker information is not there yet, we create the information.
   if (itr == client_map.end()) {
-    shared_ptr<WorkerInfo> wi(new WorkerInfo(location.name(),
+    boost::shared_ptr<WorkerInfo> wi(new WorkerInfo(location.name(),
                                              location.presto_port(), zmq_ctx_));
     client_map.insert(make_pair(key, wi));
     LOG_INFO("Opened connection to %s:%d", location.name().c_str(), location.presto_port());
@@ -1233,7 +1248,6 @@ void PrestoWorker::hello(ServerInfo master_location,
   LOG_DEBUG("Sending reply with worker info: %s %d", worker_location.name().c_str(), worker_location.presto_port());
   if (reply_flag & (1 << SHARED_MEM_QUOTA)) {
     helloreply.set_shared_memory(shm_total_);
-    
   }
   if (reply_flag & (1 << NUM_EXECUTOR)) {
     helloreply.set_executors(num_executors_);
@@ -1390,7 +1404,7 @@ void PrestoWorker::shutdown() {
   try {
     bool ret = client_map_mutex_.timed_lock(boost::get_system_time()+boost::posix_time::milliseconds(2000));
     if(ret  == true) {
-      unordered_map<std::string, shared_ptr<WorkerInfo> >::iterator itr =
+      unordered_map<std::string, boost::shared_ptr<WorkerInfo> >::iterator itr =
           client_map.begin();
       for (; itr != client_map.end(); ++itr) {
         itr->second->Close();
@@ -1412,7 +1426,7 @@ void PrestoWorker::MonitorMaster() {
     // a worker shutdown
     boost::this_thread::sleep
     (boost::posix_time::seconds(WORKER_HEARTBEAT_PERIOD));
-    uint64_t elapsed_time = master_last_contacted_.age()/1e6;
+    ::uint64_t elapsed_time = master_last_contacted_.age()/1e6;
     if(elapsed_time > (WORKER_DEAD_THRESHOLD)) {
       LOG_INFO("Master node is detected to be down. Shutdown worker : elapsed time since last heartbeat: %lld", elapsed_time);
       try {
@@ -1439,6 +1453,7 @@ void PrestoWorker::MonitorMaster() {
 void PrestoWorker::verticaload(VerticaDLRequest verticaload) {
   if(verticaload.type() == VerticaDLRequest::START) {
     CreateLoaderThread(verticaload.split_size(),
+                       verticaload.split_name(),
                        verticaload.uid(), 
                        verticaload.id());
   }
@@ -1449,9 +1464,9 @@ void PrestoWorker::verticaload(VerticaDLRequest verticaload) {
               <RepeatedPtrField<string>::const_iterator,
                string>(verticaload.query_result().begin(),
                        verticaload.query_result_size(), &qry_res);
-    uint64_t npartitions = data_loader_->SendResult(qry_res);
+    ::uint64_t npartitions = data_loader_->SendResult(qry_res);
 
-    LOG_INFO("Number of partitions generated is %d", npartitions);
+    LOG_INFO("<DataLoader> Number of partitions generated is %d", npartitions);
 
     TaskDoneRequest reply;
     reply.set_id(verticaload.id());
@@ -1467,36 +1482,37 @@ void PrestoWorker::verticaload(VerticaDLRequest verticaload) {
       data_loader_thread_->interrupt();
       data_loader_thread_ = NULL;
       delete data_loader_thread_; 
-      LOG_INFO("Deleted Data loader thread");
+      LOG_INFO("<DataLoader> Deleted Data loader thread");
     }
 
     if(data_loader_ != NULL) {
       delete data_loader_;
       data_loader_ = NULL;
-      LOG_INFO("Killed Data Loader");
+      LOG_INFO("<DataLoader> Killed Data Loader");
     }
   }
 }
 
-void PrestoWorker::CreateLoaderThread(uint64_t split_size, uint64_t uid, uint64_t id) {
+void PrestoWorker::CreateLoaderThread(::uint64_t split_size, string split_prefix, 
+                                      ::uint64_t uid, ::uint64_t id) {
   int port_number = -1;
   int32_t clientfd;
   try {
     clientfd = CreateBindedSocket(start_port_range_, end_port_range_, &port_number);
   } catch (...) {
-    LOG_ERROR("Error creating socket for Data Loader %d", clientfd);
+    LOG_ERROR("<DataLoader> Error creating socket %d", clientfd);
     port_number = -1;
     // leeky: isn't it better to return here if there's an error
   }
 
   std::pair<int32_t, int32_t> bind_info = std::make_pair(clientfd, port_number);
-  data_loader_ = new DataLoader(this, port_number, clientfd, split_size);
+  data_loader_ = new DataLoader(this, port_number, clientfd, split_size, split_prefix);
   data_loader_thread_ = new thread(bind(&DataLoader::Run, data_loader_));  
 
   if(port_number == -1)
-    LOG_ERROR("Could not open a port for loading data from Vertica.");
+    LOG_ERROR("<DataLoader> Could not open a port for loading data from Vertica.");
   else   
-    LOG_INFO("Worker started Data Loader. Listening socket at port#:%d for connection from Vertica", port_number);
+    LOG_INFO("<DataLoader> Worker started Data Loader. Listening socket at port#:%d for connection from Vertica", port_number);
 
   TaskDoneRequest reply;
   reply.set_id(id);
@@ -1520,25 +1536,35 @@ static void ParseXMLConfig(const string &config,
                            int &executors,
                            unordered_map<string, ArrayStore*> *array_stores) {
   property_tree::ptree pt;
-  read_xml(config, pt);
+  try {
+    read_xml(config, pt, boost::property_tree::xml_parser::no_comments);
+  } catch(...) {
+      throw PrestoShutdownException("<jorgem>Error parsing XML.\n");
+  }
   size_t conf_mem, conf_num_exec;
 
   property_tree::ptree worker_conf = pt.get_child("WorkerConfig");
 
   try {
-    port = atoi(worker_conf.get_child("Port").data().c_str());
+    string worker_start_port = worker_conf.get_child("StartPortRange").data();
+    presto::strip_string(worker_start_port);
+    port = atoi(worker_start_port.c_str());
   } catch (property_tree::ptree_bad_path &) {
   }
 
   try {
-    conf_num_exec = atoi(worker_conf.get_child("Executors").data().c_str());
+    string worker_executors = worker_conf.get_child("Executors").data();
+    presto::strip_string(worker_executors);
+    conf_num_exec = atoi(worker_executors.c_str());
     executors = conf_num_exec > 0 ? conf_num_exec : executors;
   } catch (property_tree::ptree_bad_path &) {
   }
 
   try {
+    string worker_sharedmemory = worker_conf.get_child("SharedMemory").data();
+    presto::strip_string(worker_sharedmemory);
     conf_mem =
-        atol(worker_conf.get_child("SharedMemory").data().c_str()) *
+        atol(worker_sharedmemory.c_str()) *
         (1LL<<20);    
     shared_memory = conf_mem > 0 ? conf_mem : shared_memory;
   } catch (property_tree::ptree_bad_path &) {
@@ -1551,8 +1577,11 @@ static void ParseXMLConfig(const string &config,
          storage_it++) {
       property_tree::ptree device_conf = storage_it->second;
       string name = device_conf.get_child("Name").data();
+      presto::strip_string(name);
+      string worker_size =  device_conf.get_child("Size").data();
+      presto::strip_string(worker_size);
       size_t size = atol(
-          device_conf.get_child("Size").data().c_str()) *
+          worker_size.c_str()) *
           (1LLU<<20);
 #ifndef USE_MMAP_AS_SHMEM
       (*array_stores)[name] = new FSArrayStore(size, name);
@@ -1567,12 +1596,12 @@ static void ParseXMLConfig(const string &config,
 }  // namespace presto
 
 /** Determine optimal # of executors automatically.
- * It get the number of cores and the number of executors will be num_cores -1
+ * It get the number of cores and the number of executors will be num_cores 
  * @return optimal number of executors
  */
 static int auto_executors() {
   int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-  return num_cores > 1 ? (num_cores - 1) : DEFAULT_EXECUTORS;
+  return num_cores > 0 ? (num_cores) : DEFAULT_EXECUTORS;
 }
 
 /** Determine optimal shared mem size automatically by considering the SHM mounted size and system configuration
@@ -1628,14 +1657,13 @@ static void clean_garbage_presto_shm(set<int> distributedR_ids) {
     string shm_prefix = PRESTO_SHM_PREFIX;
     size_t sps = shm_prefix.size();
 
-    string loader_shm_prefix = LOADER_SHM_PREFIX;
-    size_t lps = loader_shm_prefix.size();
+    string loader_file_prefix = LOADER_SHM_PREFIX;
+    size_t lps = loader_file_prefix.size();
 
     while (ep = readdir(dp)) {  // NOLINT
       if (ep != NULL) {
         string fname = ep->d_name;
-        if (fname.compare(0, sps, shm_prefix) == 0) {
-          //LOG_DEBUG("Removing Shared memory segments %s from Previous sessions.", fname.c_str());          
+        if (fname.compare(0, sps, shm_prefix) == 0 || fname.compare(0, lps, loader_file_prefix) == 0) {
           std::vector<std::string> elems;
           // parse the shared memory segment. The format is
           // R-shm-session ID with master addr/port-dobject name_split id_version
@@ -1644,8 +1672,6 @@ static void clean_garbage_presto_shm(set<int> distributedR_ids) {
           if (distributedR_ids.count(atoi(elems[2].c_str())) == 0) {
             boost::interprocess::shared_memory_object::remove(fname.c_str());
           }
-        } else if(fname.compare(0, lps, loader_shm_prefix) == 0) {
-          boost::interprocess::shared_memory_object::remove(fname.c_str());
         }
       }
     }
@@ -1711,8 +1737,13 @@ int main(int argc, char **argv) {
         executors = atoi(optarg) > 0 ? atoi(optarg) : executors;
         break;
       case 'm':
-        shared_memory = atol(optarg) * (1LL<<20) > 0 ?
-          atol(optarg) * (1LL<<20) : shared_memory;
+        {
+	  unsigned long long optarg_memory= atol(optarg) * (1LL<<20);
+	  if(optarg_memory >0){
+	    unsigned long long total_memory= get_total_memory();	    
+	    shared_memory = optarg_memory > total_memory ? total_memory : optarg_memory;
+	  }
+	}
         break;
       case 'l':
         log_level = atoi(optarg) > 3 ? log_level : atoi(optarg);
@@ -1737,7 +1768,6 @@ int main(int argc, char **argv) {
     worker_addr = string(hostname);
   }
   char workerLogname[1024];
-//  sprintf(workerLogname, "/tmp/R_worker_%s_%s.%d.log", getenv("USER"), hostname, presto_port);
   sprintf(workerLogname, "/tmp/R_worker_%s_%s.%d.log", getenv("USER"), master_addr.c_str(), master_port);
   InitializeFileLogger(workerLogname);  
   LoggerFilter(log_level);
@@ -1746,8 +1776,8 @@ int main(int argc, char **argv) {
     return 0;
   }  
   LOG_INFO("Starting worker.");
-  
-  vector<shared_ptr<presto::PrestoWorker> > worker_handles;
+
+  vector<boost::shared_ptr<presto::PrestoWorker> > worker_handles;
 
   context_t zmq_ctx(NUM_CTX_THREADS);
 

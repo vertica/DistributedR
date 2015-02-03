@@ -12,16 +12,22 @@
   \code{\link{dlist}} can be space-inefficient, and should be replaced by 
   \code{\link{darray}} whereever possible.}
 
-\usage{dlist (partitions)}
+\usage{dlist (npartitions)}
 
 \arguments{
- \item{partitions}{an integer specifying number of partitions of the list.}
+ \item{npartitions}{an integer specifying number of partitions of the list.}
 }     
 
 \details{ Distributed lists are internally stored as list objects. Each partition
   of the list can have variable number of elements in it. For example, 
-  the distributed list \code{dlist(partitions=5)} has five partitions. Each
+  the distributed list \code{dlist(npartitions=5)} has five partitions. Each
   partition is an empty list \code{list()}.
+
+Too many partitions increase the overheads of managing distributed
+objects.  We recommend users to create objects with as many partitions
+as the total number of CPU cores in the system.  We restrict users
+from creating objects when the number of partitions is more than
+20,000 or more than 50x the number of CPU cores.
 
   Distributed lists can be read-shared by multiple concurrent tasks, but 
   modified by only a single writer per partition. Programmers express parallelism 
@@ -43,7 +49,7 @@
   AuYoung, A., and Schreiber, R. (2013) Presto: Distributed Machine
   Learning and Graph Processing with Sparse Matrices. \emph{EuroSys'13},
   197--210.
-  \item Homepage: http://www.hpl.hp.com/research/distributedr.htm
+  \item Homepage: http://www.vertica.com/distributedr
 %  \item Mailing list: presto-dev@external.groups.hp.com
 }
 }

@@ -42,7 +42,7 @@
 \Address{
   Indrajit Roy\\
   HP Vertica Development Team \\
-  URL: \url{http://www.hpl.hp.com/distributedR.htm}
+  URL: \url{http://www.vertica.com/distributedr}
 }
 
 %% need no \usepackage{Sweave.sty}
@@ -392,6 +392,44 @@ getpartition(D)
 mean(D)
 colSums(D)
 @ 
+
+\subsection{Distributed array with flexible partition sizes}
+
+ You can also create distributed arrays by specifying just the number
+of partitions, but not their sizes. This flexibility is useful
+when the size of an array is not known apriori. For example,
+create a distributed array with 5 partitions as follows:
+
+<<flex 1>>=
+fA <- darray(npartitions=c(5,1)) 
+@ 
+
+Each partition can contain any number of rows and columns as long as
+it results in a well formed array. For example, you can store \code{i} rows in
+the ith partition.
+
+<<flex 2>>=
+foreach(i, 1:npartitions(fA), initArrays<-function(y=splits(fA,i), index=i) {
+     y<-matrix(index, nrow=index,ncol=5)
+     update(y)
+})
+@
+
+Check partition sizes by calling:
+
+<<flex 2>>=
+partitionsize(fA)
+@
+
+Contents of the second partition are:
+<<flex 3>>=
+getpartition(fA,2)
+@
+
+Contents of the full array are: 
+<<flex 4>>=
+getpartition(fA)
+@
 
 \subsection{Creating a distributed data frame}
 

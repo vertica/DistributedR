@@ -39,14 +39,16 @@ namespace presto {
  * DataLoader Constructor
  */
 DataLoader::DataLoader(
-    PrestoWorker* presto_worker, int32_t port, int32_t sock_fd_, uint64_t split_size) :
+    PrestoWorker* presto_worker, int32_t port, int32_t sock_fd, ::uint64_t split_size, string split_prefix) :
   presto_worker_(presto_worker),
-  port_(port), sock_fd(sock_fd_),
-  DR_partition_size(split_size) {
+  port_(port), sock_fd_(sock_fd),
+  DR_partition_size(split_size),
+  split_prefix_(split_prefix) {
   total_data_size = 0;
   total_nrows = 0;
   file_id = 0;
   vnode_EOFs.clear();
+  transfer_complete_ = false;
   read_pool = pool(10);
 
   //Initialize buffer
@@ -65,16 +67,18 @@ DataLoader::DataLoader(
  *
  */
 DataLoader::~DataLoader() {
+  close(sock_fd_);
+  LOG_DEBUG("<DataLoader> Clearing leftover temporary loader files");
+  for(int i = 0; i < file_id ; i++) {
+    std::ostringstream loader_name;
+    loader_name << "/dev/shm/" << split_prefix_ << (i+1);
+    std::string temp_shm_file = loader_name.str();
+    unlink(temp_shm_file.c_str());
+  }
+
   if(buffer.buf != NULL) {
     free(buffer.buf);
     buffer.buf = NULL;
-  }
-
-  LOG_DEBUG("Clearing leftover temporary loader files");
-  for(int i = 0; i < file_id ; i++) {
-    std::string prefix = std::string("/dev/shm/") + LOADER_SHM_PREFIX;
-    std::string temp_shm_file = prefix + int_to_string(i+1);
-    unlink(temp_shm_file.c_str());
   }
 
   vnode_EOFs.clear();
@@ -88,9 +92,10 @@ DataLoader::~DataLoader() {
  * - Frees buffer
  * 
  **/
-uint64_t DataLoader::SendResult(std::vector<std::string> qry_result) {
+::uint64_t DataLoader::SendResult(std::vector<std::string> qry_result) {
    
    read_pool.wait();
+   transfer_complete_ = true;
 
    map<std::string, int> result_EOFs;
    result_EOFs.clear();
@@ -104,7 +109,7 @@ uint64_t DataLoader::SendResult(std::vector<std::string> qry_result) {
    }
 
    if(!(result_EOFs.size() == vnode_EOFs.size() && std::equal(result_EOFs.begin(), result_EOFs.end(), vnode_EOFs.begin()))) 
-     LOG_ERROR("Result validation failed.");
+     LOG_ERROR("<DataLoader> Result validation failed.");
    else {
     if(total_nrows > 0)
      Flush();  
@@ -122,15 +127,34 @@ uint64_t DataLoader::SendResult(std::vector<std::string> qry_result) {
  * Creates a shared memory segment for a given data size.
  *
  **/
-void DataLoader::CreateCsvShm(std::string shm_name, uint64_t data_size) {  
-  boost::interprocess::shared_memory_object csv_shm(boost::interprocess::open_or_create, shm_name.c_str(), boost::interprocess::read_write);
-  csv_shm.truncate(data_size);
-  boost::interprocess::mapped_region csv_mapped(csv_shm, boost::interprocess::read_write);
-  void *address = csv_mapped.get_address();
-  memcpy(address, (void*)buffer.buf, data_size);
-  LOG_DEBUG("Created shared memory segment %s", shm_name.c_str());
+void DataLoader::CreateCsvShm(std::string shm_name, ::uint64_t data_size) {
+  size_t free_shm_size = get_free_shm_size();
+  if (free_shm_size > 0 && free_shm_size <= data_size) {
+     ostringstream msg;
+     msg << "<DataLoader> Cannot allocate " << data_size << " bytes to Shared Memory. "
+         << "Free shared memory size is " << free_shm_size;
+     LOG_ERROR("%s", msg.str().c_str());
+     close(sock_fd_);
+  } else { 
+     boost::interprocess::shared_memory_object csv_shm(boost::interprocess::open_or_create, shm_name.c_str(), boost::interprocess::read_write);
+     csv_shm.truncate(data_size);
+     boost::interprocess::mapped_region csv_mapped(csv_shm, boost::interprocess::read_write);
+     void *address = csv_mapped.get_address();
+     memcpy(address, (void*)buffer.buf, data_size);
+     LOG_DEBUG("<DataLoader> Created shared memory segment %s", shm_name.c_str());
+  }
 }
 
+
+std::string DataLoader::getNextShmName() {
+  boost::unique_lock<boost::mutex> lock(shm_name_mutex_);
+  file_id++;
+  ostringstream shm_file_name;
+  shm_file_name << split_prefix_ << file_id;
+  std::string shm_name = shm_file_name.str();
+  lock.unlock();
+  return shm_name;
+}
 
 /**
  * Flushes final data bytes received by this Worker which has not made it to the partition size.
@@ -153,7 +177,7 @@ void DataLoader::Flush() {
  * - Shared memory segment created contains data in comma-separated format.
  *
  **/
-void DataLoader::AppendDataBytes(const char* shm_file, uint64_t data_size, uint32_t nrows) {
+void DataLoader::AppendDataBytes(const char* shm_file, ::uint64_t data_size, uint32_t nrows) {
   unique_lock<recursive_mutex> lock(metadata_mutex_);
 
   char* p = (char*)shm_file;
@@ -162,8 +186,12 @@ void DataLoader::AppendDataBytes(const char* shm_file, uint64_t data_size, uint3
 
   if(total_data_size > buffer.buffersize) {
      buffer.buf = (char*) realloc ((void*)buffer.buf, total_data_size);
-     if(buffer.buf == NULL) 
-       throw PrestoWarningException("Error in reserving memory for loading data files from Vertica");
+     if(buffer.buf == NULL)  {
+       ostringstream msg;
+       msg << "<DataLoader> Unable to reserve data buffer of " << total_data_size << " bytes.";
+       LOG_ERROR("%s", msg.str().c_str());
+       close(sock_fd_);
+     }
      
      buffer.buffersize = total_data_size;
   }
@@ -176,9 +204,9 @@ void DataLoader::AppendDataBytes(const char* shm_file, uint64_t data_size, uint3
   }
 
   if(total_nrows >= DR_partition_size) {
-    LOG_DEBUG("Creating a shared memory segment of %d rows", total_nrows);
+    LOG_DEBUG("<DataLoader> Creating a shared memory segment of %d rows", total_nrows);
     std::string shm_name = getNextShmName();
-    CreateCsvShm(shm_name, total_data_size); 
+    CreateCsvShm(shm_name, total_data_size);
 
     total_data_size = 0;
     total_nrows = 0;
@@ -200,12 +228,12 @@ void DataLoader::ReadFromVertica(int32_t connection_fd) {
   struct Metadata metadata;
   int n = recv(connection_fd, &metadata, sizeof(metadata), 0);
   if(n == 0) 
-    LOG_ERROR("No Metadata received from Vertica");
+    LOG_ERROR("<DataLoader> No Metadata received from Vertica");
   else if (n<0)
-    LOG_ERROR("Error in receiving Metadata from Vertica");
+    LOG_ERROR("<DataLoader> Error in receiving Metadata from Vertica");
   
  
-  uint64_t data_size = metadata.size;
+  ::uint64_t data_size = metadata.size;
   uint32_t nrows = metadata.nrows;
   bool is_eof = metadata.isEOF;
   
@@ -218,10 +246,10 @@ void DataLoader::ReadFromVertica(int32_t connection_fd) {
     //data_buffer[b_read]='\0';
     while((errno = 0, (n = recv(connection_fd, data_buffer, sizeof(data_buffer), 0))>0) || errno == EINTR) {
       if(n == 0) {
-       LOG_ERROR("No data bytes received from Vertica");
+       LOG_ERROR("<DataLoader> No data bytes received from Vertica");
        break;
       } else if (n<0){
-       LOG_ERROR("Error in receiving Metadata from Vertica");
+       LOG_ERROR("<DataLoader> Error in receiving Metadata from Vertica");
        break;
       } else {
        data_buffer[n]='\0';
@@ -250,22 +278,22 @@ void DataLoader::ReadFromVertica(int32_t connection_fd) {
  *
  **/
 void DataLoader::Run() {
-  try {
+  try { 
     struct sockaddr_in their_addr;
     socklen_t sin_size = sizeof(their_addr);   
     while(true) {
       boost::this_thread::interruption_point();
-      int ret = listen(sock_fd, 10);
+      int ret = listen(sock_fd_, 10);
       boost::this_thread::interruption_point();
       if (ret < 0) {
-        LOG_ERROR("Data Loader thread stopped listening for data connections");
+        LOG_ERROR("<DataLoader> Data Loader stopped listening for data connections");
         break;
       }
 
-      int32_t connection_fd = accept(sock_fd, (struct sockaddr *) &their_addr,
+      int32_t connection_fd = accept(sock_fd_, (struct sockaddr *) &their_addr,
                    &sin_size);
       if (connection_fd < 0) {
-        LOG_ERROR("Connection failure. %s", strerror(errno));
+        LOG_ERROR("<DataLoader> Connection failure. %s", strerror(errno));
         close(connection_fd);
         break;
       } else {
@@ -273,9 +301,9 @@ void DataLoader::Run() {
         schedule(read_pool, boost::bind(&DataLoader::ReadFromVertica, this, connection_fd));
       }
     } 
-    close(sock_fd); 
+    close(sock_fd_); 
   } catch(boost::thread_interrupted const&) {
-    LOG_DEBUG("Data Loader thread interrupted");
+    LOG_DEBUG("<DataLoader> Data Loader thread interrupted");
   }
 }
 

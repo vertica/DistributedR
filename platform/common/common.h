@@ -45,6 +45,8 @@
 #include <google/protobuf/repeated_field.h>
 #include <zmq.hpp>
 
+#include <boost/algorithm/string/erase.hpp>
+
 #include "shared.pb.h"
 #include "PrestoException.h"
 
@@ -61,7 +63,7 @@
 // will be used to identify Preso SHM object in a shared memory region.
 // UID is appended at the end
 #define PRESTO_SHM_PREFIX "R-shm-"
-#define LOADER_SHM_PREFIX "DR-shm-loader-"
+#define LOADER_SHM_PREFIX "DR-loader-"
 #define SHM_FOLDER "/dev/shm/"
 #define EXECUTOR_ISS_STR "executor_iss_"
 
@@ -381,7 +383,10 @@ static pair<int, int> get_boost_version() {
     char shutdown_msg[4] = "-1";
     send(sockfd, shutdown_msg, strlen(shutdown_msg), 0);
   }
+//remove whitespace and \t \n \r from string in place
+void strip_string(string &s);
 
 }  // namespace presto
+
 
 #endif  // _PRESTO_COMMON_

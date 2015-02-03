@@ -139,7 +139,8 @@ message VerticaDLRequest {
   }
   required Type type = 1;
   optional int64 split_size = 2;
-  repeated string query_result = 3;
-  required int64 id = 4;
-  optional int64 uid = 5;
+  optional string split_name = 3;
+  repeated string query_result = 4;
+  required int64 id = 5;
+  optional int64 uid = 6;
 }

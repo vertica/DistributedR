@@ -57,34 +57,30 @@ struct Metadata {
 
 class DataLoader {
  public:
-  DataLoader(PrestoWorker *presto_worker, int port, int32_t sock_fd, uint64_t split_size); 
+  DataLoader(PrestoWorker *presto_worker, int port, int32_t sock_fd, ::uint64_t split_size, string split_prefix);
   ~DataLoader();
 
   void Run();
   void ReadFromVertica(int32_t new_fd);
-  void CreateCsvShm(std::string shm_name, uint64_t size);
-  void AppendDataBytes(const char* shm_file, uint64_t size, uint32_t nrows);
+  std::string getNextShmName();
+  void CreateCsvShm(std::string shm_name, ::uint64_t size);
+  void AppendDataBytes(const char* shm_file, ::uint64_t size, uint32_t nrows);
   uint64_t SendResult(std::vector<std::string> qry_result);
   void Flush();
-
-  std::string getNextShmName() {
-    unique_lock<mutex> lock(shm_name_mutex_);
-    file_id++;
-    ostringstream shm_file_name;
-    shm_file_name << LOADER_SHM_PREFIX << file_id;
-    std::string shm_name = shm_file_name.str();
-    lock.unlock();
-    return shm_name;
+  bool IsTransferComplete() {
+    return transfer_complete_;
   }
 
  private:
   PrestoWorker *presto_worker_;
   int port_;
-  int32_t sock_fd;
+  int32_t sock_fd_;
   uint64_t total_data_size;
   uint64_t total_nrows;
   uint64_t file_id; 
   uint64_t DR_partition_size;
+  string split_prefix_;
+  bool transfer_complete_;
 
   std::map<std::string, int> vnode_EOFs;
   

@@ -11,8 +11,8 @@
     \tabular{ll}{
         Package: \tab HPdclassifier\cr
         Type: \tab Package\cr
-        Version: \tab 0.7.0\cr
-        Date: \tab 2014-01-22\cr
+        Version: \tab 1.0.0\cr
+        Date: \tab 2015-01-16\cr
     }
  Main Functions:
  \itemize{
@@ -22,7 +22,7 @@
 }
 
 \author{
-Arash Fard <afard@vertica.com>
+HP Vertica Analytics Team <distributedRTeam@external.groups.hp.com>
 }
 \references{
  \enumerate{

@@ -20,8 +20,6 @@
 #
 #  This code is a distributed version based on randomForest function available in randomForest package.
 #
-#  
-#  Aarsh Fard (afard@vertica.com)
 #
 #########################################################
 "hpdrandomForest" <-
@@ -29,7 +27,7 @@ function(x, nExecutor, ...)
   UseMethod("hpdrandomForest")
 
 "hpdrandomForest.formula" <-
-    function(formula, data = NULL, ..., subset, na.action = na.fail, nExecutor, trace=FALSE, setSeed) {
+    function(formula, data = NULL, ..., ntree=500, na.action = na.fail, nExecutor, trace=FALSE, completeModel=FALSE, setSeed) {
 ### formula interface for hpdrandomForest.
 ### code gratefully copied from randomForest.formula (package randomForest_4.6-7).
 ###
@@ -43,44 +41,55 @@ function(x, nExecutor, ...)
     if (any(c("xtest", "ytest") %in% names(m)))
         stop("xtest/ytest not supported through the formula interface")
     names(m)[2] <- "formula"
-    if (is.matrix(eval(m$data, parent.frame())))
-        m$data <- as.data.frame(data)
+    if(!is.null(data))
+        if (is.matrix(eval(m$data, parent.frame())))
+            m$data <- as.data.frame(data)
     m$... <- NULL
     m$na.action <- na.action
     m[[1]] <- as.name("model.frame")
+    m$ntree <- NULL
     m$nExecutor <- NULL
     m$trace <- NULL
     m$setSeed <- NULL # the argument setSeed is only for test purpose
-    m <- eval(m, parent.frame())
-    y <- model.response(m)
-    Terms <- attr(m, "terms")
-    attr(Terms, "intercept") <- 0
-    ## Drop any "negative" terms in the formula.
-    ## test with:
-    ## randomForest(Fertility~.-Catholic+I(Catholic<50),data=swiss,mtry=2)
-    m <- model.frame(terms(reformulate(attributes(Terms)$term.labels)),
-                     data.frame(m))
-    ## if (!is.null(y)) m <- m[, -1, drop=FALSE]
-    for (i in seq(along=ncol(m))) {
-        if (is.ordered(m[[i]])) m[[i]] <- as.numeric(m[[i]])
+    m$completeModel <- NULL
+
+    if(!is.null(data)) {
+        if(is.dframe(data)) {
+            ret <- hpdrandomForest.default(data, ..., ntree=ntree, nExecutor=nExecutor,trace=trace,setSeed=setSeed, completeModel=completeModel, formula=formula)
+        } else {
+            m <- eval(m, parent.frame())
+            y <- model.response(m)
+            Terms <- attr(m, "terms")
+            attr(Terms, "intercept") <- 0
+            attr(y, "na.action") <- attr(m, "na.action")
+            ## Drop any "negative" terms in the formula.
+            ## test with:
+            ## randomForest(Fertility~.-Catholic+I(Catholic<50),data=swiss,mtry=2)
+            m <- model.frame(terms(reformulate(attributes(Terms)$term.labels)),
+                             data.frame(m))
+            ## if (!is.null(y)) m <- m[, -1, drop=FALSE]
+            for (i in seq(along=m)) {
+                if (is.ordered(m[[i]])) m[[i]] <- as.numeric(m[[i]])
+            }
+            ret <- hpdrandomForest.default(m, y, ..., ntree=ntree, nExecutor=nExecutor,trace=trace,setSeed=setSeed, completeModel=completeModel)
+            ret$terms <- Terms
+            if (completeModel && !is.null(attr(y, "na.action"))) {
+                attr(ret$predicted, "na.action") <- ret$na.action <- attr(y, "na.action")
+	        }
+        }
     }
-    ret <- hpdrandomForest(m, y, ..., nExecutor=nExecutor,trace=trace,setSeed=setSeed)
+
     cl <- match.call()
     cl[[1]] <- as.name("hpdrandomForest")
     ret$call <- cl
-    ret$terms <- Terms
-    if (!is.null(attr(m, "na.action")))
-        ret$na.action <- attr(m, "na.action")
-    class(ret) <- c("randomForest.formula", "randomForest", "hpdrandomForest.formula", "hpdrandomForest")
+    class(ret) <- c("hpdrandomForest.formula", "hpdrandomForest", "randomForest.formula", "randomForest")
     return(ret)
 } # "hpdrandomForest.formula"
 
 ## x, y, xtest, ytest should have all follow one of these cases:
 ## Case 1- compatible to their types in randomForest
 ## Case 2- They are all (in the case of existance) of type darray
-## Case 3- They are all (in the case of existance) of type dframe
-## Case 4- x and xtest are of type darray, and y and ytest of type dframe
-## Case 5- x and xtest are of type dframe, and y and ytest of type darray
+## Case 3- x is of type dframe, and there is a formula. y is null; xtest and ytest are not supported at this case
 "hpdrandomForest.default"  <-
     function(x, y=NULL,  xtest=NULL, ytest=NULL, ntree=500,
              mtry=if (!is.null(y) && !is.factor(y) && !is.dframe(y))
@@ -88,11 +97,10 @@ function(x, nExecutor, ...)
              replace=TRUE, classwt=NULL, cutoff, strata,
              sampsize = if (replace) nrow(x) else ceiling(.632*nrow(x)),
              nodesize = if (!is.null(y) && !is.factor(y) && !is.dframe(y)) 5 else 1,
-             maxnodes=NULL,
-             importance=FALSE, localImp=FALSE, nPerm=1,
-             norm.votes=TRUE,
-             keep.forest=!is.null(y) && is.null(xtest), corr.bias=FALSE,
-             nExecutor, trace=FALSE, ..., setSeed) {
+             maxnodes=NULL,importance=FALSE, localImp=FALSE, nPerm=1,
+             proximity=FALSE,
+             norm.votes=TRUE, keep.forest=TRUE,
+             nExecutor, trace=FALSE, completeModel=FALSE, ..., setSeed, formula) {
 
     m <- match.call(expand.dots = FALSE)
     # validating the inputs
@@ -102,37 +110,69 @@ function(x, nExecutor, ...)
         stop("nExecutor should be a positive integer number and smaller than 'ntree'")
 
     nSamples <- NROW(x)
-    nFeatures <- NCOL(x)
     if (nSamples == 0) stop("data (x) has 0 rows")
     Stratify <- length(sampsize) > 1
     if ((!Stratify) && sampsize > nSamples) stop("sampsize too large")
 
-    if (!is.null(xtest)) {
-        if (is.null(y))
-            stop("xtest cannot be used for unsupervised mode")
-        if (nFeatures != ncol(xtest))
-            stop("x and xtest must have same number of columns")
-        if (nrow(xtest) == 0)
-            stop("assigned xtest is empty")
-    }
-    if(!is.null(y)) {
-        if(NCOL(y) != 1)
-            stop("y should have a single column")
-        if(NROW(y) != nSamples)
-            stop("length of response must be the same as predictors")
-        if(is.data.frame(y))    y <- y[,1]
-    }
-    if(!is.null(ytest)) {
-        if(NCOL(ytest) != 1)
-            stop("ytest should have a single column")
-        if (!is.factor(ytest) && NROW(ytest) == 0)
-            stop("assigned ytest is empty")
-        if(is.data.frame(ytest)) ytest <- ytest[,1]
-        if(is.null(xtest)) 
-            stop("xtest is not available")
-        if(NROW(ytest) != NROW(xtest))
-            stop("length of ytest must be the same as xtest")
-    }
+    if(is.dframe(x)) { # when x is dframe and y formula
+        if (missing(formula))
+            formula <- ~.
+        if (!is.null(y))
+            stop("when x is of type dframe, the interface with formula should be used")
+        if (!is.null(xtest) || !is.null(ytest))
+            stop("xtest/ytest are not supported when x is a dframe")
+
+        allNames <- colnames(x)
+        varNames <- all.vars(formula)
+        if("." %in% varNames)
+            varNames <- varNames[- which(varNames == ".")]
+        if(! all(varNames %in% allNames))
+            stop("there are variable names in the formula which are not present in the column names of 'x'")
+        if(length(all.vars(formula)) != length(all.vars(formula[[2]]))) { # there is a response
+            response <- all.vars(formula[[2]])
+            if( length(response) > 1 || "." %in% response)
+                stop("only one response is allowed in the formula")
+            features <- all.vars(formula[[3]])
+            if("." %in% features) nFeatures <- length(colnames(x)) -1
+            else nFeatures <- length(features)
+        } else { # there is no response (unsupervised)
+            nFeatures <- NCOL(x)
+            keep.forest <- FALSE
+            sampsize <- sampsize * 2
+        }
+    } else {
+        nFeatures <- NCOL(x)
+
+        if (!is.null(xtest)) {
+            if (is.null(y))
+                stop("xtest cannot be used for unsupervised mode")
+            if (nFeatures != ncol(xtest))
+                stop("x and xtest must have same number of columns")
+            if (nrow(xtest) == 0)
+                stop("assigned xtest is empty")
+        }
+        if(!is.null(y)) {
+            if(NCOL(y) != 1)
+                stop("y should have a single column")
+            if(NROW(y) != nSamples)
+                stop("length of response must be the same as predictors")
+            if(is.data.frame(y))    y <- y[,1]
+        } else { # there is no response (unsupervised)
+            keep.forest <- FALSE
+            sampsize <- sampsize * 2
+        }
+        if(!is.null(ytest)) {
+            if(NCOL(ytest) != 1)
+                stop("ytest should have a single column")
+            if (!is.factor(ytest) && NROW(ytest) == 0)
+                stop("assigned ytest is empty")
+            if(is.data.frame(ytest)) ytest <- ytest[,1]
+            if(is.null(xtest)) 
+                stop("xtest is not available")
+            if(NROW(ytest) != NROW(xtest))
+                stop("length of ytest must be the same as xtest")
+        }
+    } # if-else
 
     ## Make sure mtry is in reasonable range.
     if (mtry < 1 || mtry > nFeatures)
@@ -143,15 +183,17 @@ function(x, nExecutor, ...)
     # the forced argument for the internal randomForest functions
     do.trace <- FALSE
     keep.inbag=FALSE
+    corr.bias=FALSE # remove it from the interface because it is said it is experimental
 
     # this list helps to pass the value of input arguments to the workers even when they are assigned variables  
     if(trace)
         cat("Listing the input data\n")
+    if(proximity) warning("Calculating and storing proximity matrix is very memory inefficient.")
     # it is better to apply norm.votes after combine
     inputData <- list(ntree=ntree, mtry=mtry, 
             replace=replace, classwt=classwt, sampsize=sampsize,
             nodesize=nodesize, maxnodes=maxnodes, importance=importance, localImp=localImp,
-            nPerm=nPerm,
+            nPerm=nPerm, proximity=proximity,
             keep.forest=keep.forest, corr.bias=corr.bias, nExecutor=nExecutor)
     # these arguments don't have default values in the original signature of the function
     if (!missing(cutoff))
@@ -177,7 +219,7 @@ function(x, nExecutor, ...)
     outdl <- dlist(nExecutor)
 
     if (is.matrix(x) || is.data.frame(x)) {
-    ## Case 1
+    ## Case 1- compatible to their types in randomForest
         # validating xtest
         if(!is.null(xtest)) {
             if(is.darray(xtest) || is.dframe(xtest) || is.dlist(xtest))
@@ -194,19 +236,27 @@ function(x, nExecutor, ...)
                 stop("The type of 'ytest' should be consistent with 'y'")
         }
 
-        # Each argument of foreach function is limited to 64MB
+        # Each argument of foreach function is limited to 2GB
         # parallel creation of the sub-forests
         foreach(i, 1:nExecutor, progress=trace, trainModel <- function(oli=splits(outdl,i), inputD=inputData, x=x, 
                 y=if(is.null(y)) TRUE else y, xtest=if(is.null(xtest)) TRUE else xtest,
                 ytest=if(is.null(ytest)) TRUE else ytest, idx=i, .local_randomForest.default=.local_randomForest.default) {
             library(randomForest)
             inputD$x <- x
-            if(!is.logical(y))
-                inputD$y <- y
+            if(!is.logical(y)) {
+                if(is.character(y))
+                    inputD$y <- factor(y)
+                else
+                    inputD$y <- y
+            }
             if(!is.logical(xtest))
                 inputD$xtest <- xtest
-            if(!is.logical(ytest))
-                inputD$ytest <- ytest
+            if(!is.logical(ytest)) {
+                if(is.character(ytest))
+                    inputD$ytest <- factor(ytest)
+                else
+                    inputD$ytest <- ytest
+            }
             # determining number of trees for this sub-forest
             quotient <- inputD$ntree %/% inputD$nExecutor
             remainder <- inputD$ntree %% inputD$nExecutor
@@ -215,7 +265,11 @@ function(x, nExecutor, ...)
 
             set.seed(inputD$setSeed[idx])
 
-            oli <- list(do.call(".local_randomForest.default", inputD))
+            oli <- tryCatch({
+                        list(do.call(".local_randomForest.default", inputD))
+                    }, error = function(e){
+                        oli <- list(error=e)
+                    })
 
             if( inherits(oli[[1]], "randomForest") ) { # when there is no error
                 # y is the same for all trees
@@ -232,54 +286,59 @@ function(x, nExecutor, ...)
 
             update(oli)
         })
-    } else if (is.darray(x) || is.dframe(x)) {
-    ## Case 2 & Case 3 & Case 4 & Case 5
-        if(is.darray(x) && x@sparse)
+    } else if (is.darray(x)) {
+    ## Case 2- They are all (in the case of existance) of type darray
+        if(is.invalid(x)) stop("'x' should not be an empty darray")
+        if(x@sparse)
             stop("Sparse darray is not supported for x")
         # validating xtest
         if(!is.null(xtest)) {
-            if(is.darray(x) && !is.darray(xtest))
+            if(!is.darray(xtest))
                 stop("The type of 'xtest' should be consistent with 'x'")
-            if(is.dframe(x) && !is.dframe(xtest))
-                stop("The type of 'xtest' should be consistent with 'x'")
-            if(is.darray(xtest) && xtest@sparse)
+            if(is.invalid(xtest)) stop("'xtest' should not be an empty darray")
+            if(xtest@sparse)
                 stop("Sparse darray is not supported for xtest")
-        } else # splits of this dframe will have 0 columns and 0 rows which can be indication of its being NULL insdide foreach 
-            xtest <- dframe(c(nExecutor,1),c(1,1)) 
+        } else # splits of this darray will have 0 columns and 0 rows which can be indication of its being NULL insdide foreach 
+            xtest <- darray(c(1,1),c(1,1),data=NA) 
         # validating y
         if(!is.null(y)) {
-            if(!is.darray(y) && !is.dframe(y))
-                stop("The type of 'y' should be with darray or dframe")
-            if(is.darray(y) && y@sparse)
+            if(!is.darray(y))
+                stop("The type of 'y' should be consistent with 'x'")
+            if(is.invalid(y)) stop("'y' should not be an empty darray")
+            if(y@sparse)
                 stop("Sparse darray is not supported for y")
-            if(is.darray(y) && Stratify) stop("sampsize should be of length one")
-        } else # splits of this dframe will have 0 columns and 0 rows which can be indication of its being NULL insdide foreach 
-            y <- dframe(c(nExecutor,1),c(1,1)) 
+            if(Stratify) stop("sampsize should be of length one")
+        } else # splits of this darray will have 0 columns and 0 rows which can be indication of its being NULL insdide foreach 
+            y <- darray(c(1,1),c(1,1),data=NA) 
         # validating ytest
         if(!is.null(ytest)) {
             if(is.null(y))
                 stop("The type of 'ytest' should be consistent with 'y'")
-            if(is.darray(y) && !is.darray(ytest))
+            if(!is.darray(ytest))
                 stop("The type of 'ytest' should be consistent with 'y'")
-            if(is.dframe(y) && !is.dframe(ytest))
-                stop("The type of 'ytest' should be consistent with 'y'")
-            if(is.darray(ytest) && ytest@sparse)
+            if(is.invalid(ytest)) stop("'ytest' should not be an empty darray")
+            if(ytest@sparse)
                 stop("Sparse darray is not supported for ytest")
-        } else # splits of this dframe will have 0 columns and 0 rows which can be indication of its being NULL insdide foreach 
-            ytest <- dframe(c(nExecutor,1),c(1,1)) 
+        } else # splits of this darray will have 0 columns and 0 rows which can be indication of its being NULL insdide foreach 
+            ytest <- darray(c(1,1),c(1,1),data=NA) 
 
-        # Each argument of foreach function is limited to 64MB
+        # Each argument of foreach function is limited to 2GB
         # parallel creation of the sub-forests
         foreach(i, 1:nExecutor, progress=trace, trainModel <- function(oli=splits(outdl,i), inputD=inputData, x=splits(x), 
-                y=splits(y), xtest=splits(xtest), ytest=splits(ytest), idx=i, .local_randomForest.default=.local_randomForest.default) {
+                y=splits(y), xtest=splits(xtest), ytest=splits(ytest), idx=i, .local_randomForest.default=.local_randomForest.default, 
+                xcoln=colnames(x), xtestcoln=colnames(xtest)) { # this line can be omitted after the problem of splits in passing colnames is resolved
             library(randomForest)
-            inputD$x <- x   # x is of type data.frame
-            if(NROW(y) != 0)
-                inputD$y <- y[,1] # y will become of type factor when it is categorial. It must have a single column
-            if(NROW(xtest) != 0)
+            colnames(x) <- xcoln
+            inputD$x <- x
+            if(! all(is.na(y)))
+                inputD$y <- y[,1]
+            if(! all(is.na(xtest))) {
+                colnames(xtest) <- xtestcoln
                 inputD$xtest <- xtest
-            if(NROW(ytest) != 0)
+            }
+            if(! all(is.na(ytest)))
                 inputD$ytest <- ytest[,1]
+                
             # determining number of trees for this sub-forest
             quotient <- inputD$ntree %/% inputD$nExecutor
             remainder <- inputD$ntree %% inputD$nExecutor
@@ -288,7 +347,73 @@ function(x, nExecutor, ...)
 
             set.seed(inputD$setSeed[idx])
 
-            oli <- list(do.call(".local_randomForest.default", inputD))
+            oli <- tryCatch({
+                        list(do.call(".local_randomForest.default", inputD))
+                    }, error = function(e){
+                        oli <- list(error=e)
+                    })
+
+            if( inherits(oli[[1]], "randomForest") ) { # when there is no error
+                # y is the same for all trees
+                if(idx != 1) 
+                    oli[[1]]$y <- NULL
+                if(oli[[1]]$type == "classification") {
+                    # confusion will be calculated after combine
+                    oli[[1]]$confusion <- NULL
+                } else if(oli[[1]]$type == "unsupervised") {
+                    # votes for unsupervised mode can be removed
+                    oli[[1]]$votes <- NULL
+                }
+            }
+
+            update(oli)
+        })
+    } else if (is.dframe(x)) {
+    ## Case 3- x is of type dframe; y, xtest, and ytest are not supported at this case
+        # validating xtest
+            # it is already checked that xtest is NULL
+        # validating y
+            # it is already checked that y is NULL 
+        # validating ytest
+            # it is already checked that ytest is NULL
+        # Each argument of foreach function is limited to 2GB
+        # parallel creation of the sub-forests
+        foreach(i, 1:nExecutor, progress=trace, trainModel <- function(oli=splits(outdl,i), inputD=inputData, x=splits(x), 
+                formula=formula, idx=i, .local_randomForest.default=.local_randomForest.default) {
+            library(randomForest)
+            
+            if(length(all.vars(formula)) != length(all.vars(formula[[2]]))) { # there is a response
+                xnames <- all.vars(formula[[3]])
+                yname <- all.vars(formula[[2]])
+                if("." %in% xnames) {
+                    allNames <- colnames(x)
+                    names(allNames) <- allNames
+                    xnames <- allNames[- which(names(allNames) == yname)]
+                }
+                inputD$x <- x[xnames]   # x is of type data.frame
+                if(is.character(x[,yname])) {# y will be either a numeric vector or a factor
+                    inputD$y <- factor(x[,yname])
+                    yCategories <- levels(inputD$y)
+                    if("" %in% yCategories) stop("Found an empty category in the response")
+                } else
+                    inputD$y <- x[,yname]
+            } else { # there is no response (clustering)
+                inputD$x <- x   # x is of type data.frame
+            }
+
+            # determining number of trees for this sub-forest
+            quotient <- inputD$ntree %/% inputD$nExecutor
+            remainder <- inputD$ntree %% inputD$nExecutor
+            if( idx <= remainder) inputD$ntree <- quotient + 1
+            else inputD$ntree <- quotient
+
+            set.seed(inputD$setSeed[idx])
+
+            oli <- tryCatch({
+                        list(do.call(".local_randomForest.default", inputD))
+                    }, error = function(e){
+                        oli <- list(error=e)
+                    })
 
             if( inherits(oli[[1]], "randomForest") ) { # when there is no error
                 # y is the same for all trees
@@ -307,7 +432,7 @@ function(x, nExecutor, ...)
         })
     } else {
     ## Not supported type
-        stop("the only supported structures for x are: 'matrix', 'data.frame', 'darray', and 'dframe'")
+        stop("the only supported structures for x are: 'matrix', 'data.frame', 'darray', and 'dframe'. When x is a 'dframe', the formula interface should be used.")
     }
     
     if(trace)
@@ -344,7 +469,7 @@ function(x, nExecutor, ...)
 
     rf <- do.call("combine", rflist)
     rf$call <- m
-    class(rf) <- c("randomForest", "hpdrandomForest")
+    class(rf) <- c("hpdrandomForest", "randomForest")
 
     # adding combined err.rate, mse, and rsq
     if(rf$type == "classification") {
@@ -382,12 +507,47 @@ function(x, nExecutor, ...)
         rf$oob.times <- oob.times
         rf$predicted <- predicted / oob.times
     }
+    
+    # Saving the terms
+    if(rf$type == "classification" || rf$type == "regression") {
+        if(is.dframe(x)) {
+            yname <- all.vars(formula[[2]])
+            xnames <- all.vars(formula[[3]])
+            if("." %in% xnames) {
+                allNames <- colnames(x)
+                names(allNames) <- allNames
+                xnames <- allNames[- which(names(allNames) == yname)]
+            }
+        } else {
+            yname <- names(y)
+            if(is.null(yname)) yname <- colnames(y)
+            xnames <- names(x)
+            if(is.null(xnames)) xnames <- colnames(x)
+        }
+        if(!is.null(yname) && !is.null(xnames) && length(yname)==1 ) {
+            rf$terms <- terms(as.formula(paste(yname, paste(xnames, collapse=" + "), sep=" ~ ")))
+            environment(rf$terms) <- globalenv()
+        }
+    }
+    
+    # we do not provide this feature
+    rf$inbag <- NULL    # keep.inbag=FALSE
+    rf$coefs <- NULL    # corr.bias=FALSE
+
+    if(! completeModel) {
+        rf$y <- NULL
+        rf$oob.times <- NULL
+        rf$votes <- NULL
+        rf$predicted <- NULL
+        rf$test <- NULL
+        rf$proximity <- NULL
+    }
 
     rf
 } # "hpdrandomForest.default"
 
 ###################################################################################
-### code gratefully copied from randomForest.default (package randomForest_4.6-7).
+### code gratefully copied from randomForest.default (package randomForest_4.6-10).
 ## all stop commands are removed. Therefore, the error message is returned instead of crashing the distributedR environment.
 .local_randomForest.default <-
     function(x, y=NULL,  xtest=NULL, ytest=NULL, ntree=500,
@@ -404,8 +564,8 @@ function(x, nExecutor, ...)
              keep.inbag=FALSE, ...) {
 
     # proximity is very memory inefficient
-    proximity <- FALSE
-    oob.prox <- FALSE
+    # proximity <- FALSE
+    # oob.prox <- FALSE
     ## mylevels() returns levels if given a factor, otherwise 0.
     mylevels <- function(x) if (is.factor(x)) levels(x) else 0
     ## a list for collecting all warning messages
@@ -420,7 +580,7 @@ function(x, nExecutor, ...)
         return("Need at least two classes to do classification.")
     n <- nrow(x)
     p <- ncol(x)
-    if (n == 0) return("data (x) has 0 rows")
+    if (n == 0) stop("data (x) has 0 rows")
     x.row.names <- rownames(x)
     x.col.names <- if (is.null(colnames(x))) 1:ncol(x) else colnames(x)
 
@@ -439,7 +599,6 @@ function(x, nExecutor, ...)
     if (mtry < 1 || mtry > p)
         warningMsg[[length(warningMsg)+1]] <- "invalid mtry: reset to within valid range"
     mtry <- max(1, min(p, round(mtry)))
-
     if (!is.null(y)) {
         if (length(y) != n) return("length of response must be the same as predictors")
         addclass <- FALSE
@@ -481,8 +640,8 @@ function(x, nExecutor, ...)
         xlevels <- as.list(rep(0, p))
     }
     maxcat <- max(ncat)
-    if (maxcat > 32)
-        return("Can not handle categorical predictors with more than 32 categories.")
+    if (maxcat > 53)
+        return("Can not handle categorical predictors with more than 53 categories.")
 
     if (classRF) {
         nclass <- length(levels(y))
@@ -525,7 +684,7 @@ function(x, nExecutor, ...)
         }
     } else addclass <- FALSE
 
-#A    if (missing(proximity)) proximity <- addclass
+    if (missing(proximity)) proximity <- addclass
     if (proximity) {
         prox <- matrix(0.0, n, n)
         proxts <- if (testdat) matrix(0, ntest, ntest + n) else double(1)
@@ -758,6 +917,9 @@ function(x, nExecutor, ...)
                     x.row.names))) else NULL),
                     inbag = if (keep.inbag) rfout$inbag else NULL)
     } else {
+		ymean <- mean(y)
+		y <- y - ymean
+		ytest <- ytest - ymean
         rfout <- .C("regRF",
                     x,
                     as.double(y),
@@ -811,7 +973,7 @@ function(x, nExecutor, ...)
             rfout$bestvar <-
                 rfout$bestvar[1:max.nodes, , drop=FALSE]
             rfout$nodepred <-
-                rfout$nodepred[1:max.nodes, , drop=FALSE]
+                rfout$nodepred[1:max.nodes, , drop=FALSE] + ymean
             rfout$xbestsplit <-
                 rfout$xbestsplit[1:max.nodes, , drop=FALSE]
             rfout$leftDaughter <-
@@ -828,7 +990,7 @@ function(x, nExecutor, ...)
         }
         out <- list(call = cl,
                     type = "regression",
-                    predicted = structure(ypred, names=x.row.names),
+                    predicted = structure(ypred + ymean, names=x.row.names),
                     mse = rfout$mse,
                     rsq = 1 - rfout$mse / (var(y) * (n-1) / n),
                     oob.times = rfout$oob.times,
@@ -843,7 +1005,7 @@ function(x, nExecutor, ...)
                                                x.row.names)) else NULL,
                     proximity = if (proximity) matrix(rfout$prox, n, n,
                     dimnames = list(x.row.names, x.row.names)) else NULL,
-                    ntree = ntree,
+                   ntree = ntree,
                     mtry = mtry,
                     forest = if (keep.forest)
                     c(rfout[c("ndbigtree", "nodestatus", "leftDaughter",
@@ -852,9 +1014,9 @@ function(x, nExecutor, ...)
                       list(ncat = ncat), list(nrnodes=max.nodes),
                       list(ntree=ntree), list(xlevels=xlevels)) else NULL,
                     coefs = if (corr.bias) rfout$coef else NULL,
-                    y = y,
+                    y = y + ymean,
                     test = if(testdat) {
-                        list(predicted = structure(rfout$ytestpred,
+                        list(predicted = structure(rfout$ytestpred + ymean,
                              names=xts.row.names),
                              mse = if(labelts) rfout$msets else NULL,
                              rsq = if(labelts) 1 - rfout$msets /
@@ -871,6 +1033,6 @@ function(x, nExecutor, ...)
     }
     class(out) <- "randomForest"
     out$warnings <- warningMsg
-    out$proximity <- NULL # proximity is very memory inefficient
+    # out$proximity <- NULL # proximity is very memory inefficient
     return(out)
 }

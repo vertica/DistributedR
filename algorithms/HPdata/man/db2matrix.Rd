@@ -5,18 +5,18 @@
 db2matrix function is an example for loading a set of unlabeled samples stored in a table to a matrix. It is assumed that samples are stored in a single table. All the rows of the table will be read, and each row will be a sample.
 }
 \usage{
-db2matrix(tableName, features = list(...), conf)
+db2matrix(tableName, dsn, features = list(...))
 }
 
 \arguments{
   \item{tableName}{
     it is the name of the table in the database in string format.
   }
+  \item{dsn}{
+    the Data Source Name(DSN) as provided in ODBC.INI file to connect to the database.
+  }
   \item{features}{
     the list of the name of columns corresponding to the features of a sample.
-  }
-  \item{conf}{
-    the name of configuration in ODBC.INI file for connecting to the database.
   }
 }
 
@@ -25,7 +25,7 @@ db2matrix(tableName, features = list(...), conf)
 }
 
 \author{
-Arash Fard <afard@vertica.com>
+    HP Vertica Analytics Team
 }
 
 \examples{
@@ -33,7 +33,7 @@ Arash Fard <afard@vertica.com>
     # Assuming that centers are stored in a table named "centers",
     # and the names of the columns are "col1", "col2", "col3", and "col4". 
     loadedCenters <- db2matrix ("centers", list("col1", "col2", 
-    "col3", "col4"), conf="RDev")
+    "col3", "col4"), dsn="RDev")
  }
 }
 

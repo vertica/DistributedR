@@ -15,12 +15,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 #########################################################
+#
 #  File hpdpagerank.R
 #  Distributed pagerank 
-#
-#
 #  
-#  Aarsh Fard (afard@vertica.com)
 #
 #########################################################
 
@@ -44,7 +42,8 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
   }
   directed = TRUE # the first version treats any graph as a directed graph
   ### Argument checks
-  if (!is.darray(dgraph)) { stop("dgraph argument must be of type darray") }
+  if (!is.darray(dgraph)) stop("dgraph argument must be of type darray")
+  if (is.invalid(dgraph)) stop("'dgraph' should not be an empty darray")
   nVertices <- nrow(dgraph) # number of vertices in the graph
   if (nVertices != ncol(dgraph)) { stop("The input adjacency matrix must be square") }
   if (nVertices != dgraph@blocks[1]) { stop("The input adjacency matrix must be partitioned column-wise") }
@@ -136,7 +135,7 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
 
       #Let's get the number of outgoing edges in each partition
       if (trace) {
-        cat("Calculating the number of outgoing edges in each partition)\n")
+        cat("Calculating the number of outgoing edges in each partition\n")
         starttime<-proc.time()
       }
       if (is.null(weights)) { # when there is no weight on the edges
@@ -251,6 +250,7 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
       update(diff)
     })
     maxdiff <- max(diffArray)
+    if(is.na(maxdiff)) stop("An error occured in the calculation most likely because of missed values in dgraph. You may use na_action='exclude' to overwrite the missed values with 0.")
     # swaping the PR vectors
     tempPR <- PR
     PR <- PR_new

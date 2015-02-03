@@ -15,9 +15,8 @@
 #Suite 330, Boston, MA 02111-1307 USA
 #####################################################################
 
-
 Name:    vertica-distributedR
-Version: 0.7.0
+Version: 1.0.0
 Release: 0.%{?build_number}%{?dist}
 Summary: An environment for executing R functions in a distributed manner.
 
@@ -27,28 +26,18 @@ License: proprietary
 URL:     http://www.vertica.com/  
 
 %define ldconfig_file %{name}-x86_64.conf     
-%define Rinside RInside_0.2.10.tar.gz
-%define Rcpp Rcpp_0.10.6.tar.gz
-%define XML XML_3.98-1.1.tar.gz
-%define datatable data.table_1.8.10.tar.gz
-%define HPDGLM HPDGLM
+%define HPdregression HPdregression
 %define HPdcluster HPdcluster
 %define HPdgraph HPdgraph
 %define HPdclassifier HPdclassifier
-%define randomForest randomForest_4.6-7.tar.gz
 %define HPdata HPdata
 
 Source0: %{name}-%{version}.tar.gz       
 Source1: %{ldconfig_file}
-Source2: %{Rinside}
-Source3: %{Rcpp}
-Source4: %{XML}
-Source5: %{datatable}
-Source6: %{HPDGLM}
+Source6: %{HPdregression}
 Source7: %{HPdcluster}
 Source8: %{HPdgraph}
 Source9: %{HPdclassifier}
-Source10: %{randomForest}
 Source11: %{HPdata}
 
 BuildRoot:   %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
@@ -57,25 +46,21 @@ BuildRoot:   %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 # We do this because rpm gets confused about R module dependencies.
 AutoReqProv: no
 
-BuildRequires:  protobuf-devel, protobuf-compiler, libxml2-devel
-BuildRequires:  zlib-devel, zeromq-devel libaio-devel
-Requires:       protobuf, libxml2, libxml2-devel, libaio, zeromq
+#BuildRequires:  protobuf-devel, protobuf-compiler, libxml2-devel
+#BuildRequires:  zlib-devel, zeromq-devel libaio-devel
+#Requires:       protobuf, libxml2, libxml2-devel, libaio, zeromq
 
 %description
 R is a single-threaded process.  This limits its utility for big data analytics.  Vertica Distributed-R allows Vertica users to write programs which will be executed in distributed fashion, that is, parts of programs as specified by the developer can be run in multiple, parallel single-threaded R-processes.  The result is dramatically reduced execution times for big data  analytical algorithms.
 
+Build revision: %{scm_revision}
 %prep
 %setup -q
 cp -pv %SOURCE1 .
-cp -pv %SOURCE2 .
-cp -pv %SOURCE3 .
-cp -pv %SOURCE4 .
-cp -pv %SOURCE5 .
 cp -rpv %SOURCE6 .
 cp -rpv %SOURCE7 .
 cp -rpv %SOURCE8 .
 cp -rpv %SOURCE9 .
-cp -pv %SOURCE10 .
 cp -rpv %SOURCE11 .
 
 %build
@@ -90,13 +75,8 @@ install -d %{_install_base}/third_party/lib/atomicio
 install -d $RPM_BUILD_ROOT/%_sysconfdir/ld.so.conf.d/
 
 install -m 644 %{ldconfig_file}   $RPM_BUILD_ROOT/%_sysconfdir/ld.so.conf.d/
-install -m 444 %{Rinside}         %{_install_base}/third_party/R_addons/
-install -m 444 %{Rcpp}            %{_install_base}/third_party/R_addons/
-install -m 444 %{XML}             %{_install_base}/third_party/R_addons/
-install -m 444 %{datatable}         %{_install_base}/third_party/R_addons/
-install -m 444 %{randomForest}    %{_install_base}/third_party/R_addons/
 
-rsync -axv --exclude=.svn %{HPDGLM}        %{_install_base}/third_party/R_addons/
+rsync -axv --exclude=.svn %{HPdregression} %{_install_base}/third_party/R_addons/
 rsync -axv --exclude=.svn %{HPdcluster}    %{_install_base}/third_party/R_addons/
 rsync -axv --exclude=.svn %{HPdgraph}      %{_install_base}/third_party/R_addons/
 rsync -axv --exclude=.svn %{HPdclassifier} %{_install_base}/third_party/R_addons/
@@ -121,6 +101,10 @@ rm -rf $RPM_BUILD_ROOT
 %_sysconfdir/ld.so.conf.d/%{ldconfig_file}
 
 %pre
+%define _logdir /tmp/distributedR_addons
+rm -rf  %{_logdir}/
+mkdir -pv %{_logdir} > /dev/null 2>&1
+
 which R > /dev/null 2>&1
 if [ $? -ne 0 ]; then
     echo 
@@ -131,23 +115,24 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+##Remove old packages in case of upgrades
+if [ "$1" -eq "2" ]; then 
+echo "Removing old distributedR packages" >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE HPdata >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE HPdregression >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE HPdcluster >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE HPdgraph >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE HPdclassifier >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE MatrixHelper >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE Executor >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE distributedR >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+fi
+
 %post
-%define _logdir /tmp/distributedR_addons
-rm -rf  %{_logdir}/
-mkdir -pv %{_logdir}
+mkdir -p /tmp/distributedR_addons
 chmod 777 /dev/shm
 
 /sbin/ldconfig -v > %{_logdir}/ldconfig.log 2>&1
-for ADDON in %{Rcpp} %{Rinside} %{XML} %{datatable} %{randomForest}; do
-    echo "Installing $ADDON"
-    echo "Installing $ADDON" >>  %{_logdir}/vertica_distributedR_addon_install.log
-    R CMD INSTALL /opt/hp/distributedR/third_party/R_addons/$ADDON >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
-    if [ $? -ne 0 ]; then
-        echo "... error"
-        exit 1
-    fi
-    /sbin/ldconfig -v >> %{_logdir}/ldconfig.log 2>&1
-done
 
 for thing in distributedR Executor MatrixHelper; do
     echo "Installing $thing"
@@ -160,7 +145,7 @@ for thing in distributedR Executor MatrixHelper; do
     /sbin/ldconfig -v >> %{_logdir}/ldconfig.log 2>&1
 done
 
-for ADDON in HPDGLM HPdcluster HPdgraph HPdclassifier HPdata; do
+for ADDON in HPdregression HPdcluster HPdgraph HPdclassifier HPdata; do
     echo "Installing $ADDON"
     echo "Installing $ADDON" >>  %{_logdir}/vertica_distributedR_addon_install.log
     R CMD INSTALL /opt/hp/distributedR/third_party/R_addons/$ADDON >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
@@ -172,19 +157,26 @@ for ADDON in HPDGLM HPdcluster HPdgraph HPdclassifier HPdata; do
 done
 
 %preun
-R CMD REMOVE HPdata
-R CMD REMOVE HPDGLM
-R CMD REMOVE HPdcluster
-R CMD REMOVE HPdgraph
-R CMD REMOVE HPdclassifier
-R CMD REMOVE MatrixHelper
-R CMD REMOVE Executor
-R CMD REMOVE distributedR
+mkdir -p /tmp/distributedR_addons
+##Remove old packages only in case of uninstallation
+if [ "$1" -eq "0" ]; then
+echo "Uninstalling distributedR" >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE HPdata >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE HPdregression >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE HPdcluster >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE HPdgraph >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE HPdclassifier >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE MatrixHelper >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE Executor >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+R CMD REMOVE distributedR >> %{_logdir}/vertica_distributedR_addon_install.log 2>&1
+fi
 
 %postun
 /sbin/ldconfig
 
 %changelog
+* Mon Dec 01 2014 Rich Zeliff <richard.zeliff@hp.com> 1.0.0
+  - Removed unnecessary R language addon packs
 * Wed Jan 29 2014 Arash Fard <arash.jalal-zadeh-fard@hp.com> 0.4.0
   Added HPdata to the RPM 
 * Tue Jan 21 2014 Arash Fard <arash.jalal-zadeh-fard@hp.com> 0.3.0

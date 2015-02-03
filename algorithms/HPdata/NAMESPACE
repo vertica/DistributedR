@@ -1,3 +1,3 @@
+useDynLib(HPdata)
 exportPattern("^[[:alpha:]]+")
 import(distributedR)
-useDynLib(HPdata, hpdsplitter)

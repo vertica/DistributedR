@@ -41,7 +41,7 @@
 #include <boost/thread/condition_variable.hpp>
 #include <boost/thread/locks.hpp>
 
-using namespace boost;
+//using namespace boost;
 using namespace std;
 using namespace zmq;
 
@@ -80,10 +80,10 @@ class MasterClient {
 
   string endpoint_;
   bool running_;
-  thread *thr_;
+  boost::thread *thr_;
 
-  mutex message_queue_mutex_;
-  condition_variable message_queue_empty_;
+  boost::mutex message_queue_mutex_;
+  boost::condition_variable message_queue_empty_;
   list<MasterRequest> message_queue_;
 };
 

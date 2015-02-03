@@ -34,7 +34,7 @@
       Learning and Graph Processing with Sparse
       Matrices. \emph{EuroSys'13},
       197--210.
-      \item Homepage: http://www.hpl.hp.com/research/distributedr.htm
+      \item Homepage: http://www.vertica.com/distributedr
 %      \item Mailing list: presto-dev@external.groups.hp.com
     }
   }

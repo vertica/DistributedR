@@ -23,6 +23,8 @@
 
 #include "DistributedObjectMap.h"
 
+using namespace boost;
+
 namespace presto {
 
 /** DistributedObjectMap constructor

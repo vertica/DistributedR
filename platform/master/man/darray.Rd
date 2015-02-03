@@ -7,7 +7,8 @@
   blocks. Distributed arrays can store only numeric data.}
 
 \usage{
-darray (dim, blocks, sparse = FALSE, data = 0, empty=FALSE)
+darray (dim, blocks, sparse = FALSE, data = 0, empty=FALSE, distribution_policy='roundrobin')
+darray (npartitions, sparse = FALSE, distribution_policy='roundrobin')
 }
 
 \arguments{
@@ -16,7 +17,10 @@ darray (dim, blocks, sparse = FALSE, data = 0, empty=FALSE)
   columns.}
   \item{sparse}{logical. Indicates if input array is a sparse.}
   \item{data}{initial value of all elements in array. Default is 0.}
-  \item{empty}{if TRUE array is left unitialized, each partition is a zero matrix. Default is FALSE.}
+  \item{empty}{if TRUE array is left unitialized, each partition is a zero matrix. Default is FALSE unless used with 'npartitions'.}
+  \item{npartitions}{vector specifying number of partitions.}
+  \item{distribution_policy}{defines policy to distribute array partitions across the workers.
+  The distribution policy used is 'roundrobin'. Currently, this argument is only for internal use.}
 }
 
 \details{ By default, array partitions are internally stored as dense
@@ -27,6 +31,19 @@ size. For example, the distributed array \code{darray(dim=c(5,5),
 blocks=c(2,5))} has three partitions. The first two partitions have two
 rows each but the last partition has only one row. All three partitions
 have five columns. 
+
+ Distributed arrays can also be defined by specifying just the number
+of partitions, but not their sizes. This flexibility is useful
+when the size of an array is not known apriori. For example,
+\code{darray(npartitions=c(5,1))} is a dense array with five
+partitions.  Each partition can contain any number of rows, though the
+number of columns should be same to conform to a well formed array.
+
+Too many partitions increase the overheads of managing distributed
+objects.  We recommend users to create objects with as many partitions
+as the total number of CPU cores in the system.  We restrict users
+from creating objects when the number of partitions is more than
+20,000 or more than 50x the number of CPU cores.
 
   Distributed arrays can be read-shared by multiple concurrent tasks,
 but modified by only a single writer per partition.  Programmers express
@@ -40,7 +57,7 @@ using \code{\link{update}}.
  \code{\link{getpartition}}. Number of partitions can be obtained by
  \code{\link{npartitions}}. Partitions are numbered from left to right,
  and then top to bottom, i.e., row major order. Dimension of each partition can 
- be obtained using \code{\link{dimpartition}}.
+ be obtained using \code{\link{partitionsize}}.
 }
 
 \value{ Returns a distributed array with the specified dimensions.  Data
@@ -52,7 +69,7 @@ using \code{\link{update}}.
   AuYoung, A., and Schreiber, R. (2013) Presto: Distributed Machine
   Learning and Graph Processing with Sparse Matrices. \emph{EuroSys'13},
   197--210.
-  \item Homepage: http://www.hpl.hp.com/research/distributedr.htm
+  \item Homepage: http://www.vertica.com/distributedr
 %  \item Mailing list: presto-dev@external.groups.hp.com
 }
 }
@@ -75,14 +92,26 @@ using \code{\link{update}}.
 \dontrun{
 library(distributedR)
 distributedR_start()
+
 ##Sparse array of size 10X10 with 10 partitions and each partition is of size 1X10
 da<-darray(dim=c(10,10), blocks=c(1,10), sparse=TRUE) 
 getpartition(da)
 cat("Input matrix dimension: ", da@dim, " block dimension: ", da@blocks,
 " total number of partitions: ", npartitions(da),"\n")
+
 ##Dense array of size 9X9 with 3 partitions and each partition is of size 3X3
 db<-darray(dim=c(9,9), blocks=c(3,3), sparse=FALSE, data=11)
 cat("value of 3rd partition is: \n", getpartition(db,3),"\n")
+
+##Flexible sized dense array. Five partitions, each with variable number of rows.
+dc<-darray(npartitions=c(5,1))
+foreach(i, 1:npartitions(dc), initArrays<-function(y=splits(dc,i), index=i) {
+     y<-matrix(index, nrow=index,ncol=5)
+     update(y)
+})
+cat("value of 2nd partition is: \n")
+getpartition(dc,2)
+getpartition(dc)
 distributedR_shutdown()
 }
 }

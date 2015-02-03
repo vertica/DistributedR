@@ -60,14 +60,13 @@ class DataLoaderManager {
   SEXP GetLoaderParameterUniform();
   SEXP GetLoaderParameterLocal(SEXP table_metadata);
   SEXP FetchLoaderStatus(SEXP UDx_result);
-  SEXP DataLoaderError(SEXP UDx_error);
   SEXP getNPartitions();
   SEXP getFileIDs();
 
   void WorkerLoaderComplete(WorkerInfo* workerinfo, int64_t nparitions);
   void LoadComplete();
 
-  unordered_map<int32_t, uint64_t> GetPartitionMap() {
+  boost::unordered_map<int32_t, uint64_t> GetPartitionMap() {
     return partitions_worker_id_map_;
   }
 
@@ -84,7 +83,7 @@ class DataLoaderManager {
   int split_size_;
   int totalPartitions;
   bool invalid_ports;
-  unordered_map<int32_t, uint64_t> partitions_worker_id_map_;
+  boost::unordered_map<int32_t, uint64_t> partitions_worker_id_map_;
   vector<int32_t> loader_workers_;
   map<int32_t, int32_t> file_id_map_;
   map<WorkerInfo*, int> worker_port_info;
@@ -93,7 +92,7 @@ class DataLoaderManager {
 
   boost::interprocess::interprocess_semaphore loader_sema_;
 
-  mutex loader_mutex;
+  boost::mutex loader_mutex;
 };
 
 }
