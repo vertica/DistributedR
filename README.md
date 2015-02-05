@@ -7,7 +7,7 @@ The Distributed R platform exposes data structures, such as distributed arrays, 
 
 Using Distributed R constructs, data can be loaded in parallel from any data source. Distributed R also provides a parallel data loader from the Vertica database. Please see vRODBC repository.
 
-Distributed R is delivered in a single, easy-to-install rpm file. The rpm installs the platform and all parallel algorithm R packages. Please download it from from www.vertica.com/marketplace.
+Distributed R is delivered in a single tar.gz file. It contains easy-to-run scripts to install requisite packages and libraries, platform and all parallel algorithm R packages offered by Distributed R. Please register and download it from https://my.vertica.com/downloads/hp-vertica-distributed-r-1-0-0. Complete product documentation can be downloaded from http://www.vertica.com/hp-vertica-documentation/hp-vertica-distributed-r-1-0-x-product-documentation.
 
 How to Contribute
 ============
