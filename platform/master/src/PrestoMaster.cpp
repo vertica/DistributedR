@@ -299,9 +299,9 @@ vector<int32_t> PrestoMaster::WorkerPorts() {
  * @return a map of name (ip:port) with the information of each worker
  */
 map<string, vector<size_t> > PrestoMaster::GetWorkerStatus() {
-  unordered_map<std::string, Worker*> wi = scheduler_->GetWorkerInfo();
+  boost::unordered_map<std::string, Worker*> wi = scheduler_->GetWorkerInfo();
   map<string, vector<size_t> > worker_info;
-  unordered_map<std::string, Worker*>::iterator wiit;
+  boost::unordered_map<std::string, Worker*>::iterator wiit;
   for (wiit = wi.begin(); wiit != wi.end(); ++wiit) {
     vector<size_t> w_stat;
     w_stat.push_back((size_t)(wiit->second->executors));
@@ -319,15 +319,15 @@ map<string, vector<size_t> > PrestoMaster::GetWorkerStatus() {
  * @return a map of name (split name) with the information of each split
  */
 map<string, vector<string> > PrestoMaster::GetDobjectInfo() {
-  unordered_map<std::string, Split*> si = scheduler_->GetSplitInfo();
+  boost::unordered_map<std::string, Split*> si = scheduler_->GetSplitInfo();
   map<string, vector<string> > split_info;
-  unordered_map<std::string, Split*>::iterator siit;
+  boost::unordered_map<std::string, Split*>::iterator siit;
   for (siit = si.begin(); siit != si.end(); ++siit) {
     vector<string> s_stat;
     // split size in KByte
     s_stat.push_back(int_to_string(siit->second->size >> 10));
-    unordered_set<Worker*> w = siit->second->workers;
-    unordered_set<Worker*>::iterator wit;
+    boost::unordered_set<Worker*> w = siit->second->workers;
+    boost::unordered_set<Worker*>::iterator wit;
     for (wit = w.begin(); wit != w.end(); ++wit) {
       s_stat.push_back(server_to_string((*wit)->server));
     }
@@ -343,8 +343,8 @@ map<string, vector<string> > PrestoMaster::GetDobjectInfo() {
  * @return NULL
  */
 void PrestoMaster::DeleteDobject(string da_name) {
-  unordered_map<string, Split*> si = scheduler_->GetSplitInfo();
-  unordered_map<string, Split*>::const_iterator sit = si.begin();
+  boost::unordered_map<string, Split*> si = scheduler_->GetSplitInfo();
+  boost::unordered_map<string, Split*>::const_iterator sit = si.begin();
   for (; sit != si.end(); ++sit) {
     // iterate splits and find matching names
     if (sit->first.find(da_name) != std::string::npos) {
@@ -461,7 +461,7 @@ void PrestoMaster::ConnectWorkers(const vector<ServerInfo>& workers) {
     fflush(stdout);
   }
   fprintf(stderr,"\n");
-  unordered_map<std::string, Worker*> reg_workers = scheduler_->GetWorkerInfo();
+  boost::unordered_map<std::string, Worker*> reg_workers = scheduler_->GetWorkerInfo();
   if(i == workers.size()) {
     fprintf(stderr, "All %d workers are registered.\n", workers.size());
     LOG_INFO("All %d workers are registered. Master Started.", workers.size());
@@ -486,7 +486,7 @@ void PrestoMaster::ConnectWorkers(const vector<ServerInfo>& workers) {
         // One worker in one machine per one master is enforced.
         string cand_addr = workers[j].name();
         LOG_INFO("Checking non-registered workers - %s %s", cand_addr.c_str());
-        unordered_map<std::string, Worker*>::iterator it;
+        boost::unordered_map<std::string, Worker*>::iterator it;
         for (it = reg_workers.begin(); it != reg_workers.end(); ++it) {
           LOG_INFO("Comparing with the registered worker - %s\n", it->second->server.name().c_str());
           if (cand_addr.compare(it->second->server.name()) == 0) {
@@ -847,8 +847,8 @@ RCPP_MODULE(master_module) {
 }
 
 int main(int argc, char *argv[]) {
-  char cmd[2000];
-  size_t in = fread(cmd, 1, 2000, stdin);
+  char cmd[20000];
+  size_t in = fread(cmd, 1, 20000, stdin);
   cmd[in] = '\0';
 
   optind--;  // need this for args to be passed correctly

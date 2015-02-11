@@ -387,7 +387,7 @@ int ReadRawArgs(RInside& R) {  // NOLINT
     char name[256];
     int size;
     res = scanf(" %s %d:", name, &size);
-    LOG_DEBUG("Read Raw variable %s", name);
+    LOG_DEBUG("Read Raw variable %s index: %d total: %d", name,i,raw_vars);
     if (res != 2) {
       LOG_WARN("ReadRawArgs => Variable %s - Bad file format for Executor. Executor cannot recognize commands from Worker.", name);
       throw PrestoWarningException
