@@ -196,7 +196,7 @@ void OOCScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) {
     TIMING_END(execdone)
         } else if (type == FETCH || type == LOAD) {
     // a corresponding fetch/load is done
-    unordered_set< ::uint64_t> dep_tasks = dependencies_[make_pair(worker, split)];
+    boost::unordered_set< ::uint64_t> dep_tasks = dependencies_[make_pair(worker, split)];
     dependencies_.erase(make_pair(worker, split));
 
     if (contains_key(locked_on_[split], worker)) {
@@ -223,7 +223,7 @@ void OOCScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) {
     }
     lock.unlock();
 
-    for (unordered_set< ::uint64_t>::iterator i = dep_tasks.begin();
+    for (boost::unordered_set< ::uint64_t>::iterator i = dep_tasks.begin();
          i != dep_tasks.end(); i++) {
       ::uint64_t dep_task_id = *i;
 
@@ -299,12 +299,12 @@ void OOCScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) {
     CCTask *t = reinterpret_cast<CCTask*>(task);
     cctask_ids_.erase(make_pair(t->worker, t->name));
 
-    unordered_set< ::uint64_t> dep_tasks = dependencies_cc[taskid];
+    boost::unordered_set< ::uint64_t> dep_tasks = dependencies_cc[taskid];
     dependencies_cc.erase(taskid);
     lock.unlock();
 
     // handle
-    for (unordered_set< ::uint64_t>::iterator i = dep_tasks.begin();
+    for (boost::unordered_set< ::uint64_t>::iterator i = dep_tasks.begin();
          i != dep_tasks.end(); i++) {
       ::uint64_t dep_task_id = *i;
 
@@ -415,14 +415,14 @@ void OOCScheduler::AddTask(const vector<TaskArg*> &tasks,
   OOC_LOG("...\n");
 #endif
 
-  unordered_set<Worker*> modified_workers;
+  boost::unordered_set<Worker*> modified_workers;
 
   size_t total_size = 0;
   size_t unique_size = 0;
   size_t total_size_after_skip = 0;
   size_t unique_size_after_skip = 0;
-  unordered_set<Split*> used_splits;
-  unordered_map<Split*, vector<int> > split_uses;
+  boost::unordered_set<Split*> used_splits;
+  boost::unordered_map<Split*, vector<int> > split_uses;
   vector<int> skipped;
   current_op_timer.start();
 
@@ -500,8 +500,8 @@ void OOCScheduler::AddTask(const vector<TaskArg*> &tasks,
         for (int32_t j = 0; j < arg.arrays_size(); j++) {
           metalock.lock();
           Split *split = splits[arg.arrays(j).name()];
-          unordered_set<Worker*> &locs = split->workers;
-          for (unordered_set<Worker*>::iterator i = locs.begin();
+          boost::unordered_set<Worker*> &locs = split->workers;
+          for (boost::unordered_set<Worker*>::iterator i = locs.begin();
                i != locs.end(); i++) {
             available[*i] += split->size;
           }
@@ -537,7 +537,7 @@ void OOCScheduler::AddTask(const vector<TaskArg*> &tasks,
     lock.unlock();
   }
 
-  for (unordered_set<Worker*>::iterator i = modified_workers.begin();
+  for (boost::unordered_set<Worker*>::iterator i = modified_workers.begin();
        i != modified_workers.end(); i++) {
     Worker *worker = *i;
     LOG("trying to schedule task after task creation\n");
@@ -1043,13 +1043,13 @@ size_t OOCScheduler::ExpectedMemUsage(Worker *worker) {
   // size_t ret = 0;
 
   // // splits in dram
-  // for (unordered_set<Split*>::iterator i = worker->splits_dram.begin();
+  // for (boost::unordered_set<Split*>::iterator i = worker->splits_dram.begin();
   //      i != worker->splits_dram.end(); i++) {  // BIGFOR
   //   ret += (*i)->size;
   // }
 
   // // locked splits
-  // for (unordered_map<Split*, int>::iterator i =
+  // for (boost::unordered_map<Split*, int>::iterator i =
   //          locked_splits_[worker].begin();
   //      i != locked_splits_[worker].end(); i++) {  // BIGFOR
   //   if (!contains_key(worker->splits_dram, i->first)) {
@@ -1064,13 +1064,13 @@ void OOCScheduler::FlushUnlockedSplits(Worker *worker, size_t flush_size) {
   TIMING_START(flushunlockedsplits)
       LOG("flushing at least %zuMB unlocked splits!\n", flush_size >> 20);
   unique_lock<recursive_mutex> lock(metadata_mutex);
-  unordered_set<Split*> splits_to_flush;
+  boost::unordered_set<Split*> splits_to_flush;
   if (flush_size == 0) {
     flush_size = worker->size;
   }
   size_t size = 0;
   TIMING_START(flushunlockedsplits1)
-      for (unordered_set<Split*>::iterator i = worker->splits_dram.begin();
+      for (boost::unordered_set<Split*>::iterator i = worker->splits_dram.begin();
            i != worker->splits_dram.end(); i++) {  // BIGFOR!
         // TODO(erik): this doesnt flush composites
         if (!contains_key(locked_splits_[worker], *i) &&
@@ -1088,7 +1088,7 @@ void OOCScheduler::FlushUnlockedSplits(Worker *worker, size_t flush_size) {
           size>>20, flush_size>>20);
 
   TIMING_START(flushunlockedsplits2)
-      for (unordered_set<Split*>::iterator i = splits_to_flush.begin();
+      for (boost::unordered_set<Split*>::iterator i = splits_to_flush.begin();
            i != splits_to_flush.end(); i++) {
         LOG("flushing split %s\n", (*i)->name.c_str());
         ArrayStore *store = worker->arraystores.begin()->second;
@@ -1114,7 +1114,7 @@ void OOCScheduler::FlushUnlockedSplits(Worker *worker, size_t flush_size) {
 void OOCScheduler::FlushUnlockedSplit(Worker *worker) {
   LOG("flushing a single split!\n");
   unique_lock<recursive_mutex> lock(metadata_mutex);
-  for (unordered_set<Split*>::iterator i = worker->splits_dram.begin();
+  for (boost::unordered_set<Split*>::iterator i = worker->splits_dram.begin();
        i != worker->splits_dram.end(); i++) {  // BIGFOR (?)
     // TODO(erik): this doesnt flush composites
     if (!contains_key(locked_splits_[worker], *i) &&
@@ -1144,7 +1144,7 @@ void OOCScheduler::FlushUnlockedSplit(Worker *worker) {
     // TODO(erik): handle case when it's in
     // another worker's arraystore!!!
 
-    for (unordered_map<string, ArrayStore*>::iterator i =
+    for (boost::unordered_map<string, ArrayStore*>::iterator i =
              worker->arraystores.begin();
          i != worker->arraystores.end(); i++) {
       if (contains_key(i->second->splits, split)) {
