@@ -15,62 +15,63 @@ You can also get a Virtual Machine with everything installed [here](http://www.v
 ## Installing from source
 
 1. Install dependencies:  
-  * On Ubuntu:
-```
-  $ sudo apt-get install -y make gcc g++ libxml2-dev rsync
-```
+  * On Ubuntu:  
+
+          $ sudo apt-get install -y make gcc g++ libxml2-dev rsync  
+
   * On CentOS:
-```
-  $ sudo yum install -y make gcc gcc-c++ libxml2-devel rsync
-```
+
+          $ sudo yum install -y make gcc gcc-c++ libxml2-devel rsync
+
+
 2. Install R:
   * On Ubuntu:
-```
-  $ echo "deb http://cran.r-project.org//bin/linux/ubuntu trusty/" | sudo tee /etc/apt/sources.list.d/r.list
-  $ sudo apt-get update
-  $ sudo apt-get install -y --force-yes r-base-core
-```
+
+          $ echo "deb http://cran.r-project.org//bin/linux/ubuntu trusty/" | sudo tee /etc/apt/sources.list.d/r.list
+          $ sudo apt-get update
+          $ sudo apt-get install -y --force-yes r-base-core
+
   * On CentOS:
-```
-  $ curl -O http://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-  $ sudo rpm -i epel-release-latest-7.noarch.rpm
-  $ sudo yum update
-  $ sudo yum install R R-devel
-```
+
+          $ curl -O http://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
+          $ sudo rpm -i epel-release-latest-7.noarch.rpm
+          $ sudo yum update
+          $ sudo yum install R R-devel
+
+
 3. Install R dependencies:
-```
-  $ sudo R # to install globally
-  R> install.packages(c('Rcpp','RInside','XML','randomForest','data.table'))
-```
-4. Compile and install Distributed R
-```
-  $ make
-  $ make install
-```
-5. Configure local SSH
-```
-  $ ssh-keygen # choose defaults
-  $ chmod 600 ~/.ssh/id_rsa # set right permissions
-  $ cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys2
-  $ ssh localhost # should log in without a password
-```
+
+        $ sudo R # to install globally
+        R> install.packages(c('Rcpp','RInside','XML','randomForest','data.table'))
+
+4. Compile and install Distributed R:
+
+        $ make
+        $ make install
+
+5. Configure local SSH:
+
+        $ ssh-keygen # choose defaults
+        $ chmod 600 ~/.ssh/id_rsa # set right permissions
+        $ cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys2
+        $ ssh localhost # should log in without a password
+
 6. Open R and run an example:
-```
-  library(distributedR)
-  distributedR_start() # start DR
-  distributedR_status()
 
-  B <- darray(dim=c(9,9), blocks=c(3,3), sparse=FALSE) # create a darray
-  foreach(i, 1:npartitions(B),
-    init<-function(b = splits(B,i), index=i) {
-    b <- matrix(index, nrow=nrow(b), ncol=ncol(b))
-    update(b)
-  }) # initialize it
+        library(distributedR)
+        distributedR_start() # start DR
+        distributedR_status()
 
-  getpartition(B) # collect darray data
+        B <- darray(dim=c(9,9), blocks=c(3,3), sparse=FALSE) # create a darray
+        foreach(i, 1:npartitions(B),
+          init<-function(b = splits(B,i), index=i) {
+          b <- matrix(index, nrow=nrow(b), ncol=ncol(b))
+          update(b)
+        }) # initialize it
 
-  distributedR_shutdown() # stop DR
-```
+        getpartition(B) # collect darray data
+
+        distributedR_shutdown() # stop DR
 
 ## How to Contribute
 
