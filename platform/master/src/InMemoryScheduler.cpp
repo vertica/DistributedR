@@ -89,12 +89,12 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
     timers_.erase(taskid);
 #endif
     // get a list of tasks that are dependent to this Fetch task
-    unordered_set< ::uint64_t> dep_tasks = dependencies_[taskid];
+    boost::unordered_set< ::uint64_t> dep_tasks = dependencies_[taskid];
     dependencies_.erase(taskid);
     lock.unlock();
 
     // handle
-    for (unordered_set< ::uint64_t>::iterator i = dep_tasks.begin();
+    for (boost::unordered_set< ::uint64_t>::iterator i = dep_tasks.begin();
          i != dep_tasks.end(); i++) {
       // a taskID that is dependent on this task
       ::uint64_t dep_task_id = *i;
@@ -185,12 +185,12 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
 #endif
     cctask_ids_.erase(make_pair(t->worker, t->name));
     // get a list of tasks that are dependent on this create composite task
-    unordered_set< ::uint64_t> dep_tasks = dependencies_[taskid];
+    boost::unordered_set< ::uint64_t> dep_tasks = dependencies_[taskid];
     dependencies_.erase(taskid);
     lock.unlock();
 
     // handle
-    for (unordered_set< ::uint64_t>::iterator i = dep_tasks.begin();
+    for (boost::unordered_set< ::uint64_t>::iterator i = dep_tasks.begin();
          i != dep_tasks.end(); i++) {
       ::uint64_t dep_task_id = *i;  // a dependent taskID
 
@@ -232,8 +232,8 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
  * @return the best worker to fetch a split
  */
 static Worker* best_worker_to_fetch_from(
-    const unordered_set<Worker*> &workers) {
-  unordered_set<Worker*>::iterator i = workers.begin();
+    const boost::unordered_set<Worker*> &workers) {
+  boost::unordered_set<Worker*>::iterator i = workers.begin();
   Worker *best = *i;
   for (i++; i != workers.end(); i++) {
     if (best->sendtasks.size() > (*i)->sendtasks.size()) {
@@ -331,8 +331,8 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
         // Get a split pointer
         Split *split = splits[arg.arrays(j).name()];
         // workers with the split
-        unordered_set<Worker*> &locs = split->workers;
-        for (unordered_set<Worker*>::iterator i = locs.begin();
+        boost::unordered_set<Worker*> &locs = split->workers;
+        for (boost::unordered_set<Worker*>::iterator i = locs.begin();
              i != locs.end(); i++) {
           available[*i] += split->size;
         }

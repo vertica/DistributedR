@@ -30,7 +30,7 @@ namespace presto {
 /** DistributedObjectMap constructor
  */
 DistributedObjectMap::DistributedObjectMap() {
-  dobject_map_.reset(new unordered_map<string, DistributedObject*>());
+  dobject_map_.reset(new boost::unordered_map<string, DistributedObject*>());
   mutex_.reset(new mutex());
 }
 
@@ -65,7 +65,7 @@ void DistributedObjectMap::DeleteDobject(const string& name) {
  */
 DistributedObject* DistributedObjectMap::GetDistributedObject(const string& name) {
   unique_lock<mutex> d_lock(*mutex_);
-  unordered_map<string, DistributedObject*>::iterator it =
+  boost::unordered_map<string, DistributedObject*>::iterator it =
     dobject_map_->find(name);
 
   DistributedObject* ret = NULL;

@@ -363,7 +363,7 @@ bool Scheduler::Done(TaskDoneRequest* req) {
       // This split is already in the split (OOCScheduler)
       split = splits[cctask->name];
       if (split->size != req->update_sizes(0)) {
-        for (unordered_set<Worker*>::iterator i = locked_on_[split].begin();
+        for (boost::unordered_set<Worker*>::iterator i = locked_on_[split].begin();
              i != locked_on_[split].end(); i++) {
           locked_size_[*i] -= split->size;
           locked_size_[*i] += req->update_sizes(0);
@@ -563,10 +563,10 @@ void Scheduler::AddTask(TaskArg *t) {
 
 void Scheduler::GarbageCollect(Worker *worker, int degree) {
   // delete splits which are at least input degree generations old
-  unordered_set<Split*> splits_to_delete;
+  boost::unordered_set<Split*> splits_to_delete;
 
   unique_lock<recursive_mutex> lock(metadata_mutex);
-  for (unordered_set<Split*>::iterator i = worker->splits_dram.begin();
+  for (boost::unordered_set<Split*>::iterator i = worker->splits_dram.begin();
        i != worker->splits_dram.end(); i++) {
     int32_t split_id;
     string darray_name;
@@ -581,7 +581,7 @@ void Scheduler::GarbageCollect(Worker *worker, int degree) {
       splits_to_delete.insert(*i);
     }
   }
-  for (unordered_set<Split*>::iterator i = splits_to_delete.begin();
+  for (boost::unordered_set<Split*>::iterator i = splits_to_delete.begin();
        i != splits_to_delete.end(); i++) {
     LOG("garbage collecting %s\n", (*i)->name.c_str());
     LOG_DEBUG("Garbage Collecting %s", (*i)->name.c_str());
@@ -925,7 +925,7 @@ bool Scheduler::IsSplitOnWorker(Split *split, Worker *worker) {
   // TODO(erik): speed this up with special map
   ::uint64_t ret = 0;
   unique_lock<recursive_mutex> lock(metadata_mutex);
-  for (unordered_map< ::uint64_t, FetchTask*>::iterator i = fetchtasks.begin();
+  for (boost::unordered_map< ::uint64_t, FetchTask*>::iterator i = fetchtasks.begin();
        i != fetchtasks.end(); i++) {
     if (i->second->split == split && i->second->to == worker) {
       ret = i->second->id;
@@ -940,7 +940,7 @@ bool Scheduler::IsSplitOnWorker(Split *split, Worker *worker) {
   // TODO(erik): speed this up with special map
   ::uint64_t ret = 0;
   unique_lock<recursive_mutex> lock(metadata_mutex);
-  for (unordered_map< ::uint64_t, LoadTask*>::iterator i = loadtasks.begin();
+  for (boost::unordered_map< ::uint64_t, LoadTask*>::iterator i = loadtasks.begin();
        i != loadtasks.end(); i++) {
     if (i->second->split == split && i->second->store->worker == worker) {
       ret = i->second->id;
@@ -985,14 +985,14 @@ void Scheduler::DeleteSplit(Split *split) {
   // we are garbage collecting this, noone is touching it
   // at this point
 
-  unordered_set<Worker*> workers = split->workers;
-  for (unordered_set<Worker*>::iterator i = workers.begin();
+  boost::unordered_set<Worker*> workers = split->workers;
+  for (boost::unordered_set<Worker*>::iterator i = workers.begin();
        i != workers.end(); i++) {
     Delete(split, *i);
   }
 
-  unordered_set<ArrayStore*> arraystores = split->arraystores;
-  for (unordered_set<ArrayStore*>::iterator i = arraystores.begin();
+  boost::unordered_set<ArrayStore*> arraystores = split->arraystores;
+  for (boost::unordered_set<ArrayStore*>::iterator i = arraystores.begin();
        i != arraystores.end(); i++) {
     Delete(split, *i);
   }
@@ -1173,7 +1173,7 @@ void Scheduler::WorkerLog(Worker *worker, const std::string &msg) {
 }
 
 Worker* Scheduler::GetMostMemWorker() {
-  unordered_map<std::string, Worker*>::iterator wit;
+  boost::unordered_map<std::string, Worker*>::iterator wit;
   size_t max_remaining = 0;
   Worker* worker = NULL;
   for (wit = workers.begin(); wit != workers.end(); ++wit) {
@@ -1191,7 +1191,7 @@ Worker* Scheduler::GetMostMemWorker() {
 }
 
 Worker* Scheduler::GetRndAvailableWorker() {
-  unordered_map<std::string, Worker*>::iterator wit;
+  boost::unordered_map<std::string, Worker*>::iterator wit;
   vector<Worker*> worker_vector;
   for(wit=workers.begin(); wit != workers.end(); ++wit) {
     if (wit->second->size > wit->second->used) {
@@ -1206,7 +1206,7 @@ Worker* Scheduler::GetRndAvailableWorker() {
 }
 
 Scheduler::~Scheduler() {
-  unordered_map< ::uint64_t, ExecTask*>::iterator exec_it = exectasks.begin();
+  boost::unordered_map< ::uint64_t, ExecTask*>::iterator exec_it = exectasks.begin();
   for(; exec_it != exectasks.end(); ++exec_it) {
     try {
       exec_it->second->args->sema->post();
@@ -1216,34 +1216,34 @@ Scheduler::~Scheduler() {
     delete exec_it->second;
   }
 
-  unordered_map< ::uint64_t, FetchTask*>::iterator fetch_it = fetchtasks.begin();
+  boost::unordered_map< ::uint64_t, FetchTask*>::iterator fetch_it = fetchtasks.begin();
   for(; fetch_it != fetchtasks.end(); ++fetch_it) {
     delete fetch_it->second;
   }
   
-  unordered_map< ::uint64_t, SaveTask*>::iterator save_it = savetasks.begin();
+  boost::unordered_map< ::uint64_t, SaveTask*>::iterator save_it = savetasks.begin();
   for(; save_it != savetasks.end(); ++save_it) {
     delete save_it->second;
   }
 
-  unordered_map< ::uint64_t, LoadTask*>::iterator load_it = loadtasks.begin();
+  boost::unordered_map< ::uint64_t, LoadTask*>::iterator load_it = loadtasks.begin();
   for(; load_it != loadtasks.end(); ++load_it) {
     delete load_it->second;
   }
 
-  unordered_map< ::uint64_t, CCTask*>::iterator cc_it = cctasks.begin();
+  boost::unordered_map< ::uint64_t, CCTask*>::iterator cc_it = cctasks.begin();
   for(; cc_it != cctasks.end(); ++cc_it) {
     delete cc_it->second;
   }
 
-  unordered_map<std::string, Split*>::iterator split_it = splits.begin();
+  boost::unordered_map<std::string, Split*>::iterator split_it = splits.begin();
   for(; split_it != splits.end(); ++split_it) {
     split_it->second->workers.clear();
     split_it->second->arraystores.clear();
     delete split_it->second;
   }
 
-  unordered_map<std::string, Worker*>::iterator worker_it = workers.begin();
+  boost::unordered_map<std::string, Worker*>::iterator worker_it = workers.begin();
   for(; worker_it != workers.end(); ++worker_it) {
     worker_it->second->exectasks.clear();
     worker_it->second->cctasks.clear();
@@ -1252,7 +1252,7 @@ Scheduler::~Scheduler() {
     worker_it->second->sendtasks.clear();
     worker_it->second->savetasks.clear();
     worker_it->second->loadtasks.clear();
-    unordered_map<std::string, ArrayStore*>::iterator as_it = worker_it->second->arraystores.begin();
+    boost::unordered_map<std::string, ArrayStore*>::iterator as_it = worker_it->second->arraystores.begin();
     for(; as_it != worker_it->second->arraystores.end(); ++as_it) {
       delete as_it->second;
     }

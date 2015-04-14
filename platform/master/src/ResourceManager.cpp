@@ -73,8 +73,8 @@ void ResourceManager::Run() {
           }
         }
       }
-      unordered_map<std::string, Worker*> workers = scheduler_->GetWorkerInfo();
-      unordered_map<std::string, Worker*>::iterator wit;
+      boost::unordered_map<std::string, Worker*> workers = scheduler_->GetWorkerInfo();
+      boost::unordered_map<std::string, Worker*>::iterator wit;
       for (wit = workers.begin(); wit != workers.end(); ++wit) {
         boost::this_thread::interruption_point();
         // Check the time of no contact to detect if it is dead
@@ -83,7 +83,7 @@ void ResourceManager::Run() {
           msg << "Cannot connect to a worker " << wit->first 
             << endl << "The worker might be down." << endl << 
             "Otherwise, check the firewall setup in the worker if the port number range in the configuration file is allowed for incoming traffic.";
-          unordered_map<std::string, Worker*>::iterator wwit;
+          boost::unordered_map<std::string, Worker*>::iterator wwit;
           for (wwit = workers.begin(); wwit != workers.end(); ++wwit) {
             LOG_ERROR("ResourceManager shutting down - %s age is %d\n", wwit->second->server.name().c_str(), wwit->second->last_contacted.age());
           }

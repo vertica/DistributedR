@@ -751,7 +751,7 @@ PrestoWorker::PrestoWorker(
     context_t* zmq_ctx,
     size_t shared_memory,
     int executors,
-    const unordered_map<string, ArrayStore*> &array_stores,
+    const boost::unordered_map<string, ArrayStore*> &array_stores,
     int log_level,
     string master_ip, int master_port,
     int start_port, int end_port)
@@ -814,7 +814,7 @@ PrestoWorker::~PrestoWorker() {
   try {
     bool ret = shmem_arrays_mutex_.timed_lock(boost::get_system_time()+boost::posix_time::milliseconds(2000));
     if(ret  == true) {
-      for (unordered_set<string>::iterator i = shmem_arrays_.begin();
+      for (boost::unordered_set<string>::iterator i = shmem_arrays_.begin();
         i != shmem_arrays_.end(); i++) {
         if (i->c_str() != NULL) {
           LOG_INFO("Removing Shared memory object: %s", i->c_str());
@@ -835,7 +835,7 @@ PrestoWorker::~PrestoWorker() {
   }
   
   // Remove array stores
-  for (unordered_map<string, ArrayStore*>::iterator i =
+  for (boost::unordered_map<string, ArrayStore*>::iterator i =
            array_stores_.begin();
        i != array_stores_.end();
        i++) {
@@ -846,7 +846,7 @@ PrestoWorker::~PrestoWorker() {
   try {
     bool ret = client_map_mutex_.timed_lock(boost::get_system_time()+boost::posix_time::milliseconds(2000));
     if(ret  == true) {
-      unordered_map<std::string, boost::shared_ptr<WorkerInfo> >::iterator itr =
+      boost::unordered_map<std::string, boost::shared_ptr<WorkerInfo> >::iterator itr =
           client_map.begin();
       for (; itr != client_map.end(); ++itr) {
         itr->second->Close();
@@ -1187,7 +1187,7 @@ WorkerInfo* PrestoWorker::getClient(const ServerInfo& location) {
   string key = location.name() + int_to_string(location.presto_port());
   WorkerInfo* wc = NULL;
   client_map_mutex_.lock();
-  unordered_map<std::string, boost::shared_ptr<WorkerInfo> >::iterator itr =
+  boost::unordered_map<std::string, boost::shared_ptr<WorkerInfo> >::iterator itr =
       client_map.find(key);
   // if the worker information is not there yet, we create the information.
   if (itr == client_map.end()) {
@@ -1253,7 +1253,7 @@ void PrestoWorker::hello(ServerInfo master_location,
     helloreply.set_executors(num_executors_);
   }
   if (reply_flag & (1 << ARRAY_STORES)) {
-    for (unordered_map<string, ArrayStore*>::iterator i =
+    for (boost::unordered_map<string, ArrayStore*>::iterator i =
              array_stores_.begin();
          i != array_stores_.end();
          i++) {
@@ -1303,7 +1303,7 @@ void PrestoWorker::shutdown() {
   fprintf(stderr, "total cc time: %7.2lf s\n",
           total_cc_time_/1e6);*/
   worker_stat_mutex_.lock();
-  for (unordered_map<string, worker_stats>::iterator i = worker_stats_.begin();
+  for (boost::unordered_map<string, worker_stats>::iterator i = worker_stats_.begin();
        i != worker_stats_.end(); i++) {
 
     LOG_DEBUG("Worker %s:\n    MB fetched: %7.2lfMB\n    fetch time: %7.2lf\n    MB   sent: %7.2lfMB\n    send time: %7.2lf",
@@ -1372,7 +1372,7 @@ void PrestoWorker::shutdown() {
   try {
     bool ret = shmem_arrays_mutex_.timed_lock(boost::get_system_time()+boost::posix_time::milliseconds(2000));
     if(ret  == true) {
-      for (unordered_set<string>::iterator i = shmem_arrays_.begin();
+      for (boost::unordered_set<string>::iterator i = shmem_arrays_.begin();
         i != shmem_arrays_.end(); i++) {
         if (i->c_str() != NULL) {
           LOG_DEBUG("Removing shared memory object: %s", i->c_str());
@@ -1394,7 +1394,7 @@ void PrestoWorker::shutdown() {
   }
   
   // Remove array stores
-  for (unordered_map<string, ArrayStore*>::iterator i = array_stores_.begin();
+  for (boost::unordered_map<string, ArrayStore*>::iterator i = array_stores_.begin();
       i != array_stores_.end(); i++) {
     delete i->second;
   }
@@ -1404,7 +1404,7 @@ void PrestoWorker::shutdown() {
   try {
     bool ret = client_map_mutex_.timed_lock(boost::get_system_time()+boost::posix_time::milliseconds(2000));
     if(ret  == true) {
-      unordered_map<std::string, boost::shared_ptr<WorkerInfo> >::iterator itr =
+      boost::unordered_map<std::string, boost::shared_ptr<WorkerInfo> >::iterator itr =
           client_map.begin();
       for (; itr != client_map.end(); ++itr) {
         itr->second->Close();
@@ -1534,7 +1534,7 @@ static void ParseXMLConfig(const string &config,
                            int32_t &port,
                            unsigned long long &shared_memory,
                            int &executors,
-                           unordered_map<string, ArrayStore*> *array_stores) {
+                           boost::unordered_map<string, ArrayStore*> *array_stores) {
   property_tree::ptree pt;
   try {
     read_xml(config, pt, boost::property_tree::xml_parser::no_comments);
@@ -1698,7 +1698,7 @@ int main(int argc, char **argv) {
   int log_level = 2;
   std::string master_addr, worker_addr;
   int master_port= -1;
-  unordered_map<string, presto::ArrayStore*> array_stores;
+  boost::unordered_map<string, presto::ArrayStore*> array_stores;
 
 /*
   // Read the configuration file if it exists

@@ -247,7 +247,7 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
      bool foreach_error = foreach_result.second;
      
      if (foreach_complete){
-       unordered_map< ::uint64_t, TaskDoneRequest*>::iterator itr = scheduler_->taskdones_.begin();
+       boost::unordered_map< ::uint64_t, TaskDoneRequest*>::iterator itr = scheduler_->taskdones_.begin();
        int num_tasks = scheduler_->taskdones_.size();   
        int cur_task=1;
 
