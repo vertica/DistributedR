@@ -49,7 +49,7 @@ namespace presto {
 ExecutorPool::ExecutorPool(int n_, ServerInfo *my_location_,
                            MasterClient* master_,
                            timed_mutex *shmem_arrays_mutex,
-                           unordered_set<string> *shmem_arrays,
+                           boost::unordered_set<string> *shmem_arrays,
                            const string &spill_dir,
                            int log_level,
                            string master_ip, int master_port)
