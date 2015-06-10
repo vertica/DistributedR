@@ -84,7 +84,7 @@ stop_workers <- function(bin_name="R-worker-bin") {
 
     for (i in 1:length(hosts)) {
       cmd = paste("ssh -n", hosts[[i]], "'", "killall", bin_name, "'", sep=" ")
-      cat("Running ", cmd, "\n")      
+      message(paste("Running ", cmd, sep=""))
       system(cmd, wait=FALSE, ignore.stdout=TRUE, ignore.stderr=TRUE)
     }
   }
@@ -103,6 +103,14 @@ stop_workers <- function(bin_name="R-worker-bin") {
   return (ret_str)
 }
 
+clean_string <- function(string) {
+  clean <- string;
+  clean <- gsub(" ","", clean, fixed=TRUE)
+  clean <- gsub("\n","", clean, fixed=TRUE)
+  clean <- gsub("\r","", clean, fixed=TRUE)
+  clean <- gsub("\t","", clean, fixed=TRUE)
+}
+
 start_workers <- function(cluster_conf,
                           bin_path="./bin/start_proto_worker.sh",
                           inst=0, mem=0, rmt_home="", rmt_uid="", log=2) {
@@ -116,16 +124,9 @@ start_workers <- function(cluster_conf,
   master_addr <- get_pm_object()$get_master_addr()
   master_port <- get_pm_object()$get_master_port()
 
-  #clean strings TODO move to function
-  master_addr <-  gsub(" ","", master_addr , fixed=TRUE)
-  master_addr <-  gsub("\n","", master_addr , fixed=TRUE)
-  master_addr <-  gsub("\r","", master_addr , fixed=TRUE)
-  master_addr <-  gsub("\t","", master_addr , fixed=TRUE)
-
-  master_port <-  gsub(" ","", master_port , fixed=TRUE)
-  master_port <-  gsub("\n","", master_port , fixed=TRUE)
-  master_port <-  gsub("\r","", master_port , fixed=TRUE)
-  master_port <-  gsub("\t","", master_port , fixed=TRUE)
+  #clean strings
+  master_addr <- clean_string(master_addr)
+  master_port <- clean_string(master_port)
 
   env_variables <- .pass_env_var()
   tryCatch({
@@ -133,36 +134,17 @@ start_workers <- function(cluster_conf,
       r <- worker_conf[i,]
 
       #clean strings
-      r$Hostname <-  gsub(" ","", r$Hostname , fixed=TRUE)
-      r$Hostname <-  gsub("\n","", r$Hostname , fixed=TRUE)
-      r$Hostname <-  gsub("\r","", r$Hostname , fixed=TRUE)
-      r$Hostname <-  gsub("\t","", r$Hostname , fixed=TRUE)
-
-      r$StartPortRange <-  gsub(" ","", r$StartPortRange , fixed=TRUE)
-      r$StartPortRange <-  gsub("\n","", r$StartPortRange , fixed=TRUE)
-      r$StartPortRange <-  gsub("\r","", r$StartPortRange , fixed=TRUE)
-      r$StartPortRange <-  gsub("\t","", r$StartPortRange , fixed=TRUE)
-
-      r$EndPortRange <-  gsub(" ","", r$EndPortRange , fixed=TRUE)
-      r$EndPortRange <-  gsub("\n","", r$EndPortRange , fixed=TRUE)
-      r$EndPortRange <-  gsub("\r","", r$EndPortRange , fixed=TRUE)
-      r$EndPortRange <-  gsub("\t","", r$EndPortRange , fixed=TRUE)
-      
-      r$SharedMemory <-  gsub(" ","", r$SharedMemory , fixed=TRUE)
-      r$SharedMemory <-  gsub("\n","", r$SharedMemory , fixed=TRUE)
-      r$SharedMemory <-  gsub("\r","", r$SharedMemory , fixed=TRUE)
-      r$SharedMemory <-  gsub("\t","", r$SharedMemory , fixed=TRUE)
-
-      r$Executors <-  gsub(" ","", r$Executors , fixed=TRUE)
-      r$Executors <-  gsub("\n","", r$Executors , fixed=TRUE)
-      r$Executors <-  gsub("\r","", r$Executors , fixed=TRUE)
-      r$Executors <-  gsub("\t","", r$Executors , fixed=TRUE)
+      r$Hostname <- clean_string(r$Hostname)
+      r$StartPortRange <- clean_string(r$StartPortRange)
+      r$EndPortRange <- clean_string(r$EndPortRange)
+      r$SharedMemory <- clean_string(r$SharedMemory)
+      r$Executors <- clean_string(r$Executors)
 
       m <- ifelse(as.numeric(mem)>0, mem, ifelse(is.na(r$SharedMemory), 0, r$SharedMemory))
       e <- ifelse(as.numeric(inst)>0, inst, ifelse(is.na(r$Executors), 0, r$Executors))	
       if (as.numeric(e)>64)
       {
-        cat(paste("Warning: distributedR only supports 64 R instances per worker.\nNumber of R instances has been truncated from ", e, " to 64 for worker ", r$Hostname, "\n", sep=""))
+        message(paste("Warning: distributedR only supports 64 R instances per worker.\nNumber of R instances has been truncated from ", e, " to 64 for worker ", r$Hostname, "\n", sep=""))
         e <- 64
       }
       sp_opt <- getOption("scipen")  # This option value determines whether exponentional or fixed expression will be used (m and e should not not be expressed using exponentional expression)
@@ -262,7 +244,7 @@ conf2df <- function(cluster_conf) {
     row.names(conf_df) <- NULL
     return(conf_df)
   }, error = function(e) {
-    cat(paste("Fail to parse cluster configuration XML file. Start with default values\n", e,"\n"))
+    message(paste("Fail to parse cluster configuration XML file. Start with default values\n", e, "\n", sep=""))
   })
   tryCatch({
     pm <- get_pm_object()
@@ -372,7 +354,7 @@ distributedR_master_info <- function() {
 handle_presto_exception <- function (excpt){
   excpt_class <- class(excpt)[1L]
   if (excpt_class=="presto::PrestoShutdownException") {
-    print(excpt$message)
+    message(excpt$message)
     pm <- get_pm_object()
     distributedR_shutdown(pm)
     gcinfo(FALSE)
@@ -399,7 +381,7 @@ check_dr_version_compatibility<-function(){
   master_version<-packageVersion("distributedR")
   bad_workers<-which(master_version != vers$v)
   if(length(bad_workers)>0){
-    cat(paste("Error: Incompatible distributedR versions in the cluster (master=",master_version,", worker(s)=",vers$v[(bad_workers[1])],")\nInstall same version across cluster. Shutting down session.\n", sep=""))
+    message(paste("Error: Incompatible distributedR versions in the cluster (master=",master_version,", worker(s)=",vers$v[(bad_workers[1])],")\nInstall same version across cluster. Shutting down session.", sep=""))
     distributedR_shutdown() 
     return (FALSE)
   }

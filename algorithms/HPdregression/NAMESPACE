@@ -1,5 +1,2 @@
-# Refer to all C/Fortran routines by their name prefixed by C_
-#useDynLib(hpdglm, .registration = TRUE, .fixes = "C_")
-
 exportPattern("^[[:alpha:]]+")
 import(distributedR)

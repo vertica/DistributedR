@@ -11,13 +11,13 @@
     \tabular{ll}{
         Package: \tab HPdclassifier\cr
         Type: \tab Package\cr
-        Version: \tab 1.0.0\cr
+        Version: \tab 1.1.0\cr
         Date: \tab 2015-01-16\cr
     }
  Main Functions:
  \itemize{
-  \item {hpdrandomForest:} {It is a distributed function for randomForest}
-  \item {predictHPdRF:} {distributed predict method for applying a random forest objects on a darray or a dframe}
+  \item {hpdRF_parallelTree:} {It is a distributed function for randomForest that utilizes parallelism in creating each tree of the forest}
+  \item {hpdRF_parallelForest:} {It is a distributed function for randomForest that utilizes parallelism in creating sub-forests of the forest}
  }
 }
 

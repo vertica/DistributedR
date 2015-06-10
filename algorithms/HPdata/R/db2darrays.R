@@ -35,7 +35,7 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
         stop("Response column names should be specified")   
     if(!is.logical(verticaConnector))
         stop("verticaConnector can be either TRUE or FALSE")
-    if(!is.character(loadPolicy))
+    if(!is.character(loadPolicy) || (tolower(loadPolicy)!='local' && tolower(loadPolicy)!='uniform'))
         stop("loadPolicy can be either 'local' or 'uniform'")
    
     # loading vRODBC or RODBC library for master
@@ -44,6 +44,7 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
 
     # connecting to Vertica
     db_connect <- odbcConnect(dsn)
+    loadPolicy <- tolower(loadPolicy)
 
     #get projection_name
     table <- ""
@@ -93,7 +94,13 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
         
          } 
       } else {
-        relation_type <- "table"
+        # get type of table - external or regular
+        table_type <- sqlQuery(db_connect, paste("select table_definition from tables where table_schema ILIKE '", schema, "' and table_name ILIKE '", table, "'", sep=""))
+        if(!is.data.frame(table_type)) {
+           odbcClose(db_connect)
+           stop(table_columns)
+        }
+        relation_type <- ifelse((is.null(table_type[[1]][[1]]) || is.na(table_type[[1]][[1]])), "table", "external_table")
         pred_columns <- as.list(as.character(table_columns[[1]]))
         pred_columns <- pred_columns[pred_columns %notin% resp]
         #match_idx = match(resp, pred_columns)#which(resp %in% pred_columns)
@@ -108,8 +115,15 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
            norelation <- TRUE
          else
            relation_type <- "view"
-      } else
-         relation_type <- "table"
+      } else {
+         # get type of table - external or regular
+        table_type <- sqlQuery(db_connect, paste("select table_definition from tables where table_schema ILIKE '", schema, "' and table_name ILIKE '", table, "'", sep=""))
+        if(!is.data.frame(table_type)) {
+           odbcClose(db_connect)
+           stop(table_columns)
+        }
+        relation_type <- ifelse((is.null(table_type[[1]][[1]]) || is.na(table_type[[1]][[1]])), "table", "external_table")
+      }
 
       pred_columns <- pred
     }
@@ -135,13 +149,13 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
     # the columns of the tabel
     columns <- ""
     for(i in 1:nResponses) {
-        columns <- paste(columns, resp[i], ',')
+        columns <- paste(columns, "\"", resp[i], '\",', sep="")
     }
     if(nPredictors > 1)
         for(i in 1:(nPredictors-1)) {
-            columns <- paste(columns, pred_columns[i], ',')
+            columns <- paste(columns, "\"", pred_columns[i], '\",', sep="")
         }
-    columns <- paste(columns, pred_columns[nPredictors])
+    columns <- paste(columns, "\"", pred_columns[nPredictors], "\"", sep="")
 
     # when npartitions is not specified it should be calculated based on the number of executors
     missingNparts <- FALSE
@@ -191,26 +205,17 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
         #check for unsegmented projection
         .checkUnsegmentedProjections(schema, table, relation_type, db_connect) 
 
-        #get projection_name
-        qryString <- paste("select projection_id, projection_name from tables t, projections p where t.table_name ILIKE '", table, "' and t.table_schema ILIKE '", schema, "'and t.table_id=p.anchor_table_id and p.is_super_projection=true and is_up_to_date=true order by projection_name limit 1", sep="")
-        projection_details <- sqlQuery(db_connect, qryString);
-        noprojection = FALSE
-          
-        if(nrow(projection_details) == 0) {
-            noprojection = TRUE
-        }
-        else {
-            projection_name <- as.character(projection_details$projection_name)
-            projection_oid <- as.numeric(projection_details$projection_id)
-        }
-        if(noprojection) {
-            qryString <- paste("select count(*) from views where table_name ILIKE '", table, "' and table_schema ILIKE '", schema, "'", sep="")
-            isaview <- sqlQuery(db_connect, qryString)
-            if(isaview > 0) {
-              loadPolicy <- "uniform"
-            } else 
-              stop(paste("Table/View", tableName, "does not exist or the table has no super projections with data.\nData loading aborted."))
-        }
+        if(relation_type == "table" && loadPolicy == "local") {
+           #get projection name
+           qryString <- paste("select projection_name from tables t, projections p where t.table_name ILIKE '", table, "' and t.table_schema ILIKE '", schema, "'and t.table_id=p.anchor_table_id and p.is_super_projection=true and is_up_to_date=true order by projection_name limit 1", sep="")
+           projection_details <- sqlQuery(db_connect, qryString);
+
+           if(nrow(projection_details) == 0)
+              stop(paste("Table", tableName, "does not exist or the table has no super projections with data. \nRetry with loadPolicy='uniform'"))
+           else
+              projection_name <- as.character(projection_details$projection_name)
+        } else
+          loadPolicy <- "uniform"
 
         nRows <- as.numeric(nobs)
         # calculate approximate split_size 
@@ -261,8 +266,8 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
 
           #issue UDx query
           qryString <- paste("select ExportToDistributedR(", columns, " USING PARAMETERS DR_worker_info='", udx_param$parameter_str,"', DR_partition_size=", partition_size, ", data_distribution_policy='", type, "', max_string_length = 0) over(PARTITION BEST) from ", tableName, sep="")
-          
-          cat("Loading total", nRows, "rows from table", tableName, "from Vertica with approximate partition of", partition_size,"rows\n")
+         
+          message(paste("Loading total", nRows, "rows from", tableName, "from Vertica with approximate partition of", partition_size,"rows")) 
           load_result <- sqlQuery(db_connect, qryString)
           if(!is.data.frame(load_result)) {
             sqlQuery(db_connect, paste("select set_config_parameter('MaxQueryRetries', ", retries_allowed, ");"))
@@ -279,9 +284,7 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
           if(!is.list(result))
             stop(result)
 
-          dResult <- .vertica.darrays(result, nResponses, nPredictors)
-          colnames(dResult$Y) <- resp
-          colnames(dResult$X) <- pred_columns
+          dResult <- .vertica.darrays(result, nResponses, nPredictors, pred_columns, resp)
 
           }, interrupt = function(e) {}
            , error = function(e) {
@@ -308,6 +311,11 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
         X <- darray(dim=c(nobs, nPredictors), blocks=c(rowsInBlock,nPredictors), empty=TRUE)
         #Binary response vector: value one shows sucess and zero failure 
         Y <- darray(dim=c(nobs,nResponses), blocks=c(rowsInBlock,nResponses), empty=TRUE)
+
+        if(length(pred_columns) > 0)
+           X@dimnames[[2]] <- as.character(pred_columns)
+        if(length(resp) > 0)
+           Y@dimnames[[2]] <- as.character(resp)
 
         if(!missingNparts) {
             nparts <- npartitions(X)
@@ -352,13 +360,14 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
                 x <- cbind(x, segment[[i]])
             }
 
+            colnames(x) <- pred
+            colnames(y) <- resp
+
             update(x)
             update(y)
         })
         
         dResult <- list(Y=Y, X=X)
-        colnames(dResult$Y) <- resp
-        colnames(dResult$X) <- pred_columns
         odbcClose(db_connect)
 
     } # if-else (verticaConnector)

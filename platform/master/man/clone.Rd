@@ -29,7 +29,7 @@
   \code{\link{clone}} can also be used to copy just the structure of a
 distributed object, such as the number of partitions and the partition
 sizes. For example, if \code{da} is a Nx10 distributed dense array,
-\code{db<-clone(da, ncol=1, data=2)} will create a dense array with
+\code{db<-} \code{clone(da, ncol=1, data=2)} will create a dense array with
 same number of rows as \code{da} but with only 1 column. All elements
 in the resulting darray will be 2. When copying the structure of a
 distributed object, only one of \code{nrow} or \code{ncol} can be

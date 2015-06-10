@@ -67,6 +67,7 @@ message Arg {
   repeated Array arrays = 2;
   repeated Tuple offsets = 3;
   optional Tuple dim = 4; 
+  optional bool is_list = 5;
 }
 
 message RawArg {
@@ -82,6 +83,7 @@ message RawArg {
 message NewArg {
   required string arrayname = 1;
   required string varname = 2;
+  repeated string list_arraynames = 3;
 }
 
 message CompositeArg {

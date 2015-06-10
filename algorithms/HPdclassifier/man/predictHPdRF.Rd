@@ -2,7 +2,7 @@
 \alias{predictHPdRF}
 \title{distributed predict method for applying a random forest objects on a darray or a dframe}
 \description{
-  Prediction of distributed test data using random forest.
+  DEPRECATED - This function is deprecated, and we suggest using the \code{predict.hpdRF_parallelForest} or \code{predict.hpdRF_parallelTree} functions depending on the type of the model. The new functions are aligned with generic predict function format.
 }
 \usage{
 predictHPdRF(object, newdata, trace=FALSE)
@@ -10,7 +10,7 @@ predictHPdRF(object, newdata, trace=FALSE)
 \arguments{
   \item{object}{an object of class \code{randomForest}, as that
     created by the function \code{randomForest} or 
-    \code{hpdrandomForest}.}
+    \code{hpdRF_parallelForest}.}
   \item{newdata}{a darray or a dframe containing new data. 
     darray is highly recommended when there is no categorial data}
   \item{trace}{when this argument is true, intermediate steps of the progress are displayed.}
@@ -29,7 +29,7 @@ predictHPdRF(object, newdata, trace=FALSE)
     HP Vertica Analytics Team
 }
 
-\seealso{\code{\link{hpdrandomForest}}}
+\seealso{\code{\link{hpdRF_parallelForest}}}
 
 \examples{
  \dontrun{
@@ -55,7 +55,7 @@ foreach(i,1:npartitions(dax),function(x=splits(dax,i),
     update(y)
 })
 
-(myrf1 <- hpdrandomForest(dax, day, nExecutor=nparts))
+(myrf1 <- hpdRF_parallelForest(dax, day, nExecutor=nparts))
 dp <- predictHPdRF(myrf1, dax)
 
 # example for dframe
@@ -76,7 +76,7 @@ foreach(i, 1:npartitions(df), function(xi=splits(df,i),
 # the following line will be redundant in the next release
 colnames(df) <- colnames(iris)
 
-(myrf2 <- hpdrandomForest(Species ~ ., df, nExecutor=nPartitions))
+(myrf2 <- hpdRF_parallelForest(Species ~ ., df, nExecutor=nPartitions))
 fp2 <- predictHPdRF(myrf2, df)
     
  }

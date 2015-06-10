@@ -51,6 +51,10 @@
 #include "ArrayStore.h"
 #include "DataLoader.h"
 
+#include "Observer.h"
+#include <google/protobuf/message.h>
+#include "RequestLogger.h"
+
 using namespace Rcpp;
 using namespace zmq;
 using namespace google::protobuf;
@@ -100,7 +104,7 @@ static int NUM_THREADS[NUM_THREADPOOLS] = {EXEC_THREAD_NUM,
                                     HELLO_THREAD_NUM,
                                     MISC_THREAD_NUM};
 
-class PrestoWorker {
+class PrestoWorker : public ISubject<google::protobuf::Message> {
  public:
   PrestoWorker(context_t* zmq_ctx,
                size_t shared_memory,
@@ -227,6 +231,9 @@ protected:
   boost::mutex worker_stat_mutex_;
 
   DataLoader* data_loader_;
+
+  RequestLogger *mRequestLogger;
+
 };
 
 }  // namespace presto

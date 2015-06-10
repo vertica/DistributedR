@@ -26,6 +26,8 @@
 #include <map>
 #include <string>
 #include <semaphore.h>
+#include <string.h>
+#include <unistd.h>
 
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/file_mapping.hpp>
@@ -91,7 +93,14 @@ class BoostSharedMemoryObject : public BaseSharedMemoryObject {
   void truncate(size_t length) {
     if (shared_memory_sem < 0) {
       umask(0);
+#ifdef O_CLOEXEC
       shared_memory_sem = open(get_shm_size_check_name().c_str(), O_RDWR | O_CREAT | O_CLOEXEC, S_IRWXU | S_IRWXG | S_IRWXO);
+#else
+      // O_CLOEXEC is relatively new. 
+      // Alternative way for systems that don't have it.
+      shared_memory_sem = open(get_shm_size_check_name().c_str(), O_RDWR | O_CREAT, S_IRWXU | S_IRWXG | S_IRWXO);
+      fcntl(shared_memory_sem, F_SETFD, FD_CLOEXEC);
+#endif
       if(presto::shared_memory_sem < 0){
         ostringstream msg;
         msg << "sem_open failed: " << strerror(errno); 
@@ -114,13 +123,19 @@ class BoostSharedMemoryObject : public BaseSharedMemoryObject {
       msg << "cannot allocate " << length
           << " bytes to shared memory. free shm size is " << free_shm_size;
       LOG_ERROR("%s", msg.str().c_str());
-      lockf( shared_memory_sem, F_ULOCK, 0 );
+      int res = lockf( shared_memory_sem, F_ULOCK, 0 );
+      if (res == -1) {
+          LOG_ERROR("lockf: %s", strerror(errno));
+      }
       throw PrestoWarningException(msg.str());
     }
     shm_.truncate(length);
     boost::interprocess::mapped_region mem_region (shm_, boost::interprocess::read_write);
     memset(mem_region.get_address(), 0, mem_region.get_size());
-    lockf( shared_memory_sem, F_ULOCK, 0 );
+    int res = lockf( shared_memory_sem, F_ULOCK, 0 );
+    if (res == -1) {
+        LOG_ERROR("lockf: %s", strerror(errno));
+    }
   }
 
   // need to have non-const reference

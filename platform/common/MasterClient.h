@@ -41,13 +41,16 @@
 #include <boost/thread/condition_variable.hpp>
 #include <boost/thread/locks.hpp>
 
+#include "Observer.h"
+#include <google/protobuf/message.h>
+
 //using namespace boost;
 using namespace std;
 using namespace zmq;
 
 namespace presto {
 
-class MasterClient {
+class MasterClient : public ISubject<google::protobuf::Message> {
  public:
   MasterClient(string hostname, int32_t port, context_t* zmq_ctx);
   ~MasterClient();
@@ -85,6 +88,7 @@ class MasterClient {
   boost::mutex message_queue_mutex_;
   boost::condition_variable message_queue_empty_;
   list<MasterRequest> message_queue_;
+
 };
 
 }  // namespace presto

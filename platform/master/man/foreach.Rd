@@ -20,7 +20,7 @@
 \details{
   \code{\link{foreach}} executes a function in parallel on worker
   nodes. Programmers can pass any R object as argument to the
-  function. Distributed array, data frame or lists, and their partitions can be
+  function. Distributed arrays, data frames or lists, and their partitions can be
   passed using \code{\link{splits}}.
   
   The \code{\link{foreach}} loop or the function executed by it does not
@@ -75,6 +75,30 @@ foreach(i, 1:npartitions(da),
     update(c)
   })
 getpartition(result)
+distributedR_shutdown()
+}
+\dontrun{
+library(distributedR)
+distributedR_start()
+
+da <- darray(dim=c(6,9),blocks=c(3,3),sparse=FALSE,data=0)
+
+##First index gets c(1,2,3), second index gets c(4,5,6), etc.
+get.three.indices <- function(index){
+    start = 3*(index-1) + 1
+    indices = c(start:(start+2))
+    indices
+}
+
+##Update darray 3 splits at a time, with parallelism of 2
+foreach(i,1:2,function(a=splits(da,get.three.indices(i)),data=get.three.indices(i)){
+       a[[1]] = matrix(data[[1]],nrow(a[[1]]),ncol(a[[1]]))
+       a[[2]] = matrix(data[[2]],nrow(a[[2]]),ncol(a[[2]]))
+       a[[3]] = matrix(data[[3]],nrow(a[[3]]),ncol(a[[3]]))
+       update(a)
+    })
+
+getpartition(da) ##counts from 1 to 6 in 3x3 blocks!
 distributedR_shutdown()
 }
 }

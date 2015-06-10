@@ -2,8 +2,8 @@
 
 
 # Check for distributed R rpm installation and 
-# uninstall before installation from source
-if [[ `cat /etc/*-release | grep -i 'CentOS' | wc -l` > 0 ]] || [[ `cat /etc/*-release | grep -i 'Red Hat' | wc -l` > 0 ]]; then
+#uninstall before installation from source
+if [[ `cat /etc/*-release | egrep '(CentOS|Red Hat)' | wc -l` > 0 ]]; then
   echo -e "\n==== Checking for installed rpm ===="
   if [[ `rpm -qa | grep 'vertica-distributedR' | wc -l` > 0 ]]; then
      echo "Uninstalling vertica-distributedR RPM"
@@ -14,7 +14,7 @@ if [[ `cat /etc/*-release | grep -i 'CentOS' | wc -l` > 0 ]] || [[ `cat /etc/*-r
      fi
   fi
 
-else if [[ `cat /etc/*-release | grep -i 'Debian' | wc -l` > 0 ]] || [[ `cat /etc/*-release | grep -i 'Ubuntu' | wc -l` > 0 ]]; then
+else if [[ `cat /etc/*-release | egrep '(Ubuntu|Debian)' | wc -l` > 0 ]]; then
   echo -e "\n==== Checking for installed deb ===="
   if [[ `dpkg -l | grep 'vertica-distributedr' | wc -l` > 0 ]]; then
      echo "Uninstalling vertica-distributedr DEB"

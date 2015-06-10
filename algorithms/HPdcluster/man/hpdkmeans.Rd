@@ -24,7 +24,7 @@ hpdkmeans(X, centers, iter.max = 10, nstart = 1,
     the maximum number of iterations allowed.
   }
   \item{nstart}{
-    when the value specified for 'centers' argument is a number, clustering will be performed several times and the best result is reported. The best result would be the one with highest value of 'withinss' regardless of its number of iterations. 'nstart' gives the number of times that a random set of centers is chosen and clustering is performed. When 'centers' argument is a matrix of centers, 'nstart' will be discarded.
+    when the value specified for 'centers' argument is a number, clustering will be performed several times and the best result is reported. The best result would be the one with highest value of 'withinss' regardless of its number of iterations. 'nstart' gives the number of times that a random set of centers is chosen and clustering is performed. When 'centers' argument is a matrix of centers, or when \code{completeModel=TRUE} 'nstart' will be discarded.
   }
   \item{sampling_threshold}{
     threshold for the method which Randomly finds centers (centralized or distributed). It should be always smaller than 1e9. When (blockSize > sampling_threshold || nSample > 1e9), the distributed sampling is selected, in which first a set of blocks are randomly chosen, and then the centers are randomly selected from the samples of those bloks. Here, blockSize is the number of samples in each partition of X, and nSample is the total number of samples in X.
@@ -36,7 +36,7 @@ hpdkmeans(X, centers, iter.max = 10, nstart = 1,
     it indicates what should happen when the data contain missed values. Values of NA, NaN, and Inf in samples are treated as missed values. There are two options for this argument exclude and fail. When exclude is selected (the default choice), any sample with missed values will be ignored in the clustering process. In the darray which will be created for cluster, the value corresponding to these samples will be NA. When fail is selected, the function will stop in the case of any missed value in the dataset.
   }
   \item{completeModel}{
-    when it is FALSE (default), the function does not return cluster label of the samples
+    when it is FALSE (default), the function does not return cluster label of the samples and measurements of cluster quality. Therefore, it can perform faster.
   }
 }
 \details{
@@ -46,12 +46,12 @@ The algorithm of Lloyd–Forgy (Lloyd 1957 and Forgy 1965) is used at the curren
 }
 \value{
 hpdkmeans returns an object of class "hpdkmeans" which has a print and a fitted method. It is a list with components:
-  \item{cluster}{(only when completeModel=TRUE) a darray of integers (from 1:k) indicating the cluster to which each point is allocated.}
+  \item{cluster}{(available only when completeModel=TRUE; otherwise it is NULL) a darray of integers (from 1:k) indicating the cluster to which each point is allocated.}
   \item{centers}{a matrix of cluster centres.}
-  \item{totss}{the total sum of squares.}
-  \item{withinss}{vector of within-cluster sum of squares, one component per cluster.}
-  \item{tot.withinss}{total within-cluster sum of squares, i.e., sum(withinss).}
-  \item{betweenss}{the between-cluster sum of squares, i.e. totss-tot.withinss.}
+  \item{totss}{(available only when completeModel=TRUE; otherwise it is NA) the total sum of squares.}
+  \item{withinss}{(available only when completeModel=TRUE; otherwise it is NA) vector of within-cluster sum of squares, one component per cluster.}
+  \item{tot.withinss}{(available only when completeModel=TRUE; otherwise it is NA) total within-cluster sum of squares, i.e., sum(withinss).}
+  \item{betweenss}{(available only when completeModel=TRUE; otherwise it is NA) the between-cluster sum of squares, i.e. totss-tot.withinss.}
   \item{size}{the number of points in each cluster.}
   \item{iter}{the number of iterations used for clustering. Its value will be iter.max+1 when the algorithm is not converged.}
 }
@@ -77,12 +77,7 @@ Lloyd, S. P. (1957, 1982) Least squares quantization in PCM. Technical Note, Bel
 3.073684,4.393548,1.462000,5.742105,1.433871,0.246000,2.071053),3,4)
     dimnames(centers) <- list(1L:3L, colnames(iris2))
 
-    (drs <- distributedR_status())
-    nblocks = sum(drs$Inst)
-    X <- as.darray(as.matrix(cbind(iris2$Sepal.Length,iris2$Sepal.Width,
-iris2$Petal.Length,iris2$Petal.Width)),c(ceiling(length(iris2$Sepal.Length)
-/nblocks),4))
-    colnames(X) <- colnames(iris2)
+    X <- as.darray(data.matrix(iris2))
 
     (mykm1 <- hpdkmeans(X,centers=centers))
     

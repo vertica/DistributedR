@@ -547,9 +547,9 @@ e \"" << name_ << "\", version " << version <<": rdim="<<rdim<<" :cdim="<<cdim;
       if(prev_cdim!=split_cdim){
 	result = false;
 	if(split_rdim == split_cdim ==1){
-	sprintf(err_msg,"Split %d was either not updated or updated with size (%d,%d). Mismatch with adjacent partition's column size (=%d)", (split_id+1),split_rdim, split_cdim, prev_cdim);
+    sprintf(err_msg,"Split %ld was either not updated or updated with size (%ld,%ld). Mismatch with adjacent partition's column size (=%ld)", (split_id+1),split_rdim, split_cdim, prev_cdim);
 	}else{
-	sprintf(err_msg,"Update to split %d with size (%d,%d). Mismatch with adjacent partition's column size (=%d)", (split_id+1),split_rdim, split_cdim, prev_cdim);
+    sprintf(err_msg,"Update to split %ld with size (%ld,%ld). Mismatch with adjacent partition's column size (=%ld)", (split_id+1),split_rdim, split_cdim, prev_cdim);
 	}
 	LOG_ERROR(err_msg);
       }
@@ -558,9 +558,9 @@ e \"" << name_ << "\", version " << version <<": rdim="<<rdim<<" :cdim="<<cdim;
 	result = false;
 	if(split_rdim == split_cdim ==1){
 	  //The user probably did not update the split. Provide more information in the error message.
-	 sprintf(err_msg,"Split %d was either not updated or updated with size (%d,%d). Mismatch with adjacent partition's row size (=%d)", (split_id+1),split_rdim, split_cdim, prev_rdim[row]);
+     sprintf(err_msg,"Split %ld was either not updated or updated with size (%ld,%ld). Mismatch with adjacent partition's row size (=%ld)", (split_id+1),split_rdim, split_cdim, prev_rdim[row]);
 	}else{
-	  sprintf(err_msg,"Update to split %d with size (%d,%d). Mismatch with adjacent partition's row size (=%d)", (split_id+1),split_rdim, split_cdim, prev_rdim[row]);
+      sprintf(err_msg,"Update to split %ld with size (%ld,%ld). Mismatch with adjacent partition's row size (=%ld)", (split_id+1),split_rdim, split_cdim, prev_rdim[row]);
 	}
 	LOG_ERROR(err_msg);
       }

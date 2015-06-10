@@ -102,6 +102,7 @@ void DistList::LoadInR(RInside &R, const std::string &varname){
     std::pair<void*, size_t> array_region = createmapping(*shm,
       mapped_size(sizeof(*header)), header->size, 0);
     memcpy(RAW(arr), array_region.first, header->size);
+    munmap(array_region.first, array_region.second);
   }
   Rcpp::Language unserialize_call("unserialize", arr);
   SEXP dlist;

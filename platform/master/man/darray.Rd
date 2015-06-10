@@ -43,7 +43,7 @@ Too many partitions increase the overheads of managing distributed
 objects.  We recommend users to create objects with as many partitions
 as the total number of CPU cores in the system.  We restrict users
 from creating objects when the number of partitions is more than
-20,000 or more than 50x the number of CPU cores.
+100,000 or more than no-of-cores*max(50, no-of-cores).
 
   Distributed arrays can be read-shared by multiple concurrent tasks,
 but modified by only a single writer per partition.  Programmers express

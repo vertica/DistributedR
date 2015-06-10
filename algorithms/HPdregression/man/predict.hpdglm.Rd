@@ -47,10 +47,8 @@ The output is a matrix or a darray, depending to the type of newdata, which cont
  \dontrun{
     library(HPdregression)
     distributedR_start()
-    Y <- as.darray(as.matrix(faithful$eruptions),
-                   c(ceiling(length(faithful$eruption)/4),1))
-    X <- as.darray (as.matrix(faithful$waiting),
-                   c(ceiling(length(faithful$waiting)/4),1))
+    Y <- as.darray(data.matrix(faithful["eruptions"]))
+    X <- as.darray(data.matrix(faithful["waiting"]))
 
     myModel <- hpdglm(Y, X)
     newSamples <- matrix(c(1:3),,1)

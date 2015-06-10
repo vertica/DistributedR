@@ -45,7 +45,7 @@ splitGraphFile <- function(inputFile, npartitions, outputPath, isNFS = FALSE) {
     fileName <- tokens[length(tokens)]
     inputPath <- paste(tokens[-length(tokens)], collapse="/")
     # creating a temp subdirectory for generating splits
-    tempPath <- paste(inputPath,"/tempSGF", sep="")
+    tempPath <- paste(outputPath,"/tempSGF", sep="")
     system(paste("rm -r ", tempPath), ignore.stderr = TRUE) # to make sure that the temp subdirectory does not exist
     success <- system(paste("mkdir ", tempPath))
     if(success != 0)
@@ -67,7 +67,7 @@ splitGraphFile <- function(inputFile, npartitions, outputPath, isNFS = FALSE) {
         for(w in 1:length(workers)) {
             thisW <- workers[[w]]
             workerName <- strsplit(thisW,":", fixed=TRUE)[[1]][[1]]
-            cat("Sending the files to ", workerName, "\n")
+            message("Sending the files to ", workerName)
             if(npartitions == 1) {
                 check <- system(paste("ssh ", workerName, " ls ", outputPath, sep=""), intern=TRUE)
                 success <- attributes(check)

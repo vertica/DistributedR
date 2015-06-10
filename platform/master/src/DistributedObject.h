@@ -23,6 +23,11 @@
 #ifndef __DISTRIBUTED_OBJECT_
 #define __DISTRIBUTED_OBJECT_
 
+// Needed for fast-updating of Master's metadata
+#ifndef FAST_UPDATE
+#define FAST_UPDATE
+#endif
+
 #include <boost/multi_index_container.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/random_access_index.hpp>

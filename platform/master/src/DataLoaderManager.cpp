@@ -46,9 +46,10 @@ extern "C" void m_sigint_handler(int sig);
 std::string resolve_hostname(std::string worker_hostname) {
   std::string real_hostname;
   if(worker_hostname == "127.0.0.1" || worker_hostname == "localhost") {
-    ostringstream hostname;
-    hostname << getenv("HOSTNAME");
-    real_hostname = hostname.str().c_str();
+    char hostname[1024];
+    hostname[1023] = '\0';
+    gethostname(hostname, 1023);
+    real_hostname = string(hostname);
   } else {
     real_hostname = worker_hostname;
   }
@@ -110,8 +111,19 @@ void DataLoaderManager::HandlePortAssignment(WorkerInfo* worker, int loader_port
  * - Update total number of partitions
  * - Update file_ids generated per worker
  */
-void DataLoaderManager::WorkerLoaderComplete(WorkerInfo* workerinfo, ::int64_t npartitions) {
+void DataLoaderManager::WorkerLoaderComplete(WorkerInfo* workerinfo, ::int64_t npartitions, 
+                                             int transfer_success, std::string transfer_message) {
   unique_lock<mutex> lock(loader_mutex);
+  LOG_DEBUG("<DataLoader> Worker %s : Execution successful: %s", workerinfo->get_hostname_port_key().c_str(), transfer_success ? "true":"false");
+
+  if(!(bool)transfer_success) {
+    transfer_success_ = (bool)transfer_success;
+    std::ostringstream error_msg;
+    error_msg << exception_prefix << " in Worker " << workerinfo->get_hostname_port_key() << ": "
+              << transfer_message;
+    transfer_error_message_ = error_msg.str();
+  }
+     
   totalPartitions += npartitions;
   
   for(int i = 0; i < npartitions; i++) {
@@ -271,6 +283,11 @@ SEXP DataLoaderManager::FetchLoaderStatus(SEXP UDx_result_) {
 
   for(int i = 0; i<worker_port_info.size(); i++) 
     LoaderSemaWait();
+
+  if(!transfer_success_) {
+    LOG_ERROR(transfer_error_message_.c_str());
+    forward_exception_to_r(PrestoWarningException(transfer_error_message_.c_str()));
+  }
 
   Rcpp::NumericVector totalsize_sexp = UDx_result["NROWS"];
   vector< ::int64_t> totalsize = vector< ::int64_t>(totalsize_sexp.begin(), totalsize_sexp.end());
