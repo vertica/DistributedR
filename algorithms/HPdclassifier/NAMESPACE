@@ -1,2 +1,3 @@
+useDynLib(HPdclassifier)
 exportPattern("^[[:alpha:]]+")
 import(distributedR)

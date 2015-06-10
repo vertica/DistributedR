@@ -18,16 +18,34 @@
 
 update <- function(x,empty=FALSE) {
   name <- deparse(substitute(x))
-  if(inherits(x, "dsCMatrix")) {
-    coerce_x <- as(x, "dgCMatrix")
-    assign(name, coerce_x, globalenv())
-  } else if(inherits(x, "dgeMatrix")) { #dgeMatrix is a dense matrix type
-    coerce_x <- as(x, "matrix")
-    assign(name, coerce_x, globalenv())
-  } else 
-    assign(name, x, globalenv())
+  assign(name, x, globalenv())
+
+  # Check to see if updating a list-of-splits variable -- needed to disambiguate
+  # between list of splits of dframe or single split of dlist with data frames.
+  flag <- paste0(".",name,".isListType","==TRUE")
+  flag <- tryCatch(
+            eval(parse(text=flag),envir=globalenv()),
+          error = function(e) {
+	    FALSE
+          }) 
+
+  if(!flag)
+    objdim <- getdimensions(x)
+  else {
+    if(length(x) == 0) objdim <- c(0,0)
+    else {
+      objdim <- lapply(x,getdimensions)
+      objdim <- unlist(objdim)
+    }
+  }
 
   #Find dimension of object  
+  .Call("NewUpdate", get("updates.ptr..."), name, empty, objdim,
+        DUP=FALSE)
+}
+
+# get dimensions
+getdimensions <- function(x) {
   objdim<-as.numeric(dim(x))
   if(is.null(objdim) || length(objdim)==0) objdim <-c(0,0) #For lists, numeric values, and non-matrix types etc.
   if(length(objdim)==1) objdim<-c(1,objdim) #Vectors have one dimension
@@ -46,9 +64,7 @@ update <- function(x,empty=FALSE) {
      if(all(objdim<=.Machine$integer.max) == FALSE)
         stop(paste("Executor error: Cannot create dframe partition with dimension larger than", .Machine$integer.max))
   }  
-
-  .Call("NewUpdate", get("updates.ptr..."), name, empty, objdim,
-        DUP=FALSE)
+  objdim
 }
 
 # get (x,y) offsets of split with index

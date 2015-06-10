@@ -36,10 +36,10 @@ db2matrix <- function(tableName, dsn, features = list(...)) {
     qryString <- "select"
     if(nFeatures > 1) {
         for(i in 1:(nFeatures-1)) {
-            qryString <- paste(qryString, features[i], ',')
+            qryString <- paste(qryString, "\"", features[i], '\",', sep="")
         }
     }
-    qryString <- paste(qryString, features[nFeatures])
+    qryString <- paste(qryString, "\"", features[nFeatures], "\"", sep="")
     qryString <- paste(qryString, " from", tableName)
 
     connect <- odbcConnect(dsn)

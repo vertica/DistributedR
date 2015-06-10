@@ -58,7 +58,7 @@ stresstest:
 
 test_platform:
 	echo "library(distributedR); library(testthat); sink(paste(getwd(),'/test_platform.out',sep=''), type='output'); distributedR_start(); test_package('distributedR'); distributedR_shutdown()" | R --vanilla --slave --no-save
-	@echo "\n----- Test Report -----\n"
+	@echo -e "\n----- Test Report -----\n"
 	@cat $(PWD)/test_platform.out
 
 test_clean:
@@ -104,7 +104,7 @@ algorithm_docs:
 ## === Uninstall and Clean targets
 
 uninstall:
-	sudo bin/uninstall_distributedR.sh	
+	sudo bin/uninstall_distributedR.sh ${ARGS}
 
 clean:
 	$(MAKE) -C third_party/atomicio clean
@@ -123,20 +123,4 @@ clean:
 distclean: clean
 	$(MAKE) -C third_party clean
 
-
-
-## === Targets to create rpm/debian package from source
-
-rpm:
-	$(MAKE) -C os_packaging rpm
-	cp os_packaging/rpmbuild/RPMS/x86_64/*.rpm .
-	$(MAKE) -C os_packaging rpm-clean
-
-debian:
-	$(MAKE) -C os_packaging debian
-	cp os_packaging/debbuild/DEBS/*.deb .
-	$(MAKE) -C os_packaging deb-clean
-
 include build.mk
-
-

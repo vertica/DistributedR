@@ -1,9 +1,0 @@
-Source: vertica-distributedR
-Priority: extra
-Maintainer: Hewlett-Packard Company
-Package: vertica-distributedR
-Architecture: amd64
-Version: 1.0.0
-Description: An environment for executing R functions in a distributed manner.
- R is a single-threaded process.  This limits its utility for big data analytics.  Vertica Distributed-R allows Vertica users to write programs which will be executed in distributed fashion, that is, parts of programs as specified by the developer can be run in multiple, parallel single-threaded R-processes.  The result is dramatically reduced execution times for big data  analytical algorithms. 
- Build revision @@SCM_VERSION@@ 

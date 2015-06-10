@@ -152,13 +152,14 @@ function(X, centers, iter.max = 10, nstart = 1,
     }
 
 #O  Z <- do_one(nmeth)
-    Z <- .do_oneSet(nmeth, X, Norms, k, centers, iter.max, trace, mask)
-    best <- sum(Z$wss)
+    Z <- .do_oneSet(nmeth, X, Norms, k, centers, iter.max, trace, mask, completeModel=completeModel)
+    if(completeModel)
+        best <- sum(Z$wss)
 
-    if(nstart >= 2 && !initialCenters) {
+    if(nstart >= 2 && !initialCenters && completeModel) {
 	    for(i in 2:nstart) {
 	        centers <- .pickCenters(X, k, sampling_threshold, trace)
-	        ZZ <- .do_oneSet(nmeth, X, Norms, k, centers, iter.max, trace, mask)
+	        ZZ <- .do_oneSet(nmeth, X, Norms, k, centers, iter.max, trace, mask, completeModel=completeModel)
 	        if((z <- sum(ZZ$wss)) < best) {
 		        Z <- ZZ
 		        best <- z
@@ -174,7 +175,8 @@ function(X, centers, iter.max = 10, nstart = 1,
     }
 
 #O    totss <- sum(scale(x, scale = FALSE)^2)
-    totss <- .d.totss(X, trace, mask)
+    if(completeModel)
+        totss <- .d.totss(X, trace, mask)
 
     if (trace) {
         endTotalTime <- proc.time()
@@ -192,9 +194,9 @@ function(X, centers, iter.max = 10, nstart = 1,
                        size = Z$size, iter = Z$iter),
 	              class = c("hpdkmeans","kmeans"))
     else
-        structure(list(centers = centers, totss = totss,
-                       withinss = Z$wss, tot.withinss = best,
-                       betweenss = totss - best, 
+        structure(list(centers = centers, totss = NA,
+                       withinss = NA, tot.withinss = NA,
+                       betweenss = NA, 
                        size = Z$size, iter = Z$iter),
 	              class = c("hpdkmeans","kmeans"))
 }
@@ -398,7 +400,7 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
 }
 
 ## Main clustersing function (a complete set of iterations for given centers)
-.do_oneSet <- function (nmeth, X, Norms, k, centers, iter.max, trace, mask = NULL) {
+.do_oneSet <- function (nmeth, X, Norms, k, centers, iter.max, trace, mask = NULL, completeModel=FALSE) {
     nSample <- nrow(X)    # number of samples
     p <- as.integer(ncol(X))    # number of features
     nparts <- npartitions(X)  # number of partitions (blocks)
@@ -408,7 +410,10 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
     numOfPoints <- darray(dim=c(k, nparts), blocks=c(k,1), FALSE)
 
     #Create an array that maps points to their clusters
+    if(completeModel)
         cluster <- clone(X, ncol=1, data=NA, sparse=FALSE)
+    else
+        cluster <- darray(npartitions=npartitions(X))
 
     iteration_counter <- 1
     .hpkmeans.env$iterations_totalTime <- 0
@@ -422,7 +427,7 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
             }
             foreach(i, 1:nparts, progress=trace, kmeansFunc <- function(Xi=splits(X,i), Ni=splits(Norms,i),
                     centers=centers, sumOfClusteri=splits(sumOfCluster,i), numOfPointsi=splits(numOfPoints,i),
-                    clusteri=splits(cluster,i), nmeth=nmeth){
+                    clusteri=splits(cluster,i), nmeth=nmeth, completeModel=completeModel){
                 cl = integer(nrow(Xi))
                 nc = integer(nrow(centers))
                 if(class(Xi) == "matrix")
@@ -434,10 +439,12 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
                 centers[is.nan(centers)] <- 0
                 sumOfClusteri <- matrix(centers * nc)
                 numOfPointsi <- matrix(nc)
+                if(completeModel)
                     clusteri <- matrix(cl)
                 
                 update(sumOfClusteri)
                 update(numOfPointsi)
+                if(completeModel)
                     update(clusteri)
             })
             size <- rowSums(numOfPoints)    # the number of points in every cluster, the size of each cluster
@@ -467,7 +474,7 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
             }
             foreach(i, 1:nparts, progress=trace, kmeansFunc <- function(Xi=splits(X,i), maski=splits(mask,i), Ni=splits(Norms,i),
                     centers=centers, sumOfClusteri=splits(sumOfCluster,i), numOfPointsi=splits(numOfPoints,i),
-                    clusteri=splits(cluster,i), nmeth=nmeth){
+                    clusteri=splits(cluster,i), nmeth=nmeth, completeModel=completeModel){
                 good <- maski > 0
                 m <- as.integer(sum(maski))
                 cl <- integer(m)
@@ -480,11 +487,13 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
                 centers[is.nan(centers)] <- 0
                 sumOfClusteri <- matrix(centers * nc)
                 numOfPointsi <- matrix(nc)
+                if(completeModel)
                     clusteri[good,] <- matrix(cl)
                 
                 update(sumOfClusteri)
                 update(numOfPointsi)
-                update(clusteri)
+                if(completeModel)
+                    update(clusteri)
             })
             size <- rowSums(numOfPoints)    # the number of points in every cluster, the size of each cluster
             cent <- rowSums(sumOfCluster)   # sum of all centers
@@ -512,40 +521,43 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
     if(any(size == 0))
         warning("empty cluster: try a better set of initial centers", call.=FALSE)
 
-    #Create a darray for wss
-    dwss <- darray(dim=c(k, nparts), blocks=c(k,1), sparse=FALSE, empty=TRUE)
-    if(trace) {
-        cat("Calculating wss\n")
-        starttime<-proc.time()
-    }
+    if(completeModel) {
+        #Create a darray for wss
+        dwss <- darray(dim=c(k, nparts), blocks=c(k,1), sparse=FALSE, empty=TRUE)
+        if(trace) {
+            cat("Calculating wss\n")
+            starttime<-proc.time()
+        }
 
-    if(is.null(mask)) {
-        foreach(i, 1:nparts, progress=trace, wssFunction <- function(Xi=splits(X,i),
-                dwssi=splits(dwss,i), clusteri=splits(cluster,i), centers=centers){
-			if(class(Xi) == "matrix")
-				dwssi <- .Call("calculate_wss", Xi, centers, clusteri, PACKAGE="MatrixHelper")
-			else
-				dwssi <- .Call("calculate_wss", as.matrix(Xi), centers, clusteri, PACKAGE="MatrixHelper")
-            update(dwssi)
-        })
-    } else {
-        foreach(i, 1:nparts, progress=trace, wssFunction <- function(Xi=splits(X,i), maski=splits(mask,i),
-                dwssi=splits(dwss,i), clusteri=splits(cluster,i), centers=centers){
-            good <- maski > 0
-			if(class(Xi) == "matrix")
-				dwssi <- .Call("calculate_wss", Xi[good,], centers, clusteri[good,], PACKAGE="MatrixHelper")
-			else
-				dwssi <- .Call("calculate_wss", as.matrix(Xi[good,]), centers, clusteri[good,], PACKAGE="MatrixHelper")
-            update(dwssi)
-        })
-    }
+        if(is.null(mask)) {
+            foreach(i, 1:nparts, progress=trace, wssFunction <- function(Xi=splits(X,i),
+                    dwssi=splits(dwss,i), clusteri=splits(cluster,i), centers=centers){
+	    		if(class(Xi) == "matrix")
+	    			dwssi <- .Call("calculate_wss", Xi, centers, clusteri, PACKAGE="MatrixHelper")
+	    		else
+	    			dwssi <- .Call("calculate_wss", as.matrix(Xi), centers, clusteri, PACKAGE="MatrixHelper")
+                update(dwssi)
+            })
+        } else {
+            foreach(i, 1:nparts, progress=trace, wssFunction <- function(Xi=splits(X,i), maski=splits(mask,i),
+                    dwssi=splits(dwss,i), clusteri=splits(cluster,i), centers=centers){
+                good <- maski > 0
+	    		if(class(Xi) == "matrix")
+	    			dwssi <- .Call("calculate_wss", Xi[good,], centers, clusteri[good,], PACKAGE="MatrixHelper")
+	    		else
+	    			dwssi <- .Call("calculate_wss", as.matrix(Xi[good,]), centers, clusteri[good,], PACKAGE="MatrixHelper")
+                update(dwssi)
+            })
+        }
 
-    wss <- rowSums(dwss)
-    if (trace) {    # timing end
-        endtime <- proc.time()
-        spentTime <- endtime-starttime
-        cat("Spent time:",(spentTime)[3],"sec\n")
-    }
+        wss <- rowSums(dwss)
+        if (trace) {    # timing end
+            endtime <- proc.time()
+            spentTime <- endtime-starttime
+            cat("Spent time:",(spentTime)[3],"sec\n")
+        }
+    } else # if(completeModel)
+        wss <- NA
 
     list(cluster=cluster, centers=centers, wss=wss, size=size, iter=iteration_counter)
 }
@@ -706,3 +718,16 @@ hpdapply <- function(newdata, centers, trace=FALSE) {
 
   cluster
 }
+
+## A supplementary function for deployment
+# inputModel: it is the model that is going to be prepared for deployment
+deploy.hpdkmeans <- function(inputModel) {
+    if(is.null(inputModel$centers))
+        stop("the model does not contain centers and cannot be used for prediction")
+    distributed_objects <- sapply(inputModel, is.darray)
+    if(any(distributed_objects))
+        inputModel <- inputModel[-(which(distributed_objects, arr.ind=TRUE))]
+    class(inputModel) <- c("hpdkmeans","kmeans")
+    inputModel
+}
+

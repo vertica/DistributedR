@@ -67,11 +67,11 @@ setMethod("initialize", "dobject",
 	    nblocks <-  npartitions[1]*npartitions[2]
             nexecutors <- sum((distributedR_status())$Inst)
 
-            if(nblocks > 20000 || nblocks > nexecutors*50){
+            if(nblocks > 100000 || nblocks > (nexecutors*(max(nexecutors,50)))){
                 stop("Exceeded max limit of partitions on this cluster. Use fewer partitions. E.g., 1x-5x of #cores (",nexecutors,") instead of ",nblocks,".\n")
             }
             if(nblocks > 5*nexecutors){
-                cat(paste("Warning: Too many partitions may degrade performance. Use fewer partitions. E.g., 1x-5x of #cores (",nexecutors,") instead of ",nblocks,".\n",sep=""))
+                warning(paste("Too many partitions may degrade performance. Use fewer partitions. E.g., 1x-5x of #cores (",nexecutors,") instead of ",nblocks,".",sep=""))
             }
 
             supported_distributions <- c("roundrobin") #c("roundrobin", "random", "custom")

@@ -114,7 +114,7 @@ typedef enum {
   SYS_MEM_USED
 } HelloReplyFlag;
 
-static string exception_prefix = "distributedR Exception: ";
+static string exception_prefix = "DistributedR Exception";
 
 /** Convert integer to string
  * @param i integer to convert to string

@@ -48,12 +48,12 @@ int gethasweights(ifstream &inFile)
         return 1;
     }
     else {
-        Rprintf("Error: found 1 vertex in a line, bad file format\n");
+        Rf_error("Error: found 1 vertex in a line, bad file format\n");
         return -1;
     }
   } //while
 
-  Rprintf("Error: found no edge list, bad file format\n");
+  Rf_error("Error: found no edge list, bad file format\n");
   return -1;
 }
 
@@ -79,7 +79,7 @@ RcppExport SEXP hpdsplitter (SEXP inputfile, SEXP rows, SEXP cols, SEXP outfile)
   ifstream inFile (inputName);
   if (! inFile) 
   {
-    Rprintf("Error: Could not open the file. Make sure that the file is accessible in the specified path\n");
+    Rf_error("Error: Could not open the file. Make sure that the file is accessible in the specified path\n");
     return R_NilValue;
   }
 
@@ -102,12 +102,12 @@ RcppExport SEXP hpdsplitter (SEXP inputfile, SEXP rows, SEXP cols, SEXP outfile)
         continue; // ignore the line without vertex
     if (fscanner != 2) {
       inFile.close();
-      Rprintf("Error: There is a line with only one vertex.\n");
+      Rf_error("Error: There is a line with only one vertex.\n");
       return R_NilValue;
     }
     if (d < 0 || e < 0) {
       inFile.close();
-      Rprintf("Error: Found a negative number for a vertex ID. Vertex IDs should be non-negative integers.\n");
+      Rf_error("Error: Found a negative number for a vertex ID. Vertex IDs should be non-negative integers.\n");
       return R_NilValue;
     }
 
@@ -123,12 +123,12 @@ RcppExport SEXP hpdsplitter (SEXP inputfile, SEXP rows, SEXP cols, SEXP outfile)
 //  Rprintf("%d vertices\n", v);
   if (desired_rowsplits > v)
   {
-    Rprintf("Error: requested number of row splits is bigger than the number of vertices\n");
+    Rf_error("Error: requested number of row splits is bigger than the number of vertices\n");
     return R_NilValue;
   }
   if (desired_colsplits > v)
   {
-    Rprintf("Error: requested number of col splits is bigger than the number of vertices\n");
+    Rf_error("Error: requested number of col splits is bigger than the number of vertices\n");
     return R_NilValue;
   }
 
@@ -138,13 +138,11 @@ RcppExport SEXP hpdsplitter (SEXP inputfile, SEXP rows, SEXP cols, SEXP outfile)
   int colsplits = v%colsplitsize==0 ? v/colsplitsize : v/colsplitsize+1;
   if (rowsplits != desired_rowsplits)
   {
-    Rprintf("WARNING: number of vertices is not divisible by requested number of row splits\n");
-    Rprintf("         new number of row splits is %d\n", rowsplits);
+    Rf_warning("WARNING: number of vertices is not divisible by requested number of row splits\n         new number of row splits is %d\n", rowsplits);
   }
   if (colsplits != desired_colsplits)
   {
-    Rprintf("WARNING: number of vertices is not divisible by requested number of col splits\n");
-    Rprintf("         new number of col splits is %d\n", colsplits);
+    Rf_warning("WARNING: number of vertices is not divisible by requested number of col splits\n         new number of col splits is %d\n", colsplits);
   }
 
   int splits = rowsplits*colsplits;
@@ -158,7 +156,7 @@ RcppExport SEXP hpdsplitter (SEXP inputfile, SEXP rows, SEXP cols, SEXP outfile)
     sprintf(fname, "%s%d", outname, i);
     outfiles[i] = fopen(fname, "w");
     if (outfiles[i] == NULL) {
-        Rprintf("Error in creating the output files.\n");
+        Rf_error("Error in creating the output files.\n");
         return R_NilValue;
     }
   }

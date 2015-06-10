@@ -371,7 +371,7 @@ bool PrestoMasterHandler::NewUpdate(NewUpdateRequest update) {
    DistributedObject* d = darray_map_->GetDistributedObject(
          darray_name);
    d->PutSplitWithId(split_id, arr);
-   LOG_INFO("New value of darray split %s updated", darray_name.c_str());
+   LOG_DEBUG("New value of split %s updated", darray_name.c_str());
    return true;
 }
 

@@ -95,8 +95,6 @@ pair<void*, size_t> createmapping(
     return make_pair(address, size);
   }
 
-  boost::interprocess::mapping_handle_t map_hnd = mapping.get_mapping_handle();
-
   void *result = mmap(address,
                       size,
                       PROT_READ|PROT_WRITE,
@@ -293,21 +291,40 @@ ArrayData* ParseVariable(RInside &R, const string &varname,
   LOG_INFO("org_class: %d, class: %s", org_class, classname_str.c_str());
 
   if (org_class == DENSE) {
-    if (classname.find("matrix") == classname.end() && classname.find("numeric") == classname.end()) {
+    if (classname.find("matrix") == classname.end() && classname.find("numeric") == classname.end()
+            && classname.find("dsyMatrix") == classname.end() && classname.find("dgeMatrix") == classname.end()) {
       ostringstream msg;
       msg << "update(" << varname <<") failure due to data type inconsistency. " <<
         "Variable '" << varname << "' should be a dense matrix instead of " << classname_str <<".";
       throw PrestoWarningException(msg.str().c_str());
     }
     
+    if (classname.find("matrix") == classname.end()){
+        strcpy(cmd,"");
+        snprintf(cmd, CMD_BUF_SIZE, "%s <- as(%s, \"matrix\")", varname.c_str(),varname.c_str());
+        R.parseEval(cmd);
+        classname.insert("matrix");
+        classname.erase("dsyMatrix");
+        classname.erase("dgeMatrix");
+    }
+    
     return new DenseArrayData(newname, R[varname], classname);
   } else if (org_class == SPARSE) { 
-    if (classname.find("dgCMatrix") == classname.end()) {    
+    if (classname.find("dgCMatrix") == classname.end() && classname.find("dsCMatrix") == classname.end()) {    
       ostringstream msg;
       msg << "update(" << varname <<") failure due to data type inconsistency. " <<
         "Variable '" << varname << "' should be a sparse matrix instead of "<< classname_str <<".";
       throw PrestoWarningException(msg.str().c_str());
     }
+    
+    if(classname.find("dsCMatrix") != classname.end()){
+        strcpy(cmd,"");
+        snprintf(cmd, CMD_BUF_SIZE, "%s <- as(%s, \"dgCMatrix\")", varname.c_str(),varname.c_str());
+        R.parseEval(cmd);
+        classname.insert("dgCMatrix");
+        classname.erase("dsCMatrix");
+    }
+    
     return new SparseArrayData(newname, R[varname], classname);
   } else if (org_class == SPARSE_TRIPLET) {
     if (classname.find("dgTMatrix") == classname.end()) {
@@ -571,6 +588,7 @@ void DenseArrayData::LoadInR(RInside &R, const string &varname) {
         *shm, mapped_size(sizeof(*header)), data_size, 0);
     memcpy((header->value_type==REALSXP ? (void*)REAL(arr) : (void*)INTEGER(arr)),
       array_region.first, data_size);
+    munmap(array_region.first, array_region.second);
     }else{
       LOG_DEBUG("DenseArray::Skipped loading from shm to R session: Array has size %zu", data_size);
     }
@@ -886,6 +904,7 @@ void SparseArrayData::LoadInR(RInside &R, const string &varname) {
       std::pair<void*, size_t> i_region =
         createmapping(*shm, offset, size, 0);
       memcpy(INTEGER(i_vec), i_region.first, size);
+      munmap(i_region.first, i_region.second);
     }
   }
   // fill in x vector
@@ -903,6 +922,7 @@ void SparseArrayData::LoadInR(RInside &R, const string &varname) {
       std::pair<void*, size_t> x_region =
         createmapping(*shm, offset, size, 0);
       memcpy(REAL(x_vec), x_region.first, size);
+      munmap(x_region.first, x_region.second);
     }
   }
 
@@ -919,6 +939,7 @@ void SparseArrayData::LoadInR(RInside &R, const string &varname) {
     std::pair<void*, size_t> p_region =
       createmapping(*shm, offset, size, 0);
     memcpy(INTEGER(p_vec), p_region.first, size);
+    munmap(p_region.first, p_region.second);
   }
   snprintf(cmd, CMD_BUF_SIZE,
           "%s <- sparseMatrix(x=1.0, i=c(1), j=c(1), dims=c(1,1))",
@@ -1261,6 +1282,7 @@ void SparseArrayTripletData::LoadInR(RInside &R, const string &varname) {
       std::pair<void*, size_t> i_region =
         createmapping(*shm, offset, size, 0);
       memcpy(INTEGER(i_vec), i_region.first, size);
+      munmap(i_region.first, i_region.second);
     }
   }
   // fill in x vector
@@ -1279,6 +1301,7 @@ void SparseArrayTripletData::LoadInR(RInside &R, const string &varname) {
       std::pair<void*, size_t> x_region =
         createmapping(*shm, offset, size, 0);
       memcpy(REAL(x_vec), x_region.first, size);
+      munmap(x_region.first, x_region.second);
     }
   }
 
@@ -1300,6 +1323,7 @@ void SparseArrayTripletData::LoadInR(RInside &R, const string &varname) {
     std::pair<void*, size_t> j_region =
       createmapping(*shm, offset, size, 0);
     memcpy(INTEGER(j_vec), j_region.first, size);
+    munmap(j_region.first, j_region.second);
   }
   snprintf(cmd, CMD_BUF_SIZE,
           "%s <- new(\"dgTMatrix\")",

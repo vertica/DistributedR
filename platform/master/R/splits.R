@@ -55,13 +55,28 @@ setMethod("splits", signature("dobject", "missing"),
 
 setMethod("splits", signature("dobject", "numeric"),
           function(x, y, ...) {
-            if (y<=0||y>x@dobject_ptr$num_splits()) {
+            if (min(y)<=0||max(y)>x@dobject_ptr$num_splits()) {
                 stop("Split index must be larger than 0 and smaller than # of Splits")
 	    }
             split_ids <- as.vector(y-1)
             dobject <- x@dobject_ptr
             new("splits", split_ids, dobject)
           })
+
+setMethod("splits", signature("dobject", "list"),
+          function(x, y, ...) {
+             y <- unlist(y)
+             if (min(y)<=0||max(y)>x@dobject_ptr$num_splits()) {
+                stop("Split index must be 
+larger than 0 and smaller than # of Splits")
+            }
+            dobject <- x@dobject_ptr
+            split_list <- list()
+             for(i in y){
+                split_list[length(split_list)+1] = new("splits", i-1, dobject)
+              }
+            split_list 
+         })
 
 #setMethod("splits", signature("dobject", "numeric", "numeric"),
 #          function(x, y, z, ...) {
@@ -299,6 +314,9 @@ start <- proc.time()[3]
   split_names = vector("list", 0)
   raw_arg_names = vector("list", 0)
   update_args = vector("list", 0)
+  
+  # Vector to hold arguments to be in list format
+  list_type_args = vector("list",0)
 
   arg_vals = vector("list", 0)
   raw_arg_vals = vector("list", 0)
@@ -309,31 +327,46 @@ start <- proc.time()[3]
   raw.args.time <- 0
   a <- 0
   while ( a < length(args) ) {
-#    eval_arg <- eval(eval(substitute(args[[a]]), envir=parent.frame()), envir=parent.frame())
     a <- a + 1
     if (length(args[[a]]) > 1 && deparse(args[[a]][[1]]) == "splits") {
-st <- proc.time()[3]
-      
+      st <- proc.time()[3]
       length(arg_names) <- length(arg_names) + 1
       arg_names[[length(arg_names)]] <- all_arg_names[[a]]
+      if(!inherits(eval(args[[a]][[2]],envir=parent.frame()),"dobject")){
+          stop(paste("Error: cannot access a split from a non-dobject: ",args[[a]][[2]]))
+	}
+
+      splits_used = c() #empty set used for checking overlapping split assignments
 
       length(split_names) <- length(split_names) + 1
       split_names[[length(split_names)]] <- eval(args[[a]][2][[1]], envir=parent.frame())@name
 
       length(arg_vals) <- length(arg_vals) + 1
-      if (length(args[[a]]) == 3) { # single split
-	arg_vals[[length(arg_vals)]] <- as.list(as.integer(eval(args[[a]][3][[1]], envir=parent.frame())-1))
+      if (length(args[[a]]) == 3) { # single split or list-type composite
+       
+        indexed <- checkVar(deparse(substitute(index)),args[[a]][[3]])
+        result <- parseArgSplits(args[[a]][[3]],range,deparse(substitute(index)),wild=indexed,eval(args[[a]][[2]],envir=parent.frame()))
+        arg_vals[[length(arg_vals)]] = result[[2]]
 
-	if (length(range)>1 && is.numeric(args[[a]][[3]]))  update_args = append(update_args, all_arg_names[[a]][1])
+	# if list type is determined to be true, save it in list_args vector
+        if(result[[1]]){
+           length(list_type_args) <- length(list_type_args) + 1
+  	   list_type_args[[length(list_type_args)]] <- all_arg_names[[a]]
+	}
 
-        nparts = eval(args[[a]][[2]], envir=parent.frame())@dobject_ptr$num_splits()  #validate splits arguments
-	range.split<-(unlist(arg_vals[[length(arg_vals)]]))+1
-        if (nparts < max(range.split))  {
-           stop(paste("splits() failure: Object ",args[[a]][[2]]," does not have as many partitions as specified.\n",sep=""))
-	}
-        if (min(range.split)<1)  {
-           stop(paste("splits() failure: Object ",args[[a]][[2]]," refers to partition with id < 1.\n",sep=""))
-	}
+        # check if the same split is being used by multiple execution blocks
+        if(length(range) > 1 && length(result[[2]]) == 1 && length(result[[2]][[1]]) > 0){ 
+	        update_args = append(update_args, all_arg_names[[a]][1])
+        }
+        else{
+        for(ind in 1:length(result[[2]])){
+            if(length(intersect(splits_used,result[[2]][[ind]])) > 0){ # split re-use occurred, make sure this variable isn't updated       
+	        update_args = append(update_args, all_arg_names[[a]][1])
+                break
+           }
+                splits_used = union(splits_used,result[[2]][[ind]])
+        }
+      }
       } else { # composite
         dobj <- eval(args[[a]][2][[1]], envir=parent.frame())
         if(is.darray(dobj)) {
@@ -346,10 +379,10 @@ st <- proc.time()[3]
         num.splits <- eval(args[[a]][2][[1]], envir=parent.frame())@dobject_ptr$num_splits()
         arg_vals[[length(arg_vals)]] <- list(as.integer(0:(num.splits-1)))
       }
-
-args.time <- args.time + proc.time()[3] - st
-    } else {
-st <- proc.time()[3]
+    args.time <- args.time + proc.time()[3] - st
+    } 
+else{
+      st <- proc.time()[3]
       length(raw_arg_names) <- length(raw_arg_names) + 1
       raw_arg_names[[length(raw_arg_names)]] <- all_arg_names[[a]]
 
@@ -360,22 +393,28 @@ st <- proc.time()[3]
       if (length(names.in.raw) > 0) {
         for (i in 1:length(names.in.raw)) {
           if (names.in.raw[i] == idx.string) {
-                                        # need to eval for all j in range
+           # need to eval for all j in range
             found <- TRUE
             env <- new.env(parent = parent.frame())
-            data <- lapply(lapply(range, function(i) { assign(idx.string, i, env); eval(args[[a]], envir=env) }),
-                           serialize, connection = NULL)
+            data <- tryCatch({
+            lapply(lapply(range, function(i) { assign(idx.string, i, env); eval(args[[a]], envir=env) }),
+                           serialize, connection = NULL)},error=function(e){
+                  stop(paste("Could not parse argument", ' "', deparse(args[[a]]),'"', ". Note that splits() may only be used directly in the foreach definition.",sep=""))
+              })
             raw_arg_vals[[length(raw_arg_vals)]] <- data
             break
           }
         }
       }
-
       if (!found) {
-        raw_arg_vals[[length(raw_arg_vals)]] <- list(serialize(eval(args[[a]], envir=parent.frame()), connection = NULL))
+ 
+        raw_arg_vals[[length(raw_arg_vals)]] <- tryCatch({
+          list(serialize(eval(args[[a]], envir=parent.frame()), connection = NULL))},error=function(e){
+	stop(paste("Could not parse argument", ' "', deparse(args[[a]]), '"', ". Note that splits() may only be used directly in the foreach definition.",sep=""))
+})
       }
       raw.args.time <- raw.args.time + proc.time()[3] - st
-    }
+ }
   }
 
   # validate update() statements
@@ -386,17 +425,14 @@ st <- proc.time()[3]
     x <- x+1 
     if (update_match[[x]][[1]]>-1) {
         arg_name <- substr(norm_func[[x]], 8, gregexpr(")", norm_func[[x]])[[1]][[1]]-1)
-        if (arg_name %in% update_args) stop(paste("Error in update(", arg_name, "): A split or composite array cannot be updated more than once", sep=""))
+        if (arg_name %in% update_args) stop(paste("Error in update(", arg_name, "): A split or composite array cannot be updated more than once, and split-lists may not overlap.", sep=""))
         mtch <- match(arg_name, all_arg_names)
         errorstring <- paste("Error in ",norm_func[[x]], ": Variable '", arg_name, "' is not mapped to any distributed object found in the foreach function argument\n", sep="") 
         if (!is.na(mtch)) {
-           dobj_name <- if ( length(args[[mtch]])>1 && deparse(args[[mtch]][[1]])=="splits" ) args[[mtch]][[2]]
-                         else NA
-           #if ( !is.darray(eval(dobj_name, envir=parent.frame())) && !is.dframe(eval(dobj_name, envir=parent.frame())) 
+		  if (!(arg_name %in% arg_names)) { stop(errorstring)}
+        #if ( !is.darray(eval(dobj_name, envir=parent.frame())) && !is.dframe(eval(dobj_name, envir=parent.frame())) 
            #      && !class(eval(dobj_name, envir=parent.frame()))=="dlist")  { 
-           if (!inherits(eval(dobj_name, envir=parent.frame()), "dobject"))
-              stop(errorstring)  
-       }   
+               }   
        else  {
         stop(errorstring)
        }   
@@ -405,12 +441,13 @@ st <- proc.time()[3]
 
   max_argval_size = 0
   for (av in arg_vals) {
-    max_argval_size = max_argval_size + max(unlist(lapply(av, object.size)))
+    max_argval_size = max(max_argval_size, max(unlist(lapply(av, object.size))))
   }
   for (rav in raw_arg_vals) {
-    max_argval_size = max_argval_size + max(unlist(lapply(rav, object.size)))
+    max_argval_size = max(max_argval_size, max(unlist(lapply(rav, object.size))))
   }
 
+  #this limit applies to each individual argument instead of all arguments together
   if(max_argval_size >= .rcpp_obj_max_size) {
     stop(paste("Each function argument size cannot be larger than 2GB. Current size: ", max_argval_size, sep=""))
   }
@@ -424,6 +461,7 @@ st <- proc.time()[3]
         arg_names,
         split_names,
         arg_vals,
+        list_type_args,
         raw_arg_names,
         raw_arg_vals,
         TRUE,
@@ -434,4 +472,139 @@ st <- proc.time()[3]
   },error = handle_presto_exception)
 
   #return(status)
+}
+
+# check if argument utilizes the index variable (utility function)
+checkVar <- function(variable,func_statement){
+    # sometimes the argument can be NULL, and this will cause this part to fail without return
+    if(length(func_statement) == 0 || is.null(func_statement)){
+       return(FALSE) 
+     }
+    found = FALSE
+    if(func_statement == variable)
+      {
+          return(TRUE)
+      }
+    len = length(func_statement)
+
+# for all arguments of the given expression, find if one of them is the index variable
+    if(len > 1){
+       for(i in 1:len){
+          if(length(func_statement[[i]]) == 0 || is.null(func_statement[[i]])){
+             return(FALSE)
+           }
+ 
+          # if found, break and return true
+          if(func_statement[[i]] == variable){
+                found = TRUE
+                break
+            }
+
+          # recurse if the expression is multiple-levels deep
+          if(length(func_statement[[i]]) > 1){
+              found = checkVar(variable,func_statement[[i]])
+              if(found) {break}
+        }
+    }
+}
+    found
+}
+
+# This function takes the second argument to the splits() expression and parses it. It may be a simple expression, e.g., "i" or "i*2", or a function or list that needs to be evaluated either as a function of i or not
+# PARAM expression: the expression (second arg to splits()) to be evaluated
+# PARAM arg: the index variable
+# PARAM wild: is a boolean that indicates whether (based on checkVar used before this is called) the the evaluated expression will depend on the index. If not, then the loop is shortened and we can optimize by not running the loop multiple times (since the value will be the same
+# PARAM dob: the dobject reference (first argument to splits())
+# RETURNS a list: the first element is whether or not this argument should be a list_type arg. the second element is the list of indices that should be appended to "arg_vals" in the parent or calling function
+parseArgSplits <- function(expression,vec,arg="",wild=FALSE,dob){
+
+# run only one iteration if not dependent on index
+if(!wild){
+   vec = 1
+}
+
+ret = list()
+list_size = 0
+
+list_type = FALSE # variable to track whether each an evaluated statement with list-type was found
+
+# iterate over different values of the index, and evaluate the expression
+# Temporarily assign new value of index in parent environment, then restore
+for(index in vec){
+    list_size = list_size+1
+    if(wild){
+      temp = get(arg,envir=parent.frame(2))
+      assign(arg,index,envir=parent.frame(2))
+    }
+    splits_vec <- tryCatch({
+    eval(expression,envir=parent.frame(2))
+    }, error = function(e){
+      # If we've reached here, it was impossible to evaluate the expression in the current context. We must reach out to the parent environment.
+      if(wild){
+        temp2 = get(arg,envir=parent.frame(n=6))
+        assign(arg,index,envir=parent.frame(n=6))
+      }
+      tryCatch({
+        eval(expression,envir=parent.frame(n=6))
+     }, error = function(e){    
+        stop(paste("Could not evaluate",' "', deparse(expression),'"',", check validity of expression.",sep=""))
+      }, finally = {
+          # Restore the value of the variable that was replaced, if any.
+            if(wild) assign(arg,temp2,envir=parent.frame(n=6))
+})
+}, finally = {
+  if(wild) assign(arg,temp,envir=parent.frame(2))
+})
+
+# The expression may yield either a list, a vector, or scalar. If it's a list, unlist it here but make sure it's all numeric.
+if(is.list(splits_vec)){
+    list_type = TRUE
+
+    expr <- deparse(splits_vec)
+
+    splits_vec <- tryCatch({
+    unlist(splits_vec,recursive=FALSE)
+    }, error = function(e){
+         stop(paste("Error parsing", ' "', deparse(expression),'"',". Lists or vectors must be numeric.",sep=""))}, warning = function(w){
+         stop(paste("Error parsing", ' "', deparse(expression),'"',". Lists or vectors must be numeric.",sep=""))})
+
+    if(is.list(splits_vec)) {
+	stop(paste0("Error in evaluating expression \"",expr,"\"; nested lists of splits are not allowed."))
+    }
+
+    splits_vec <- as.numeric(splits_vec)
+   }
+  
+   # Find the maximum split index for bounds checking
+   max_index <- dob@dobject_ptr$num_splits() - 1
+
+   # Can't be NULL
+   if(is.null(splits_vec)){
+        stop("Cannot have a NULL split-index. For empty sets, you must use an empty list, i.e. list().")
+     }
+
+   # Check for type
+   if(class(splits_vec) != "numeric" && class(splits_vec) != "integer"){
+         stop("A non-numeric argument was provided to splits(). Indices must be lists or vectors of numeric or integer type.")
+   }
+ 
+   # Calling function requires 0-indexing
+   splits_vec <- splits_vec - 1
+    
+   # Check that indices are within the bounds of what's valid for this dobject
+if(length(splits_vec > 0)){
+    if(max(splits_vec)>max_index|| min(splits_vec) < 0){
+       stop("A provided splits index is out of bounds. Indices must be >0 and <= npartitions(dobject).")
+    }
+}
+
+   # If we've gotten here and list_type is still FALSE, it may be true if the vector expression is used, and if there are multiple values in the vector, we must still consider this a list_type argument.
+if(length(splits_vec) > 1){
+        list_type = TRUE
+}
+   # The first value of this list is the boolean indicating whether this is a list-type argument
+    ret[[list_size]] <- as.integer(splits_vec)
+}
+    ret = list(list_type,ret)
+    ret
 }

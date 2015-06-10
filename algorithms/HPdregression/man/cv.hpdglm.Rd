@@ -4,7 +4,7 @@
     Cross-Validation Method for hpdglm Models
 }
 \description{
-    This function is implemented for evaluating a model built by hpdglm using Cross-Validation method (This function is only available for complete models). In simple words, the data is randomly divided into K folds, and building model and testing that is repeated K times. Every iteration, one fold is reserved as test data and the rest is used for training. Finally, the prediction costs of the new models on all folds are aggregated.
+    This function is implemented for evaluating a model built by hpdglm using Cross-Validation method. In simple words, the data is randomly divided into K folds, and building model and testing that is repeated K times. Every iteration, one fold is reserved as test data and the rest is used for training. Finally, the prediction costs of the new models on all folds are aggregated.
 }
 \usage{
 cv.hpdglm(responses, predictors, hpdglmfit,
@@ -46,10 +46,8 @@ cv.hpdglm(responses, predictors, hpdglmfit,
  \dontrun{
     library(HPdregression)
     distributedR_start()
-    Y <- as.darray(as.matrix(faithful$eruptions),
-                   c(ceiling(length(faithful$eruption)/4),1))
-    X <- as.darray(as.matrix(faithful$waiting),
-                   c(ceiling(length(faithful$waiting)/4),1)) 
+    Y <- as.darray(data.matrix(faithful["eruptions"]))
+    X <- as.darray(data.matrix(faithful["waiting"]))
 
     myModel <- hpdglm(Y, X, completeModel=TRUE)
     testCV <- cv.hpdglm(Y, X, myModel)

@@ -1,0 +1,11 @@
+Entry: Rclient
+Aliases: RSconnect RSclose RSeval RSeval.old RSlogin RSdetach RSevalDetach RSattach RSassign RSassign.old RSshutdown
+Keywords: interface
+Description: Functions to talk to an Rserve
+URL: ../../../library/Rserve/html/Rclient.html
+
+Entry: Rserve
+Aliases: Rserve
+Keywords: interface
+Description: Server providing R functionality to applications via TCP/IP or local unix sockets
+URL: ../../../library/Rserve/html/Rserv.html

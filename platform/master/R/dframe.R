@@ -39,18 +39,31 @@ dframe <- function(dim=NA, blocks=NA, npartitions=NA, distribution_policy="round
   }
 
   d <- new ("dframe", dim, blocks, npartitions, subtype=stype, distribution_policy=distribution_policy)
-  
-  success <- foreach(i,1:npartitions(d),
-          initdata <- function(dhs = splits(d,i),
-	  	      		 fulldim = d@dim,
+
+  nExecutors <- sum(distributedR_status()$Inst)  
+
+  indices <- function(i,npartitions,nExecutors){
+    as.list(seq(from=i,to=npartitions,by=nExecutors))
+  }
+
+  range = 1:(min(npartitions(d),nExecutors))
+
+  success <- foreach(i,range,
+          initdata <- function(dhs = splits(d,indices(i,npartitions(d),nExecutors)),
+	  	      		 indexes = indices(i,npartitions(d),nExecutors),
+                                 fulldim = d@dim,
                                  blockdim = d@blocks,
                                  ii = i,
 				 type= stype) {
 	    if(type=="FLEX_DECLARED"){
-		dhs <- data.frame() #Empty data frame
+		dhs <- lapply(1:length(dhs),function(x) {data.frame()}) #Empty data frame
 	    }else{
-		dim=dobject.getdims(fulldim, blockdim, ii)
-                dhs <- data.frame(matrix(data=0, nrow=dim[1], ncol=dim[2]))
+                getdim <- function(x) {
+                  dobject.getdims(fulldim, blockdim, indexes[[x]])
+                }
+                dhs <- lapply(1:length(dhs),function(x) {
+                dim <- getdim(x)
+                data.frame(matrix(data=0, nrow=dim[1], ncol=dim[2]))})
 	    }
             update(dhs)
           }, progress=FALSE)
@@ -128,4 +141,156 @@ setMethod("dframe_set_values", signature("dframe", "numeric"),
       df
   })
 
+setMethod("+", signature("dframe", "numeric"),
+	     function(e1,e2) {
+	     if(is.invalid(e1)) stop("Operation not supported on empty dframes")
+	     c <- dframe(npartitions=npartitions2D(e1))
+	     success <- foreach(i, 1:npartitions(e1),
+	     function(a = splits(e1,i),
+		      b = e2,
+		      cs = splits(c,i)){
+		cs <- a+b
+		update(cs)
+		})
+	     if(!success) {rm(c); gc(); NULL}
+	     else c
+})
 
+setMethod("+", signature("numeric", "dframe"),
+	       function(e1, e2) {
+	       return (e2+e1)
+})
+
+setMethod("+", signature("dframe","dframe"),
+	       function(e1, e2){
+	       if(is.invalid(e1) || is.invalid(e2)) stop("Operation not suported on empty arrays.")
+	       if(!all(dim(e1)==dim(e2))){
+		stop("non-conformable dframes. check dimensions of the input dframes")
+	       }
+		
+	       e1_psize<-partitionsize(e1)
+	       e2_psize<-partitionsize(e2)		
+	       if(!all(e1_psize==e2_psize)){
+                stop("non-conformable partitions of dframes. Partition sizes are not same for the dframes.")
+               }
+
+	       c<-dframe(npartition=npartitions2D(e1))
+	       success <- foreach(i, 1:npartitions(e1), 
+	       	       	  	     function(a = splits(e1,i),
+				     	      b = splits(e2,i),
+					      cs = splits(c,i)){
+			cs <- a+b
+			update(cs)
+		})
+		if(!success) { rm(c); gc(); NULL }
+		else c
+})
+
+setMethod("-", signature("dframe", "numeric"),
+	     function(e1,e2) {
+	     e2 <- (-1*e2)
+	     return(e2 + e1)	      
+})
+
+setMethod("-", signature("numeric", "dframe"),
+	     function(e1,e2) {
+	      if(is.invalid(e2)) stop("Operation not supported on empty dframes")
+	      c <- dframe(npartitions=npartitions2D(e2))
+	      success <- foreach(i, 1:npartitions(e2),
+	             function(a = splits(e2,i),
+	       		b = e1,
+			cs = splits(c,i)){
+		cs <- b-a
+		update(cs)
+	      })
+	      if(!success) {rm(c); gc(); NULL}
+	      else c   
+})
+
+setMethod("-", signature("dframe","dframe"),
+	       function(e1, e2){
+	       if(is.invalid(e1) || is.invalid(e2)) stop("Operation not suported on empty arrays.")
+	       if(!all(dim(e1)==dim(e2))){
+		stop("non-conformable dframes. check dimensions of the input dframes")
+		}
+		
+		e1_psize<-partitionsize(e1)
+		e2_psize<-partitionsize(e2)		
+		if(!all(e1_psize==e2_psize)){
+             	 stop("non-conformable partitions of dframes. Partition sizes are not same for the dframes.")
+           	}
+
+		c<-dframe(npartition=npartitions2D(e1))
+		success <- foreach(i, 1:npartitions(e1), 
+			function(a = splits(e1,i),
+				 b = splits(e2,i),
+				 cs = splits(c,i)){
+			cs <- a-b
+			update(cs)
+		})
+		
+		if(!success) { rm(c); gc(); NULL }
+		else c
+})
+
+# return subset of data.frame given the block size and index
+# the block is counted from left to right and then top to down
+get_sub_dataframe <- function(dataframe, block, index){
+
+  nrow = dim(dataframe)[1]
+  ncol = dim(dataframe)[2]
+  blocks_per_row = ceiling(ncol/block[2])
+  if(index > blocks_per_row*(ceiling(nrow/block[1]))){
+         stop("index out of range")
+  }
+  b_row_idx = 1+(block[1])*(floor((index-1)/blocks_per_row)) #begin row index of submatrix
+  b_col_idx = 1+(block[2])*((index-1)%%blocks_per_row)  #begin column index of submatrix
+  e_row_idx = ifelse(b_row_idx+block[1]-1<nrow, b_row_idx+block[1]-1, nrow)
+  e_col_idx = ifelse(b_col_idx+block[2]-1<ncol, b_col_idx+block[2]-1, ncol)
+
+  return (data.frame(dataframe[b_row_idx:e_row_idx, b_col_idx:e_col_idx]))
+}
+
+setGeneric("as.dframe", function(input, blocks) standardGeneric("as.dframe"))
+
+setMethod("as.dframe", signature(input="data.frame", blocks="missing"),
+  function(input, blocks) {
+    ninst<-sum(distributedR_status()$Inst)
+    blocks<-dim(input)
+    blocks[1]<-ceiling(blocks[1]/ninst)
+    as.dframe(input, blocks)
+})
+
+setMethod("as.dframe", signature(input="data.frame",blocks="numeric"),
+ function(input,blocks){
+ 
+  out_dobject <- dframe(dim(input),blocks)
+
+  if(! is.null(out_dobject)){
+      foreach(i, 1:npartitions(out_dobject), copy<-function(idx=i,
+						df=get_sub_dataframe(input,blocks,i),
+						ddf=splits(out_dobject,i)){
+    ddf<- df
+    update(ddf)
+      },progress=FALSE)
+ 
+   if(is.null(dimnames(input)) == FALSE)
+       dimnames(out_dobject) <- dimnames(input)
+   }
+
+   return (out_dobject)
+})
+
+setMethod("as.dframe", signature(input="matrix", blocks="numeric"),
+function(input, blocks){
+ df <- data.frame(input)
+ return (as.dframe(df,blocks))
+})
+
+setMethod("as.dframe",signature(input="matrix", blocks="missing"), 
+function(input, blocks){
+    ninst<-sum(distributedR_status()$Inst)
+    blocks<-dim(input)
+    blocks[1]<-ceiling(blocks[1]/ninst)
+    as.dframe(input, blocks)
+})

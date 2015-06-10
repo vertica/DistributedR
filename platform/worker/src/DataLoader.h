@@ -55,6 +55,12 @@ struct Metadata {
   char vNode_name[100];
 };
 
+struct DLStatus {
+  bool transfer_complete_;
+  bool transfer_success_;
+  std::string transfer_error_msg_;
+};
+
 class DataLoader {
  public:
   DataLoader(PrestoWorker *presto_worker, int port, int32_t sock_fd, ::uint64_t split_size, string split_prefix);
@@ -65,11 +71,13 @@ class DataLoader {
   std::string getNextShmName();
   void CreateCsvShm(std::string shm_name, ::uint64_t size);
   void AppendDataBytes(const char* shm_file, ::uint64_t size, uint32_t nrows);
-  uint64_t SendResult(std::vector<std::string> qry_result);
+  std::pair<DLStatus, ::uint64_t> SendResult(std::vector<std::string> qry_result);
   void Flush();
   bool IsTransferComplete() {
-    return transfer_complete_;
+    return result.transfer_complete_;
   }
+  void RegisterTransferError(const char* error_msg);
+  DLStatus result;
 
  private:
   PrestoWorker *presto_worker_;
@@ -80,14 +88,14 @@ class DataLoader {
   uint64_t file_id; 
   uint64_t DR_partition_size;
   string split_prefix_;
-  bool transfer_complete_;
-
+  
   std::map<std::string, int> vnode_EOFs;
   
   Buffer buffer;
   pool read_pool;
   boost::recursive_mutex metadata_mutex_;
   boost::mutex shm_name_mutex_;
+  boost::mutex metadata_update_mutex_;
 };
 
 }// namespace

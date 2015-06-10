@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project basedir=".." name="R-IDE">
+    <!-- TODO: edit the following target according to your needs -->
+    <!-- (more info: http://www.netbeans.org/kb/articles/freeform-config.html#compilesingle) -->
+    <target name="compile-selected-files-in-src">
+        <fail unless="files">Must set property 'files'</fail>
+        <!-- TODO decide on and define some value for ${build.classes.dir} -->
+        <mkdir dir="build"/>
+        <javac destdir="build" includes="${files}" source="1.6" srcdir="src">
+            <classpath path="lib/REngine.jar:lib/Rserve.jar"/>
+        </javac>
+    </target>
+    <!-- TODO: edit the following target according to your needs -->
+    <!-- (more info: http://www.netbeans.org/kb/articles/freeform-config.html#runsingle) -->
+    <target name="run-selected-file-in-src">
+        <fail unless="run.class">Must set property 'run.class'</fail>
+        <java classname="${run.class}" failonerror="true" fork="true">
+            <classpath>
+                <pathelement path="build:lib/REngine.jar:lib/Rserve.jar"/>
+            </classpath>
+            <jvmarg value="-enableassertions"/>
+        </java>
+    </target>
+    <!-- TODO: edit the following target according to your needs -->
+    <!-- (more info: http://www.netbeans.org/kb/articles/freeform-config.html#runsingle) -->
+    <target name="debug-selected-file-in-src">
+        <fail unless="debug.class">Must set property 'debug.class'</fail>
+        <ant antfile="build.xml" inheritall="false" target="compile"/>
+        <path id="cp">
+            <pathelement path="lib/REngine.jar:lib/Rserve.jar"/>
+        </path>
+        <nbjpdastart addressproperty="jpda.address" name="Rsession" transport="dt_socket">
+            <classpath refid="cp"/>
+        </nbjpdastart>
+        <java classname="${debug.class}" fork="true">
+            <classpath refid="cp"/>
+            <jvmarg value="-Xdebug"/>
+            <jvmarg value="-Xrunjdwp:transport=dt_socket,address=${jpda.address}"/>
+        </java>
+    </target>
+    
+    <property name="unit.test.jar" value="concutest-junit-4.7-withrt.jar" />
+    <!--property name="unit.test.jar" value="junit-4.3.jar" /-->
+    
+    <!-- TODO: edit the following target according to your needs -->
+    <!-- (more info: http://www.netbeans.org/kb/articles/freeform-config.html#compilesingle) -->
+    <target name="compile-selected-files-in-test">
+        <fail unless="files">Must set property 'files'</fail>
+        <!-- TODO decide on and define some value for ${build.classes.dir} -->
+        <mkdir dir="build"/>
+        <javac destdir="build" includes="${files}" source="1.5" srcdir="test">
+            <classpath path="${unit.test.jar}:lib/REngine.jar:lib/Rserve.jar:lib/jmatharray.jar"/>
+        </javac>
+    </target>
+    <!-- TODO: edit the following target according to your needs -->
+    <!-- (more info: http://www.netbeans.org/kb/articles/freeform-config.html#runsingle) -->
+    <target name="run-selected-file-in-test">
+        <fail unless="run.class">Must set property 'run.class'</fail>
+        <java classname="${run.class}" failonerror="true" fork="true">
+            <classpath>
+                <pathelement path="build:${unit.test.jar}:lib/REngine.jar:lib/Rserve.jar:lib/jmatharray.jar"/>
+            </classpath>
+        </java>
+    </target>
+</project>

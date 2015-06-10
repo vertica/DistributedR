@@ -32,7 +32,7 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
         stop("The ODBC DSN should be specified")
     if(!is.logical(verticaConnector))
         stop("verticaConnector can be either TRUE or FALSE")
-    if(!is.character(loadPolicy))
+    if(!is.character(loadPolicy) || (tolower(loadPolicy)!='local' && tolower(loadPolicy)!='uniform'))
         stop("loadPolicy can be either 'local' or 'uniform'")
 
     # loading vRODBC or RODBC library for master
@@ -41,6 +41,7 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
 
     # connecting to Vertica
     db_connect <- odbcConnect(dsn)
+    loadPolicy <- tolower(loadPolicy)
 
     #Validate table name
     table <- ""
@@ -87,7 +88,13 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
            feature_data_type <- view_columns[[2]]        
          }
       } else {
-        relation_type <- "table"
+        # get type of table - external or regular
+        table_type <- sqlQuery(db_connect, paste("select table_definition from tables where table_schema ILIKE '", schema, "' and table_name ILIKE '", table, "'", sep=""))
+        if(!is.data.frame(table_type)) {
+           odbcClose(db_connect)
+           stop(table_columns)
+        }
+        relation_type <- ifelse((is.null(table_type[[1]][[1]]) || is.na(table_type[[1]][[1]])), "table", "external_table")
         feature_columns <- table_columns[[1]]
         feature_data_type <- table_columns[[2]]
       }
@@ -106,7 +113,13 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
          }
 
       } else {
-        relation_type <- "table"
+        # get type of table - external or regular
+        table_type <- sqlQuery(db_connect, paste("select table_definition from tables where table_schema ILIKE '", schema, "' and table_name ILIKE '", table, "'", sep=""))
+        if(!is.data.frame(table_type)) {
+           odbcClose(db_connect)
+           stop(table_columns)
+        }
+        relation_type <- ifelse((is.null(table_type[[1]][[1]]) || is.na(table_type[[1]][[1]])), "table", "external_table")
         feature_data_type <- istable[[1]]
       }
 
@@ -150,7 +163,6 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
       stop("Only numeric, logical and character data types are supported")
     }
     
-
     # reading the number of observations in the table
     qryString <- paste("select count(*) from", tableName)
     nobs <- sqlQuery(db_connect, qryString)
@@ -169,27 +181,17 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
         tryCatch ({
         .checkUnsegmentedProjections(schema, table, relation_type, db_connect)
 
-        #get projection_name           
-        qryString <- paste("select projection_id, projection_name from tables t, projections p where t.table_name ILIKE '", table, "' and t.table_schema ILIKE '", schema, "'and t.table_id=p.anchor_table_id and p.is_super_projection=true and is_up_to_date=true order by projection_name limit 1", sep="")
-        projection_details <- sqlQuery(db_connect, qryString);
-        noprojection = FALSE
-          
-        if(nrow(projection_details) == 0) {
-            noprojection = TRUE
-        }
-        else {
-            projection_name <- as.character(projection_details$projection_name)
-            projection_oid <- as.numeric(projection_details$projection_id)
-        }
-        ## Check if it a view or a system table
-        if(noprojection) {
-            qryString <- paste("select count(*) from views where table_name ILIKE '", table, "' and table_schema ILIKE '", schema, "'", sep="")
-            isaview <- sqlQuery(db_connect, qryString)
-            if(isaview > 0) {
-              loadPolicy <- "uniform"
-            } else
-              stop(paste("Table/View", tableName, "does not exist or the table has no super projections with data.\nData loading aborted."))
-        }
+        if(relation_type == "table" && loadPolicy == "local") {
+           #get projection name
+           qryString <- paste("select projection_name from tables t, projections p where t.table_name ILIKE '", table, "' and t.table_schema ILIKE '", schema, "'and t.table_id=p.anchor_table_id and p.is_super_projection=true and is_up_to_date=true order by projection_name limit 1", sep="")
+           projection_details <- sqlQuery(db_connect, qryString);
+
+           if(nrow(projection_details) == 0)
+              stop(paste("Table", tableName, "does not exist or the table has no super projections with data. \nRetry with loadPolicy='uniform'"))
+           else
+              projection_name <- as.character(projection_details$projection_name)
+        } else
+          loadPolicy <- "uniform"
 
         nRows <- as.numeric(nobs)
         # calculate approximate split_size 
@@ -241,7 +243,7 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
           #issue UDx query
           qryString <- paste("select ExportToDistributedR(", columns, " USING PARAMETERS DR_worker_info='", udx_param$parameter_str,"', DR_partition_size=", partition_size, ", data_distribution_policy='", type, "') over(PARTITION BEST) from ", tableName, sep="")
 
-          cat("Loading total", nRows, "rows from", tableName, "from Vertica with approximate partition of", partition_size,"rows\n")
+          message(paste("Loading total", nRows, "rows from", tableName, "from Vertica with approximate partition of", partition_size,"rows"))
           load_result <- sqlQuery(db_connect, qryString)
           if(!is.data.frame(load_result)) {
             sqlQuery(db_connect, paste("select set_config_parameter('MaxQueryRetries', ", retries_allowed, ");"))
@@ -258,8 +260,7 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
           if(!is.list(result))
             stop(result)
 
-          X <- .vertica.dframe(result, nFeatures)
-          colnames(X) <- feature_columns
+          X <- .vertica.dframe(result, nFeatures, feature_columns)
 
           }, interrupt = function(e) {}
            , error = function(e) {
@@ -285,6 +286,8 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
   
         # creating dframe for features
         X <- dframe(dim=c(nobs, nFeatures), blocks=c(rowsInBlock,nFeatures))
+        if(length(feature_columns) > 0)
+           X@dimnames[[2]] <- as.character(feature_columns)
 
         if(!missingNparts) {
             nparts <- npartitions(X)
@@ -294,7 +297,7 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
 
         #Load data from Vertica to dframe
         foreach(i, 1:npartitions(X), initArrays <- function(x = splits(X,i), myIdx = i, rowsInBlock = rowsInBlock, 
-                nFeatures=nFeatures, tableName=tableName, dsn=dsn, columns=columns) {
+                nFeatures=nFeatures, tableName=tableName, dsn=dsn, columns=columns, feature_columns=feature_columns) {
 
             # loading RODBC for each worker
             if (! require(vRODBC) )
@@ -319,11 +322,10 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
             odbcClose(connect)
 
             x <- segment
-
+            colnames(x) <- feature_columns
             update(x)
         })
         odbcClose(db_connect)
-        colnames(X) <- feature_columns
     } # if-else (verticaConnector)
 
     X
@@ -338,13 +340,13 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
           if(withQuotes)
             columns <- paste(columns,'\'', x[i], '\'', ',', sep="")
           else
-            columns <- paste(columns, x[i], ',')
+            columns <- paste(columns,'\"', x[i], '\"', ',', sep="")
       }   
    }   
    if(withQuotes)
       columns <- paste(columns, '\'', x[num], '\'', sep="")
    else
-      columns <- paste(columns, x[num])
+      columns <- paste(columns, '\"', x[num], '\"', sep="")
 
    columns
 }

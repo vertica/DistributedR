@@ -443,7 +443,7 @@ void PrestoMaster::ConnectWorkers(const vector<ServerInfo>& workers) {
   LOG_INFO("Master awaiting HELLO handshaking with Workers.");
   for (i = 0; i < workers.size(); i++) {
     if (i == 0) {
-      fprintf(stdout, "Workers registered - 0/%d. Will wait upto %d seconds.",
+      fprintf(stdout, "Workers registered - 0/%lu. Will wait upto %d seconds.",
         workers.size(), WORKER_CONNECT_WAIT_SECS);
       fflush(stdout);
     }
@@ -451,7 +451,7 @@ void PrestoMaster::ConnectWorkers(const vector<ServerInfo>& workers) {
     if (ret == false) break;
     char out_msg[1024];
     memset(out_msg, 0x00, sizeof(out_msg));
-    sprintf(out_msg, "\rWorkers registered - %d/%d.",(i+1), workers.size());
+    sprintf(out_msg, "\rWorkers registered - %d/%lu.",(i+1), workers.size());
     if ((i+1) < workers.size()) {
       sprintf(out_msg, "%s Will wait upto %d seconds.", out_msg, WORKER_CONNECT_WAIT_SECS);
     } else {
@@ -463,7 +463,7 @@ void PrestoMaster::ConnectWorkers(const vector<ServerInfo>& workers) {
   fprintf(stderr,"\n");
   boost::unordered_map<std::string, Worker*> reg_workers = scheduler_->GetWorkerInfo();
   if(i == workers.size()) {
-    fprintf(stderr, "All %d workers are registered.\n", workers.size());
+    fprintf(stderr, "All %lu workers are registered.\n", workers.size());
     LOG_INFO("All %d workers are registered. Master Started.", workers.size());
   } else {    
     if(reg_workers.size() == 0) {
@@ -474,7 +474,7 @@ void PrestoMaster::ConnectWorkers(const vector<ServerInfo>& workers) {
       worker_infos.clear();
       throw PrestoShutdownException("No workers are registered");
     } else {
-      fprintf(stderr, "Using only %d workers. Check with distributedR_status().\n\nNot registered workers\n",
+      fprintf(stderr, "Using only %lu workers. Check with distributedR_status().\n\nNot registered workers\n",
         reg_workers.size());
       LOG_WARN("Only %d workers are registered. Check with distributedR_status()", reg_workers.size());
       // At this point, the order of worker_infos_vec and worker_infos is in-sync
@@ -807,7 +807,7 @@ bool PrestoMaster::StartDataLoader(::uint64_t split_size, string split_prefix) {
 
 void PrestoMaster::StopDataLoader() {
 
-  LOG_INFO("<DataLoader> Data Loader execution completed.");
+  LOG_INFO("<DataLoader> Stopping Data Loader");
   for(map<int32_t, boost::shared_ptr<WorkerInfo> >::iterator itr = worker_infos.begin();
       itr!=worker_infos.end(); ++itr) {
     WorkerInfo* wi = itr->second.get();
@@ -847,8 +847,8 @@ RCPP_MODULE(master_module) {
 }
 
 int main(int argc, char *argv[]) {
-  char cmd[2000];
-  size_t in = fread(cmd, 1, 2000, stdin);
+  char cmd[20000];
+  size_t in = fread(cmd, 1, 20000, stdin);
   cmd[in] = '\0';
 
   optind--;  // need this for args to be passed correctly

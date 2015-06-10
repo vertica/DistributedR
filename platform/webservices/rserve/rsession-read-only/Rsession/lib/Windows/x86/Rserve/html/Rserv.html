@@ -1,0 +1,72 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html><head><title>R: Server providing R functionality to applications via TCP/IP or local unix sockets</title>
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<link rel="stylesheet" type="text/css" href="../../R.css">
+</head><body>
+
+<table width="100%" summary="page for Rserve {Rserve}"><tr><td>Rserve {Rserve}</td><td align="right">R Documentation</td></tr></table>
+<h2>Server providing R functionality to applications via TCP/IP or local unix sockets</h2>
+
+
+<h3>Description</h3>
+
+<p>
+Starts Rserve in daemon mode (unix only). Any additional parameters
+not related to Rserve will be passed straight to the underlying R. For
+configuration, usage and command line parameters please consult the
+online documentation at http://www.rosuda.org/Rserve. Use <code>R CMD Rserve
+  --help</code> for a brief help.
+</p>
+<p>
+The <code>Rserve</code> function is provided for convenience only, it is
+recommended to start Rserve directly from the command line, not from R
+itself. Also note that the debug version of Rserve doesn't fork and thus
+will block until closed.
+</p>
+
+
+<h3>Usage</h3>
+
+<pre>
+# R CMD Rserve [&lt;parameters&gt;]
+
+Rserve(debug = FALSE, port = 6311, args = NULL)
+</pre>
+
+
+<h3>Arguments</h3>
+
+<table summary="R argblock">
+<tr valign="top"><td><code>debug</code></td>
+<td>
+determines whether regular Rserve or debug version of
+Rserve (<code>Rserve.dbg</code>) should be started.</td></tr>
+<tr valign="top"><td><code>port</code></td>
+<td>
+port used by Rserve to listen for connections</td></tr>
+<tr valign="top"><td><code>args</code></td>
+<td>
+further arguments passed to Rserve (as a string that will be
+passed to the <code>system</code> command thus use quotes where necessary).</td></tr>
+</table>
+
+<h3>Details</h3>
+
+<p>
+Rserve is not just a package, but an application. It is provided as a
+R package for convenience only. For details see
+http://www.rosuda.org/Rserve
+</p>
+
+
+<h3>Author(s)</h3>
+
+<p>
+Simon Urbanek
+</p>
+
+
+
+<hr><div align="center">[Package <em>Rserve</em> version 0.6-0 <a href="00Index.html">Index</a>]</div>
+
+</body></html>

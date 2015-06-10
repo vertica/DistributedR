@@ -19,14 +19,15 @@ of R instances in the Distributed R session.
 %If partition size (blocks) is not present then a distributed
 %array with only a single partition is created.  
 The last set of partitions may have fewer rows or columns if input matrix size is not
-an integer multiple of partition size. For example, the distributed
-array \code{as.darray(matrix(1,nrow=5,ncol=5), blocks=c(2,5))} has
+an integer multiple of partition size. If \code{A} is a 5x5 matrix, then 
+\code{as.darray(A, blocks=c(2,5))} is a distributed array with 
 three partitions. The first two partitions have two rows each but the
 last partition has only one row. All three partitions have five
 columns. 
 
 To create a distributed array with just one partition, pass the dimension of the input array, 
-i.e. \code{as.darray(A, blocks=dim(A)}}
+i.e. \code{as.darray(A, blocks=dim(A))}
+}
 
 \value{ Returns a distributed array with dimensions equal to that of the
  input matrix and partitioned according to argument 'blocks'.  Data may

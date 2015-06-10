@@ -105,11 +105,14 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
         // decrease the number of dependencies as this task completes
         tasks_[dep_task_id].num_dependencies--;
         TaskData taskdata = tasks_[dep_task_id];
-        lock.unlock();
+
         // All other dependent tasks are done (all fetches done)
         if (taskdata.inited &&
             taskdata.num_dependencies == 0) {
           // launch task
+          tasks_[dep_task_id].launched = true;
+          lock.unlock();
+
           unique_lock<recursive_mutex> metalock(metadata_mutex);
           // Upon completion of a dependent task, Execute the task
           LOG_INFO("FETCH dependencies on the Foreach are resolved. Executing Foreach Task.");
@@ -131,7 +134,8 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
           timers_[id].start();
 #endif
           metalock.unlock();
-        }
+        } else
+          lock.unlock();
       } if (contains_key(cctasks_, dep_task_id)) {
         // One of a dependent task is create composite task
         // we and decrement the value
@@ -197,12 +201,14 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
       lock.lock();
       tasks_[dep_task_id].num_dependencies--;
       TaskData taskdata = tasks_[dep_task_id];
-      lock.unlock();
 
       // A dependent Execution task has all necessrary splits to Execute.
       if (taskdata.inited &&
           taskdata.num_dependencies == 0) {
         // launch task
+        tasks_[dep_task_id].launched = true;
+        lock.unlock();
+
         unique_lock<recursive_mutex> metalock(metadata_mutex);
         LOG_INFO("Composite Array Created. All dependencies resolved. Executing Foreach Task.: %s", t->name.c_str());
         ::uint64_t id = Exec(taskdata.worker, taskdata.task);
@@ -222,7 +228,8 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
         timers_[id].start();
 #endif
         metalock.unlock();
-      }
+      } else
+        lock.unlock();
     }
   }
 }
@@ -285,7 +292,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
   map<Worker*, int> schedule_status;
   for (int i = 0; i < tasks.size(); i++) {
     task_cnt=i+1;
-    // t contains all necessrary information to execute a task
+    // t contains all necessary information to execute a task
     TaskArg *t = tasks[i];
     ::uint64_t task_id = GetNewTaskID();
 
@@ -296,6 +303,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
 
     taskdata.task = t;
     taskdata.num_dependencies = 0;
+    taskdata.launched = false;
     taskdata.inited = false;
 
     //  look for host that has most pieces in DRAM
@@ -322,9 +330,11 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
       // the given split is a composite array and the task contains split
       // there are multiple tasks, do not consider the composite array location
       // it might be better to distribute task while creating a composite array
-      if (arg.arrays_size() > 1 && num_splits > 0 && tasks.size() > 1) {
-        continue;
-      }
+     
+      //temporarily commented out because we want scheduling decision to take into account composite "list" type operations
+     // if (arg.arrays_size() > 1 && num_splits > 0 && tasks.size() > 1) {
+      //  continue;
+     // }
 
       for (int32_t j = 0; j < arg.arrays_size(); j++) {
         metalock.lock();
@@ -346,7 +356,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
          i != available.end(); i++) {
       // it has to have available space
       if (i->first->size > i->first->used) {
-        // if a task contains a sinlge split, respect even load distribution
+        // if a task contains a single split, respect even load distribution
         if (t->args.size() == 1) {
           // if a worker does not have a task assigned yet, assign to the worker
           if (schedule_status.count(i->first) == 0) {
@@ -425,55 +435,58 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
     Response ret; 
     for (int32_t i = 0; i < t->args.size(); i++) {
       const Arg &arg = t->args[i];
-      if (arg.arrays_size() == 1) {  // split
-        const Array &array = arg.arrays(0);
-        unique_lock<recursive_mutex> lock(mutex_);
-        // we need the metadata lock because we don't want a splits location
-        // to change while we are registering the dependencies etc.
-        metalock.lock();
+      //if it's a list, for now treat it as a regular split arg
+      if (arg.arrays_size() == 1 || arg.is_list()) {  // split or list of splits
+          for(int32_t j = 0; j < arg.arrays_size(); j++){
+            const Array &array = arg.arrays(j);
+            unique_lock<recursive_mutex> lock(mutex_);
+            // we need the metadata lock because we don't want a splits location
+            // to change while we are registering the dependencies etc.
+            metalock.lock();
 
-        Split *split = splits[array.name()];
-        if (!IsSplitOnWorker(split, worker)) {
-          ::uint64_t beingfetched = IsSplitBeingFetched(split, worker);
-          if (beingfetched == 0) {  // it is not being fetched
-            Worker *from = best_worker_to_fetch_from(split->workers);
-            // create a fetch task to prepare a task
-            //LOG_DEBUG("Task number %d - Task argument %d - Split %s is not on Worker %15s. It is will be fetched from Worker %15s", 
-            //          task_cnt, i+1, split, server_to_string(worker->server).c_str(), server_to_string(from->server).c_str());
-            ::uint64_t fetch_task_id = Fetch(
-                worker,
-                from,
-                split);
-#ifdef PROFILING
-            fprintf(profiling_output_,
-                    "%8.3lf %15s %6zu FETCH STRT %15s %7.2lfMB\n",
-                    timer_.stop()/1e6,
-                    server_to_string(worker->server).c_str(),
-                    fetch_task_id,
-                    server_to_string(from->server).c_str(),
-                    split->size/static_cast<double>(1<<20));
-            timers_[fetch_task_id] = Timer();
-            timers_[fetch_task_id].start();
-#endif
-            
-            // update dependecy to execute a task after fetch is done
-            dependencies_[fetch_task_id].insert(task_id);
-            taskdata.num_dependencies++;
-            lock.unlock();
-          } else {
-            // Increment num dependencies
-            // if the dependencies_ information does not include this task
-            // on this fetch
-            if (dependencies_[beingfetched].count(task_id) == 0) {
-              taskdata.num_dependencies++;
-              dependencies_[beingfetched].insert(task_id);
+            Split *split = splits[array.name()];
+            if (!IsSplitOnWorker(split, worker)) {
+              ::uint64_t beingfetched = IsSplitBeingFetched(split, worker);
+              if (beingfetched == 0) {  // it is not being fetched
+                Worker *from = best_worker_to_fetch_from(split->workers);
+                // create a fetch task to prepare a task
+                //LOG_DEBUG("Task number %d - Task argument %d - Split %s is not on Worker %15s. It is will be fetched from Worker %15s", 
+                //          task_cnt, i+1, split, server_to_string(worker->server).c_str(), server_to_string(from->server).c_str());
+                ::uint64_t fetch_task_id = Fetch(
+                    worker,
+                    from,
+                    split);
+    #ifdef PROFILING
+                fprintf(profiling_output_,
+                        "%8.3lf %15s %6zu FETCH STRT %15s %7.2lfMB\n",
+                        timer_.stop()/1e6,
+                        server_to_string(worker->server).c_str(),
+                        fetch_task_id,
+                        server_to_string(from->server).c_str(),
+                        split->size/static_cast<double>(1<<20));
+                timers_[fetch_task_id] = Timer();
+                timers_[fetch_task_id].start();
+    #endif
+
+                // update dependency to execute a task after fetch is done
+                dependencies_[fetch_task_id].insert(task_id);
+                taskdata.num_dependencies++;
+                lock.unlock();
+              } else {
+                // Increment num dependencies
+                // if the dependencies_ information does not include this task
+                // on this fetch
+                if (dependencies_[beingfetched].count(task_id) == 0) {
+                  taskdata.num_dependencies++;
+                  dependencies_[beingfetched].insert(task_id);
+                }
+                lock.unlock();
+              }
+              if (task_cnt==1)
+                 LOG_INFO("Foreach argument '%s' has %d FETCH dependencies. Resolving dependencies.", arg.name().c_str(), taskdata.num_dependencies);
             }
-            lock.unlock();
+            metalock.unlock();
           }
-          if (task_cnt==1)
-             LOG_INFO("Foreach argument '%s' has %d FETCH dependencies. Resolving dependencies.", arg.name().c_str(), taskdata.num_dependencies);
-        }
-        metalock.unlock();
       } else {  // composite
         string name = CompositeName(arg);
 
@@ -485,7 +498,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
             !contains_key(splits[name]->workers, worker)) {
           // composite is not present
           // composite is present, but the worker does not have that split
-          // increment the dependecies to this composite
+          // increment the dependencies to this composite
           taskdata.num_dependencies++;
 
           pair<Worker*, string> key = make_pair(worker, name);
@@ -617,7 +630,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
 
     lock.lock();
     // All necessary split is prepared
-    if (taskdata.num_dependencies == 0) {
+    if (taskdata.num_dependencies == 0 && taskdata.launched == false) {
       if (task_cnt==1)
 	 LOG_INFO("Foreach arguments has no dependencies. Sending task to Worker for execution");
       ::uint64_t id = Exec(worker, t);
