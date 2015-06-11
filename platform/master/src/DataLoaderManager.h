@@ -41,13 +41,14 @@ class DataLoaderManager {
   PrestoMaster* presto_master, int split_size) :
   presto_master_(presto_master),
   loader_sema_(0), split_size_(split_size), 
-  invalid_ports(false) {
+  invalid_ports(false), transfer_success_(true) {
     
     totalPartitions = 0;
     partitions_worker_id_map_.clear();
     loader_workers_.clear();    
     file_id_map_.clear();
     worker_port_info.clear();
+    transfer_error_message_ = std::string("");
   }
 
   ~DataLoaderManager();
@@ -63,7 +64,8 @@ class DataLoaderManager {
   SEXP getNPartitions();
   SEXP getFileIDs();
 
-  void WorkerLoaderComplete(WorkerInfo* workerinfo, int64_t nparitions);
+  void WorkerLoaderComplete(WorkerInfo* workerinfo, int64_t nparitions,
+                            int transfer_success, std::string transfer_message);
   void LoadComplete();
 
   boost::unordered_map<int32_t, uint64_t> GetPartitionMap() {
@@ -87,6 +89,9 @@ class DataLoaderManager {
   vector<int32_t> loader_workers_;
   map<int32_t, int32_t> file_id_map_;
   map<WorkerInfo*, int> worker_port_info;
+
+  bool transfer_success_;
+  std::string transfer_error_message_; 
 
   PrestoMaster* presto_master_;
 

@@ -72,40 +72,50 @@ stopDataLoader <- function() {
   ret
 }
 
-.vertica.darray <- function(result) {
+.vertica.darray <- function(result, column_names=list()) {
   nparts <- result$npartitions
   file_ids <- result$file_ids
   file_prefix <- paste("/dev/shm/", .get.file.prefix(), sep="")
 
   d <- darray(npartitions=c(nparts,1), distribution_policy='custom')
+  if(length(column_names) > 0) 
+     d@dimnames[[2]] <- as.character(column_names)
 
   foreach(i, 1:npartitions(d), func <- function(dhs = splits(d,i), file_idx = file_ids[[i]],
-                                                file_prefix = file_prefix) {
+                                                file_prefix = file_prefix, column_names = column_names) {
     library(data.table)
     file_name <- paste(file_prefix, file_idx,sep="")
-    dhs_dt <- fread(file_name, header=FALSE)
+    dhs_dt <- fread(file_name, header=FALSE, integer64='double')
     unlink(file_name)
     dhs <- data.matrix(dhs_dt)
     rm(dhs_dt)
     gc()
+
+    colnames(dhs) <- column_names
     update(dhs)
   })
   d
 }
 
-.vertica.darrays <- function(result, nResponses, nPredictors) {
+.vertica.darrays <- function(result, nResponses, nPredictors, 
+                             predictor_columns=list(), response_columns=list()) {
   nparts <- result$npartitions
   file_ids <- result$file_ids
   file_prefix <- paste("/dev/shm/", .get.file.prefix(), sep="")
 
   X <- darray(npartitions=c(nparts,1), distribution_policy='custom')
   Y <- darray(npartitions=c(nparts,1), distribution_policy='custom')
+  if(length(predictor_columns) > 0)
+     X@dimnames[[2]] <- as.character(predictor_columns)
+  if(length(response_columns) > 0)
+     Y@dimnames[[2]] <- as.character(response_columns) 
 
   foreach(i, 1:npartitions(X), func <- function(x = splits(X,i), y = splits(Y,i), file_idx = file_ids[[i]], 
-            nResponses=nResponses, nPredictors=nPredictors, file_prefix = file_prefix) {
+            nResponses=nResponses, nPredictors=nPredictors, file_prefix = file_prefix,
+            predictor_columns=predictor_columns, response_columns=response_columns) {
     library(data.table)
     file_name <- paste(file_prefix, file_idx,sep="")
-    dhs_dt <- fread(file_name, header=FALSE)
+    dhs_dt <- fread(file_name, header=FALSE, integer64='double')
     unlink(file_name)
  
     y <- NULL
@@ -119,6 +129,9 @@ stopDataLoader <- function() {
     
     rm(dhs_dt)
     gc()
+    
+    colnames(x) <- predictor_columns
+    colnames(y) <- response_columns
     update(x)
     update(y)
   })
@@ -126,24 +139,28 @@ stopDataLoader <- function() {
 }
 
 
-.vertica.dframe <- function(result, nFeatures) {
+.vertica.dframe <- function(result, nFeatures, column_names=list()) {
   nparts <- result$npartitions
   file_ids <- result$file_ids
   file_prefix <- paste("/dev/shm/", .get.file.prefix(), sep="")
 
   d <- dframe(npartitions=c(nparts,1), distribution_policy='custom')
+  if(length(column_names) > 0)  
+     d@dimnames[[2]] <- as.character(column_names)
 
   foreach(i, 1:npartitions(d), func <- function(dhs = splits(d,i), file_idx = file_ids[[i]],
-                                                file_prefix = file_prefix, nCols = nFeatures) {
+                                                file_prefix = file_prefix, nCols = nFeatures,
+                                                column_names=column_names) {
     library(data.table)
     file_name <- paste(file_prefix, file_idx, sep="")
     if(nCols == 1)
-       dhs <- fread(file_name, sep='\n', header=FALSE, stringsAsFactors=getOption('stringsAsFactors'))
+       dhs <- fread(file_name, sep='\n', header=FALSE, stringsAsFactors=FALSE, integer64='double')
     else
-       dhs <- fread(file_name, sep=',', header=FALSE, stringsAsFactors=getOption('stringsAsFactors'))
+       dhs <- fread(file_name, sep=',', header=FALSE, stringsAsFactors=FALSE, integer64='double')
 
     setattr(dhs,"class","data.frame")
     unlink(file_name)
+    colnames(dhs) <- column_names
     update(dhs)
   })
   d
@@ -158,7 +175,7 @@ stopDataLoader <- function() {
   unseg_tbls <- sqlQuery(db_connect, "select distinct(t.table_schema || '.' || t.table_name) from tables t, projections p where p.is_segmented=false and p.anchor_table_id=t.table_id;")
   unseg_projs <- sqlQuery(db_connect, "select distinct(projection_schema || '.' || projection_name) from projections where is_segmented=false;")
     
-  if(relation_type == "table" && nrow(unseg_tbls)>0 && nrow(unseg_projs)>0) {
+  if((relation_type == "table" || relation_type == "external_table") && nrow(unseg_tbls)>0 && nrow(unseg_projs)>0) {
     if(paste(schema, ".", table, sep="") %in% unseg_tbls[[1]] || paste(schema, ".", table, sep="") %in% unseg_projs[[1]])
       stop("Cannot have unsegmented projection on table")
   } 

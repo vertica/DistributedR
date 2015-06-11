@@ -4,7 +4,7 @@
     Split-Sample-Validation Method for hpdglm Models
 }
 \description{
-    This function is implemented for evaluating a model built by hpdglm using Split-Sample-Validation method (This function is only available for complete models). In simple words, a percent of the data is randomly selected as test data, and a new model is built using the rest. Finally, the prediction cost of the new model on the test data is measured.
+    This function is implemented for evaluating a model built by hpdglm using Split-Sample-Validation method. In simple words, a percent of the data is randomly selected as test data, and a new model is built using the rest. Finally, the prediction cost of the new model on the test data is measured.
 }
 \usage{
     v.hpdglm(responses, predictors, hpdglmfit, 
@@ -49,10 +49,8 @@
  \dontrun{
     library(HPdregression)
     distributedR_start()
-    Y <- as.darray(as.matrix(faithful$eruptions),
-                   c(ceiling(length(faithful$eruption)/4),1))
-    X <- as.darray(as.matrix(faithful$waiting),
-                   c(ceiling(length(faithful$waiting)/4),1))
+    Y <- as.darray(data.matrix(faithful["eruptions"]))
+    X <- as.darray(data.matrix(faithful["waiting"]))
 
     myModel <- hpdglm(Y, X, completeModel=TRUE)
     testV <- v.hpdglm(Y, X, myModel)

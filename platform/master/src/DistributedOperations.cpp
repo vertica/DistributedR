@@ -163,7 +163,7 @@ void RawDataTransferThread (map<string, Rcpp::RawVector>* raw_data_cache,
         break;
       }
       if (raw_data_cache->count(string(recv_client_msg)) == 0) {
-        fprintf(stderr, "DistributedExecOperation: a client requested invalid dataset: %s cur map size: %d\n", recv_client_msg, raw_data_cache->size());
+        fprintf(stderr, "DistributedExecOperation: a client requested invalid dataset: %s cur map size: %lu\n", recv_client_msg, raw_data_cache->size());
         close(new_fd);
         break;
       }
@@ -212,6 +212,7 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
                                        SEXP arg_names_exp,
                                        SEXP split_names_exp,
                                        SEXP arg_vals_exp,
+                                       SEXP list_args_exp,
                                        SEXP raw_names_exp,
                                        SEXP raw_vals_exp,
                                        SEXP wait_exp,
@@ -239,6 +240,7 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
   Rcpp::List split_names_vec(split_names_exp);
   Rcpp::List arg_vals_vec(arg_vals_exp);
   Rcpp::List raw_vals_vec(raw_vals_exp);
+  Rcpp::List list_args_vec(list_args_exp);
 
   boost::interprocess::interprocess_semaphore sema(0);
 
@@ -277,7 +279,17 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
       ti.start();
       arg.clear_arrays();
       arg.clear_offsets();
+      
+      //mark as a list-type argument
+      bool is_list = false;
+      for(int32_t j = 0; j < list_args_vec.size(); j ++){
+          if(as<string>(list_args_vec[j]) == as<string>(arg_names_vec[k])){
+              is_list = true;
+              break;
+          }
+      }
 
+      arg.set_is_list(is_list);
       arg.set_name(as<string>(arg_names_vec[k]));
 
       Rcpp::List splits = arg_vals_vec[k];
@@ -311,7 +323,7 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
 
       args3 += ti.restart()/1e6;
 
-      if (arg.arrays_size() > 1) {  // composite
+      if (arg.arrays_size() > 1 && !is_list) {  // composite
         std::vector< ::int64_t> dim = d->GetDimensions();
         offset.Clear();
         for (int32_t i = 0; i < dim.size(); ++i) {
@@ -384,7 +396,7 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
       func_raw_args.push_back(raw_arg);
     }
     rawargst += t.stop()/1e6;
-
+    
     tasks.push_back(&task);
   }
 

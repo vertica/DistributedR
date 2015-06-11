@@ -51,17 +51,25 @@ static Scheduler *sch = NULL;
  */
 static void dispatch_task(WorkerInfo *wi, TaskArg *t,
                           ::uint64_t id, ::uint64_t uid) {
-
+    
   NewExecuteRRequest req;
   req.set_id(id);
   req.set_uid(uid);
   for (int i = 0; i < t->func_str.size(); i++)
     req.add_func(t->func_str[i]);  // add function string
   for (int i = 0; i < t->args.size(); i++) {
-    if (t->args[i].arrays_size() == 1) {  // add split arg
+    if (t->args[i].arrays_size() == 1 || t->args[i].is_list()) {  // add split arg
       NewArg arg;
       arg.set_varname(t->args[i].name());
-      arg.set_arrayname(t->args[i].arrays(0).name());
+      //need to add list-splits, and overwrite the name of the array (so logic in executorpool and executor knows how to handle these)
+      if(t->args[i].is_list()){
+          for(int j = 0; j < t->args[i].arrays_size(); j ++){
+            arg.add_list_arraynames(t->args[i].arrays(j).name());
+          }
+          arg.set_arrayname("list_type...");
+      }else{
+          arg.set_arrayname(t->args[i].arrays(0).name());
+      }
       req.add_args()->CopyFrom(arg);
     } else {  // add composite args
       NewArg arg;
@@ -73,7 +81,7 @@ static void dispatch_task(WorkerInfo *wi, TaskArg *t,
   // add arguments other than split and composite args
   for (int i = 0; i < t->raw_args.size(); i++)
     req.add_raw_args()->CopyFrom(t->raw_args[i]);
-
+  
   wi->NewExecuteR(req);
   LOG_INFO("EXECUTE TaskID %14d - Sent to Worker %s", static_cast<int>(uid), wi->hostname().c_str());
 }
@@ -241,7 +249,7 @@ std::pair<bool, bool> Scheduler::UpdateTaskResult(TaskDoneRequest* req, bool val
   foreach_status_->num_tasks--;
   if (req->has_task_result() && req->task_result() != TASK_SUCCEED) {
     foreach_status_->is_error = true;
-    TaskErrorMsg(req->task_message().c_str());
+    TaskErrorMsg(req->task_message().c_str(), server_to_string(req->location()));
   } else if (!validated)
     foreach_status_->is_error = true;
 
@@ -495,7 +503,8 @@ bool Scheduler::Done(TaskDoneRequest* req) {
   } else if (fetchresultreq.find(taskid) != fetchresultreq.end()) {
     LOG_DEBUG("VerticaDL::FETCH TaskID %5d - Received TASKDONE from Worker", static_cast<int>(taskid));
     // Data-Loader results fetched
-    presto_master_->GetDataLoader()->WorkerLoaderComplete(fetchresultreq[taskid], req->npartitions());
+    presto_master_->GetDataLoader()->WorkerLoaderComplete(fetchresultreq[taskid], req->npartitions(),
+                                                          req->task_result(), req->task_message());
     type = NONE;
   }
 
@@ -683,7 +692,7 @@ void Scheduler::DeleteSplit(const string& split_name) {
 }
 /** Execute a function by dispatching a task to a worker
  * @param worker a worker information that will execute a given Exec task
- * @param taskarg Arguements that are needed to perform this task
+ * @param taskarg Arguments that are needed to perform this task
  * @return an ID of this task
  */
 ::uint64_t Scheduler::Exec(Worker *worker, TaskArg *taskarg) {

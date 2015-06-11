@@ -69,7 +69,7 @@ static int32_t ParseUpdateLine(FILE* in, char* arr_name,
 
   if (strncmp(arr_name, "&", 100) == 0) {
     // This is a task result. Read the next line to get the message
-    fscanf(in, "\n%[^\n]", message);
+    int res = fscanf(in, "\n%[^\n]", message);
   }
   return ret;
 }

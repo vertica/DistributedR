@@ -38,8 +38,6 @@ v.hpdglm <- function(responses, predictors, hpdglmfit, percent=30, sampling_thre
     ## validation estimate of error for hpdglm prediction with a specific percent as validation set.
     cost=.hpdCost
     ## cost is a function of two arguments: the observed values and the the predicted values.
-    if(is.null(hpdglmfit$responses))
-        stop("v.hpdglm is only available for complete models.")
 
     call <- match.call()
 
@@ -79,7 +77,7 @@ v.hpdglm <- function(responses, predictors, hpdglmfit, percent=30, sampling_thre
     validationSize <- ceiling(nSample * percent / 100)
 
     if ( max(partitionsize(responses)) > sampling_threshold || nSample > 1e9) {       # distributed sampling
-        cat("Updating mask through distributed sampling\n")
+        message("Updating mask through distributed sampling")
         foreach(i, 1:nparts, samplingFunction <- function(maski=splits(mask,i), in_maski=splits(in_mask,i), out_maski=splits(out_mask,i), vSize=round(validationSize/nparts)){
             vSamples <- sample.int(nrow(in_maski), vSize)
             in_maski[vSamples] <- 0
@@ -90,7 +88,7 @@ v.hpdglm <- function(responses, predictors, hpdglmfit, percent=30, sampling_thre
         })
     } else {                                                       # centralized sampling
         validationSamples <- sample.int(nSample, validationSize)
-        cat("Updating mask through centralized sampling\n")
+        message("Updating mask through centralized sampling")
 
         end = cumsum(partitionsize(in_mask)[,1])
         start = c(0,end[-nparts])
@@ -136,7 +134,7 @@ v.hpdglm <- function(responses, predictors, hpdglmfit, percent=30, sampling_thre
 }
 
 ########################################### Cross-Validation #####################################################
-# responses, predictors: darrays containing data
+ # responses, predictors: darrays containing data
 # hpdglmfit: An object of class hpdglm containing the result of a fitted model
 # K: number of folds in cross validation
 # sampling_threshold: threshold for the method of sampling (centralized or distributed). It should be alwas smaller than 1e9
@@ -145,8 +143,6 @@ cv.hpdglm <- function(responses, predictors, hpdglmfit, K=10, sampling_threshold
     # cross-validation estimate of error for hpdglm prediction with K groups.
     cost=.hpdCost
     # cost is a function of two arguments: the observed values and the predicted values.
-    if(is.null(hpdglmfit$responses))
-        stop("cv.hpdglm is only available for complete models.")
 
     call <- match.call()
 
@@ -175,20 +171,20 @@ cv.hpdglm <- function(responses, predictors, hpdglmfit, K=10, sampling_threshold
     Kmax <- ifelse(nSample < 10000, nSample, 100L)      ## limits for number of folders
     if ((K > Kmax) || (K <= 1))
         stop("'K' outside allowable range")
-    
-    
+
+
     if ( max(partitionsize(responses)) > sampling_threshold || nSample > 1e9 || nSample/K > sampling_threshold) {       # distributed sampling
         ## folds keeps the fold tags for each sample
         folds <- clone(responses, ncol = 1)
-        cat("Distributed sampling\n")
+        message("Distributed sampling")
         foreach(i, 1:nparts, function(foldsi=splits(folds,i), K=K, .sample0=.sample0){
             fSize <- ceiling(nrow(foldsi)/K)
             s <- .sample0(rep(1L:K, fSize), nrow(foldsi))
             foldsi <- matrix(as.numeric(s), nrow(foldsi), ncol(foldsi))
             update(foldsi)
-        })                        
+        })
     } else {                                                      # centralized sampling
-        cat("Centralized sampling\n")
+        message("Centralized sampling")
         fSize <- ceiling(nSample/K)
         folds <- .sample0(rep(1L:K, fSize), nSample)
     }
@@ -214,9 +210,9 @@ cv.hpdglm <- function(responses, predictors, hpdglmfit, K=10, sampling_threshold
     Call$predictors <- predictors
 
     for(iteration in 1:K) {
-        cat("*** Fold number ",iteration," ***\n")
+        message("*** Fold number ",iteration," ***")
         if (is.darray(folds)) {       # distributed masking
-            cat("Updating mask\n")
+            message("Updating mask")
             foreach(i, 1:nparts, function(maski=splits(mask,i), in_maski=splits(in_mask,i), out_maski=splits(out_mask,i), foldsi=splits(folds,i), iteration=iteration){
                 in_maski <- ifelse(foldsi == iteration, 0, 1)
                 out_maski <- ifelse(foldsi == iteration, 1, 0)
@@ -225,11 +221,11 @@ cv.hpdglm <- function(responses, predictors, hpdglmfit, K=10, sampling_threshold
                 update(out_maski)
             })
          } else {                     # centralized masking
-            cat("Updating mask\n")
+            message("Updating mask")
             end = cumsum(partitionsize(mask)[,1])
             start = c(0,end[-nparts])+1
             foreach(i, 1:nparts, function(maski=splits(mask,i), in_maski=splits(in_mask,i), out_maski=splits(out_mask,i), folds=folds, iteration=iteration, start =start[i], end =end[i]){
-	            foldsi <- matrix(folds[start:end], nrow(maski), ncol(maski))
+                    foldsi <- matrix(folds[start:end], nrow(maski), ncol(maski))
                 in_maski <- ifelse(foldsi == iteration, 0, 1)
                 out_maski <- ifelse(foldsi == iteration, 1, 0)
                 out_maski <- out_maski * maski # to keep the missed values filtered 
@@ -282,7 +278,7 @@ cv.hpdglm <- function(responses, predictors, hpdglmfit, K=10, sampling_threshold
 ## mask should be a darray with a single column, and 0 or 1 as the value of its elements
 ## equivalent sequential: mean((y[mask==1,]-yhat[mask==1,])^2)
 .hpdCost <- function (y, yhat, mask=NULL) {
-    cat("Calculating cost\n")
+    message("Calculating cost")
     if(is.null(mask)) {
         res <- mean(.d.pow(y-yhat, 2))
         return (res )
@@ -304,4 +300,3 @@ cv.hpdglm <- function(responses, predictors, hpdglmfit, K=10, sampling_threshold
 }
 
 .sample0 <- function(x, ...) x[sample.int(length(x), ...)]
-

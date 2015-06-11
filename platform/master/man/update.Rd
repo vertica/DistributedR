@@ -10,7 +10,7 @@
 \usage{update(x)}
 
 \arguments{
-  \item{x}{input array, data.frame or list.}
+  \item{x}{input array, data.frame, list, or list of multiple splits.}
 }
 
 \details{
@@ -21,7 +21,9 @@
   executed by it does not return any value. Instead, users can call
   \code{\link{update}} to modify distributed arrays, data frames 
   or lists and publish changes. Note that \code{\link{update}} is
-  the only way to make side-effects globally visible.
+  the only way to make side-effects globally visible. 
+
+  Also note that if x is a list of multiple splits, then all of the splits associated with the list will be updated. Updating a specific partition of a list of multiple splits is not currently supported.
 }
 
 \value{
@@ -68,6 +70,30 @@ foreach(i, 1:npartitions(da),
     update(c)
   })
 getpartition(result)
+distributedR_shutdown()
+}
+\dontrun{
+library(distributedR)
+distributedR_start()
+
+da <- darray(dim=c(6,9),blocks=c(3,3),sparse=FALSE,data=0)
+
+##First index gets c(1,2,3), second index gets c(4,5,6), etc.
+get.three.indices <- function(index){
+    start = 3*(index-1) + 1
+    indices = c(start:(start+2))
+    indices
+}
+
+##Update darray 3 splits at a time, with parallelism of 2
+foreach(i,1:2,function(a=splits(da,get.three.indices(i)),data=get.three.indices(i)){
+       a[[1]] = matrix(data[[1]],nrow(a[[1]]),ncol(a[[1]]))
+       a[[2]] = matrix(data[[2]],nrow(a[[2]]),ncol(a[[2]]))
+       a[[3]] = matrix(data[[3]],nrow(a[[3]]),ncol(a[[3]]))
+       update(a)
+    })
+
+getpartition(da) ##counts from 1 to 6 in 3x3 blocks!
 distributedR_shutdown()
 }
 }

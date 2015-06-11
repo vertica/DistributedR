@@ -206,6 +206,9 @@ void ExecutorPool::execute(std::vector<std::string> func,
                            std::vector<NewArg> composite_args,
                            ::uint64_t id, ::uint64_t uid, Response* res) {
   LOG_DEBUG("EXECUTE TaskID %18zu - Waiting for an Available Executor", uid);
+  
+  
+
 
   //Timer timer;
   //timer.start();
@@ -221,7 +224,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
     if (executors[exec_index].ready == false) {
       exec_index = (exec_index + 1) % num_executors;
     } else {
-      LOG_DEBUG("EXECUTE TaskID %18zu - Will be excuted at Executor Id %d", uid, exec_index);
+      LOG_DEBUG("EXECUTE TaskID %18zu - Will be executed at Executor Id %d", uid, exec_index);
       //timer.start();
        // set an executor not ready to prevent further scheduling
       executors[exec_index].ready = false;
@@ -239,14 +242,37 @@ void ExecutorPool::execute(std::vector<std::string> func,
       
       fprintf(executors[target_executor].send, "%zu\n", args.size());
       for (int j = 0; j < args.size(); j++) {
+        std::string arrayname(args[j].arrayname().c_str());
+          
         fprintf(executors[target_executor].send, "%s %s\n",
-                args[j].arrayname().c_str(),
+                arrayname.c_str(),
                 args[j].varname().c_str());
 
+        //send over split array names separately if list_type
+        if(arrayname == "list_type..."){
+            //send number of splits in this list_type arg
+            fprintf(executors[target_executor].send, "%d\n",args[j].list_arraynames_size());
+            //send split names
+            for(int k = 0; k < args[j].list_arraynames_size(); k++){
+                fprintf(executors[target_executor].send, "%s\n",
+                    args[j].list_arraynames(k).c_str());
+            }
+        }
+        
         shmem_arrays_mutex_->lock();
-        shmem_arrays_->insert(args[j].arrayname());
+        
+        //if it's a list-type arg, don't add the arrayname to shmem_arrays. instead, add all of the splits associated with it
+        if(arrayname=="list_type..."){
+            for(int l = 0; l < args[j].list_arraynames_size(); l++){
+                shmem_arrays_->insert(args[j].list_arraynames(l));
+            }
+        }
+        else{
+            shmem_arrays_->insert(args[j].arrayname());
+        }
         shmem_arrays_mutex_->unlock();
       }
+      
       fflush(executors[target_executor].send);
 
       // write raw arguments (not splits or composite arrays)
@@ -259,7 +285,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
       
       fprintf(executors[target_executor].send, "%zu\n", raw_args.size());
       for (int j = 0; j < raw_args.size(); j++) {
-        // if the raw varaible is embedded in the protobuf message value field
+        // if the raw variable is embedded in the protobuf message value field
         if (raw_args[j].has_value() == true) {
           fprintf(executors[target_executor].send, "%s %zu:", raw_args[j].name().c_str(),
                   raw_args[j].value().size());
@@ -314,7 +340,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
       fflush(executors[target_executor].send);  // send the arguments to an executor
 
       // write function
-      // in func, each line is seperate strings and we have to get the size first
+      // in func, each line is separate strings and we have to get the size first
       size_t fun_str_length = 0;
       for (int j = 0; j < func.size(); j++) {
         fun_str_length += func[j].size();

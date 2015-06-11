@@ -345,3 +345,180 @@ setMethod("NCOL", signature("dframe"), function(x)
     {
         return (ncol(x))
     })
+
+## Converts in-place the specified categorical columns of a dframe to factor, considering the labels on all partitions
+# DF: The input dframe
+# colName: A vector of the name of the interested categorical columns
+# colID: When colName is not available, column positions can be specified using a numerical vector
+# trace: When it is FALSE (default) the progress of the foreach will be hidden
+factor.dframe <- function(DF, colName, colID, trace=FALSE) {
+
+    Labels <- .findLabels(DF, colName, colID, trace=trace)
+
+    if(length(Labels$columns) != 0) {
+        # distributing Levels among all the partitions and creating the factors accordingly
+        foreach(i, 1:npartitions(DF), progress=trace, function(DFi=splits(DF,i), Levels=Labels$Levels, columns=Labels$columns) {
+            DFi[,columns] <- lapply(columns, function(x) factor(DFi[,x], levels=Levels[[which(columns==x)]]))
+            update(DFi)
+        })
+    }
+    # no need to return the modified dframe because it is passed by reference
+}
+
+## Creates a clone of the input dframe with the specified categorical columns converted to factor, considering the labels on all partitions
+# DF: The input dframe
+# colName: A vector of the name of the interested categorical columns
+# colID: When colName is not available, column positions can be specified using a numerical vector
+# trace: When it is FALSE (default) the progress of the foreach will be hidden
+as.factor.dframe <- function(DF, colName, colID, trace=FALSE) {
+
+    Labels <- .findLabels(DF, colName, colID, trace=trace)
+    outputDF <- clone(DF)
+    if(length(Labels$columns) != 0) {
+        # distributing Levels among all the partitions and creating the factors accordingly
+        foreach(i, 1:npartitions(outputDF), progress=trace, function(DFi=splits(outputDF,i), Levels=Labels$Levels, columns=Labels$columns) {
+            DFi[,columns] <- lapply(columns, function(x) factor(DFi[,x], levels=Levels[[which(columns==x)]]))
+            update(DFi)
+        })
+    }
+    outputDF
+}
+
+## Finds the list of the labels on the categorical columns of a dframe
+# DF: The input dframe
+# colName: A vector of the name of the interested categorical columns
+# colID: When colName is not available, column positions can be specified using a numerical vector
+levels.dframe <- function(DF, colName, colID, trace=FALSE) {
+
+    Labels <- .findLabels(DF, colName, colID, trace=trace)
+
+    Labels
+}
+
+# An intermediate function to avoid code redundancy
+.findLabels <- function(DF, colName, colID, trace=FALSE) {
+
+    if(!is.dframe(DF) || is.invalid(DF)) stop("DF must be a valid dframe", call.=FALSE)
+    if(any (partitionsize(DF)[,2] != ncol(DF)) ) stop("DF must be partitioned row-wise")
+
+    nparts <- npartitions(DF)
+
+    if(!missing(colName) && !missing(colID))
+        warning("colID is ignored when colName is specified", call.=FALSE)
+
+    if(!missing(colName)) {
+        if(! is.character(colName) || NCOL(colName)!=1)
+            stop("colName must be a charactor array", call.=FALSE)
+        if(! all(colName %in% colnames(DF)))
+            stop("there are names in colName that are not available in the column names of DF", call.=FALSE)
+        columns <- unique(colName)
+    } else if(!missing(colID)) {
+        if(! is.numeric(colID) || NCOL(colID)!=1)
+            stop("colID must be a numeric array", call.=FALSE)
+        if(any( (colID > ncol(DF)) | (colID < 1) ))
+            stop("Numbers in colID must be between 1 and the number of columns in DF", call.=FALSE)
+        columns <- unique(floor(colID))
+    } else { # when missing both colName and colID, all the columns of types 'character', 'factor', and 'logical' will be selected
+        dcolID <- dlist(nparts)
+        # all the partitions of DF must have the same type by definition
+        foreach(i, 1:1, progress=trace, function(DFi=splits(DF,i), li=splits(dcolID,i)) {
+            li <- list(which (sapply(1:ncol(DFi), function(x) is.factor(DFi[,x]) || is.character(DFi[,x]) || is.logical(DFi[,x]))))
+            update(li)
+        })
+        columns <- unlist(getpartition(dcolID,1))
+        if(length(columns) == 0) {
+            warning("No change occured because no column of types 'character', 'factor', or 'logical' was found")
+            return(list(Levels=list(), columns=columns))
+        }
+        if(trace) 
+            cat(paste("Number of columns found of types 'character', 'factor', or 'logical':", length(columns),"\n"))
+    }
+    
+    # finding different categories on each partition
+    dlabels <- dlist(nparts)
+    foreach(i, 1:nparts, progress=trace, function(DFi=splits(DF,i), li=splits(dlabels,i), columns=columns) {
+        if(! all( sapply(columns, function(x) is.character(DFi[,x])) | sapply(columns, function(x) is.factor(DFi[,x])) | sapply(columns, function(x) is.logical(DFi[,x])) )) {
+            ll <- "all of the specified columns must be of type 'character', 'factor', or 'logical'"
+            class(ll) <- "err_message"
+            li <- list(ll)
+        } else {
+            li <- lapply(columns, function(x) levels(factor(DFi[,x])))
+        }
+        update(li)
+    })
+    
+    Labels <- getpartition(dlabels)
+    if(any(sapply(Labels, function(x) inherits(x, "err_message"))))
+        stop("all of the specified columns must be of type 'character', 'factor', or 'logical'", call.=FALSE)
+
+    ncolumns <- length(columns)
+    Levels <- lapply(1:ncolumns, function(i) unique(unlist(Labels[seq(i,ncolumns * nparts,ncolumns)])))
+
+    list(Levels=Levels, columns=columns)
+}
+
+## Converts in-place the specified categorical columns of a dframe from factor to their labels of type character
+# DF: The input dframe
+# colName: A vector of the name of the interested categorical columns
+# colID: When colName is not available, column positions can be specified using a numerical vector
+# trace: When it is FALSE (default) the progress of the foreach will be hidden
+unfactor.dframe <- function(DF, colName, colID, trace=FALSE) {
+
+    if(!is.dframe(DF) || is.invalid(DF)) stop("DF must be a valid dframe", call.=FALSE)
+    if(any (partitionsize(DF)[,2] != ncol(DF)) ) stop("DF must be partitioned row-wise")
+
+    nparts <- npartitions(DF)
+
+    if(!missing(colName) && !missing(colID))
+        warning("colID is ignored when colName is specified", call.=FALSE)
+
+    if(!missing(colName)) {
+        if(! is.character(colName) || NCOL(colName)!=1)
+            stop("colName must be a charactor array", call.=FALSE)
+        if(! all(colName %in% colnames(DF)))
+            stop("there are names in colName that are not available in the column names of DF", call.=FALSE)
+        columns <- unique(colName)
+    } else if(!missing(colID)) {
+        if(! is.numeric(colID) || NCOL(colID)!=1)
+            stop("colID must be a numeric array", call.=FALSE)
+        if(any( (colID > ncol(DF)) | (colID < 1) ))
+            stop("Numbers in colID must be between 1 and the number of columns in DF", call.=FALSE)
+        columns <- unique(floor(colID))
+    } else { # when missing both colName and colID, all the columns of types 'character', 'factor', and 'logical' will be selected
+        dcolID <- dlist(nparts)
+        # all the partitions of DF must have the same type by definition
+        foreach(i, 1:1, progress=trace, function(DFi=splits(DF,i), li=splits(dcolID,i)) {
+            li <- list(which (sapply(1:ncol(DFi), function(x) is.factor(DFi[,x]) || is.character(DFi[,x]) || is.logical(DFi[,x]))))
+            update(li)
+        })
+        columns <- unlist(getpartition(dcolID,1))
+        if(length(columns) == 0) {
+            warning("No change occured because no column of types 'character', 'factor', or 'logical' was found")
+        }
+        if(trace) 
+            cat(paste("Number of columns found of types 'character', 'factor', or 'logical':", length(columns),"\n"))
+    }
+
+    if(length(columns) != 0) {
+        # finding different categories on each partition
+        derr <- dlist(nparts)
+        foreach(i, 1:nparts, progress=trace, function(DFi=splits(DF,i), li=splits(derr,i), columns=columns) {
+            if(! all( sapply(columns, function(x) is.character(DFi[,x])) | sapply(columns, function(x) is.factor(DFi[,x])) )) {
+                ll <- "all of the specified columns must be of type 'character', 'factor', or 'logical'"
+                class(ll) <- "err_message"
+                li <- list(ll)
+            } else {
+                li <- list("no error")
+                DFi[,columns] <- lapply(columns, function(x) as.character(DFi[,x]))
+            }
+            update(li)
+            update(DFi)
+        })
+        
+        errors <- getpartition(derr)
+        if(any(sapply(errors, function(x) inherits(x, "err_message"))))
+            stop("all of the specified columns must be of type 'character', 'factor', or 'logical'", call.=FALSE)
+        # no need to return the modified dframe because it is passed by reference
+    }
+}
+

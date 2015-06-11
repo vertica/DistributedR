@@ -1,7 +1,0 @@
-vertica-distributedr (0.5.0-0.314.el6) experimental; urgency=low
-
-  * Converted from .rpm format to .deb by alien version 8.86
-  
-  Added HPdata to the RPM
-
- -- Shreya Prasad <prasshre@129-1>  Tue, 13 May 2014 08:03:02 -0700

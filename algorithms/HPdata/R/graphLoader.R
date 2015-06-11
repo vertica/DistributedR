@@ -68,9 +68,9 @@ db2dgraph <- function(tableName, dsn, from, to, weight, npartitions) {
 
     # checking availabilty and type of all columns
     if(isWeighted)
-        qryString <- paste("select", from, ",", to, ",", weight, "from", tableName, "limit 1")
+        qryString <- paste("select \"", from, "\", \"", to, "\", \"", weight, "\" from ", tableName, " limit 1", sep="")
     else
-        qryString <- paste("select", from, ",", to, "from", tableName, "limit 1")
+        qryString <- paste("select \"", from, "\", \"", to, "\" from ", tableName, " limit 1", sep="")
 
     oneLine <- sqlQuery(connect, qryString)
     # check valid response from the database
@@ -86,9 +86,9 @@ db2dgraph <- function(tableName, dsn, from, to, weight, npartitions) {
 
     # connecting to DB and finding the number of verices in the table
     if(isWeighted)
-        qryString <- paste("select max(",from,"), max(",to ,"), max(",weight ,") from", tableName)
+        qryString <- paste("select max(\"",from,"\"), max(\"",to ,"\"), max(\"",weight ,"\") from ", tableName, sep="")
     else
-        qryString <- paste("select max(",from,"), max(",to ,") from", tableName)
+        qryString <- paste("select max(\"",from,"\"), max(\"",to ,"\") from ", tableName, sep="")
     nVertices <- sqlQuery(connect, qryString)
     odbcClose(connect)
     # check valid response from the database
@@ -136,9 +136,9 @@ db2dgraph <- function(tableName, dsn, from, to, weight, npartitions) {
             }
 
             if (row_wise) {
-                qryString <- paste("select ",from,",",to,",",weight, " from", tableName, "where ",from," >=", start,"and", from,"<", end)
+                qryString <- paste("select \"",from,"\", \"",to,"\", \"",weight, "\" from ", tableName, " where \"",from,"\" >= ", start," and \"", from,"\" < ", end, sep="")
             } else {
-                qryString <- paste("select ",from,",",to,",",weight, " from", tableName, "where ",to," >=", start,"and", to,"<", end)
+                qryString <- paste("select \"",from,"\", \"",to,"\", \"",weight, "\" from ", tableName, " where \"",to,"\" >= ", start," and \"", to,"\" < ", end, sep="")
             }
             # each worker connects to Vertica to load its partition of the darray 
             connect <- -1
@@ -184,9 +184,9 @@ db2dgraph <- function(tableName, dsn, from, to, weight, npartitions) {
             }
 
             if (row_wise) {
-                qryString <- paste("select ",from,",",to, " from", tableName, "where ",from," >=", start,"and", from,"<", end)
+                qryString <- paste("select \"",from,"\", \"",to, "\" from ", tableName, " where \"",from,"\" >= ", start," and \"", from,"\" <", end, sep="")
             } else {
-                qryString <- paste("select ",from,",",to, " from", tableName, "where ",to," >=", start,"and", to,"<", end)
+                qryString <- paste("select \"",from,"\", \"",to, "\" from ", tableName, " where \"",to,"\" >= ", start," and \"", to,"\" < ", end, sep="")
             }
             # each worker connects to Vertica to load its partition of the darray 
             connect <- -1
@@ -223,7 +223,7 @@ db2dgraph <- function(tableName, dsn, from, to, weight, npartitions) {
             if (! require(vRODBC) )
                 library(RODBC)
                 
-            qryString <- paste("select ",from,", count(distinct ",to, ") from", tableName, "group by ",from)
+            qryString <- paste("select \"",from,"\", count(distinct \"",to, "\") from ", tableName, " group by \"",from, "\"", sep="")
             connect <- odbcConnect(dsn)
             segment<-sqlQuery(connect, qryString)
             odbcClose(connect)
@@ -273,7 +273,7 @@ file2dgraph <- function(pathPrefix, nVertices, verticesInSplit, isWeighted) {
     }
 
     nFiles <- npartitions(X)
-    cat("Openning files:\n", paste(pathPrefix,"0\n...until...\n",pathPrefix,nFiles-1,"\n",sep=""))
+    message("Openning files:\n", paste(pathPrefix,"0\n...until...\n",pathPrefix,nFiles-1,sep=""))
     errDL <- dlist(nFiles) # collecting error messages
 
     #Load data from files to darray
@@ -373,7 +373,7 @@ file2dgraph <- function(pathPrefix, nVertices, verticesInSplit, isWeighted) {
     errorList <- getpartition(errDL)
     if(! is.null(unlist(errorList))) { # there has been an error
         for( i in 1:length(errorList) ) {
-            print(paste(errorList[[i]]))
+            message(paste(errorList[[i]]))
         }
         stop("Error in reading input files")
     }

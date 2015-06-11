@@ -31,15 +31,26 @@ dlist <- function(npartitions) {
   if (length(npartitions) > 1) stop("argument 'npartitions' should be of length one")
   if (!is.numeric(npartitions)) stop("argument 'npartitions' should be numeric") 
   else if (round(npartitions)!=npartitions) stop("argument 'npartitions' should be an integer")
+
   
+
   blocks <- c(1, 1)
   dim <- c(npartitions, 1)
   tryCatch({
   d <- new ("dlist", dim, blocks)
 
-  success <- foreach(i,1:npartitions(d),
-          initdata <- function(dhs = splits(d,i)) {
-            dhs <- list()
+  # Increment by nExecutors every time to preserve round-robin locality
+  nExecutors <- sum(distributedR_status()$Inst)
+  
+  indices <- function(i,npartitions,nExecutors){
+    as.list(seq(from=i,to=npartitions,by=nExecutors))
+  }
+
+  range = 1:(min(npartitions(d),nExecutors))
+
+  success <- foreach(i,range,
+          initdata <- function(dhs = splits(d,indices(i,npartitions(d),nExecutors))) {
+            dhs <- lapply(1:length(dhs),function(x) {list()})
             update(dhs)
           }, progress=FALSE)
   },error = handle_presto_exception)

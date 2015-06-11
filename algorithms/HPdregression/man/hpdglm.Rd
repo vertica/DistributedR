@@ -53,7 +53,7 @@ completeModel=FALSE, ...)
     this argument reserved for the future improvement. The only available fitting method at the moment is "hpdglm.fit.Newton". In the future, if we have new developed algorithms, this argument can be used to switch between them.
   }
   \item{completeModel}{
-    when it is FALSE (default), the output values that have darray structure will be discarded.
+    when it is FALSE (default), calculation of several output values that are not required for prediction are skipped. Therefore, the function can perform faster.
   }
   \item{\dots}{
     arguments to be used to form the default
@@ -61,29 +61,29 @@ completeModel=FALSE, ...)
   }
 }
 \details{
-    predictors and responses must align with each other (have the same number of rows and the same number of blocks).
+    predictors and responses must align with each other (have the same number of rows and similar partitioning). Models created either in complete or incomplete mode can be used for prediction. The only motivation behind completeModel=FALSE is performance. Indeed, caluculation of several values, which are not required for prediction, are skipped.
 }
 \value{
   \item{coefficients }{calculated coefficients}
-  \item{d.residuals }{(only when completeModel=TRUE) the working residuals, that is the residuals in the final iteration of the IWLS fit. Since cases with zero weights are omitted, their working residuals are NA. It is of type darray.}
-  \item{d.fitted.values}{(only when completeModel=TRUE) the fitted mean values, obtained by transforming the linear predictors by the inverse of the link function. It is of type darray.}
+  \item{d.residuals }{(available only when completeModel=TRUE; otherwise it is NULL) the working residuals, that is the residuals in the final iteration of the IWLS fit. Since cases with zero weights are omitted, their working residuals are NA. It is of type darray.}
+  \item{d.fitted.values}{the fitted mean values, obtained by transforming the linear predictors by the inverse of the link function. It is of type darray.}
   \item{family}{the family function used for regression}
-  \item{d.linear.predictors}{(only when completeModel=TRUE) the linear fit on link scale. It is of type darray.}
+  \item{d.linear.predictors}{the linear fit on link scale. It is of type darray.}
   \item{deviance}{up to a constant, minus twice the maximized log-likelihood.}
-  \item{aic}{a version of Akaike's An Information Criterion, minus twice the maximized log-likelihood plus twice the number of parameters, computed by the aic component of the family.}
-  \item{null.deviance}{the deviance for the null model, comparable with deviance.}
+  \item{aic}{(available only when completeModel=TRUE; otherwise it is NA) a version of Akaike's An Information Criterion, minus twice the maximized log-likelihood plus twice the number of parameters, computed by the aic component of the family.}
+  \item{null.deviance}{(available only when completeModel=TRUE; otherwise it is NA) the deviance for the null model, comparable with deviance.}
   \item{iter}{the number of iterations of IWLS used.}
-  \item{prior.weights}{(only when completeModel=TRUE) the weights initially supplied. All of its values are 1 if no initial weights used. It is of type darray. The value of weight will become 0 for the samples with invalid data (NA, NaN, Inf).}
-  \item{weights}{(only when completeModel=TRUE) the working weights, that is the weights in the final iteration of the IWLS fit. It is of type darray. In order to save memory and execution time, no new darray will be created for weights when the initial weights are all 0 or 1, and it will simply be a reference to prior.weights.}
+  \item{prior.weights}{the weights initially supplied. All of its values are 1 if no initial weights used. It is of type darray. The value of weight will become 0 for the samples with invalid data (NA, NaN, Inf).}
+  \item{weights}{the working weights, that is the weights in the final iteration of the IWLS fit. It is of type darray. In order to save memory and execution time, no new darray will be created for weights when the initial weights are all 0 or 1, and it will simply be a reference to prior.weights.}
   \item{df.residual}{the residual degrees of freedom.}
   \item{df.null}{the residual degrees of freedom for the null model.}
   \item{converged}{logical. Was the IWLS algorithm judged to have converged?}
   \item{boundary}{logical. Is the fitted value on the boundary of the attainable values?}
-  \item{responses}{(only when completeModel=TRUE) the darray of responses.}
-  \item{predictors}{(only when completeModel=TRUE) the darray of predictors.}
+  \item{responses}{the darray of responses.}
+  \item{predictors}{the darray of predictors.}
   \item{na_action}{this item exists only when a few samples are excluded because of missed data. It is a list containing type "exclude" and the number of excluded samples.}
   \item{call}{the matched call.}
-  \item{offset}{(only when completeModel=TRUE) the offset darray used.}
+  \item{offset}{the offset darray used.}
   \item{control}{the value of the control argument used.}
   \item{method}{the name of the fitter function used, currently always "hpdglm.fit.Newton".}
 }
@@ -93,35 +93,32 @@ completeModel=FALSE, ...)
 
 \examples{
  \dontrun{
-    ## Example for logistic regression
+    ## Example for linear regression
     library(HPdregression)
     distributedR_start()
-    # selecting 4 partitions
-    Y <- as.darray(as.matrix(mtcars$am),c(ceiling(length(mtcars$am)/4),1))
-    colnames(Y) <- "am"
-    X <- as.darray(as.matrix(cbind(mtcars$wt,mtcars$hp)),
-                   c(ceiling(length(mtcars$hp)/4),2))
-    colnames(X) <- c("wt", "hp")
+
+    require(MASS)
+    # creating the darray of response
+    Y <- as.darray(data.matrix(Boston["medv"]))
+    # creating the darray of predictors
+    X <- as.darray(data.matrix(Boston[c("rad","crim","ptratio","dis")]))
+    # building linear regression model
+    reg <- hpdglm(Y,X, completeModel=TRUE)
+    summary(reg)
+
+    ## Example for logistic regression
+    Y <- as.darray(data.matrix(mtcars["am"]))
+    X <- as.darray(data.matrix(mtcars[c("wt","hp")]))
+
     # building logistic regression model
-    myModel <- hpdglm(Y, X, binomial)
+    myModel <- hpdglm(Y, X, binomial, completeModel=TRUE)
     summary(myModel)
     
-    ## Example for linear regression
-    require(MASS)
-    y <- matrix(Boston$medv,ncol=1)
-    n <- nrow(y)
-    x <- matrix(c(Boston$rad,Boston$crim,Boston$ptratio,Boston$dis),ncol=4)
-    # selecting the number of partitions the same as the number of R-executors
-    nparts <- sum(distributedR_status()$Inst)
-    block_row <- ceiling(n/nparts)
-    # creating the darray of response
-    Y <- as.darray(y, c(block_row,1))
-    colnames(Y) <- c("medv")
-    # creating the darray of predictors
-    X <- as.darray(x, c(block_row,4))
-    colnames(X) <- c("rad","crim","ptratio","dis")
+    ## Example for poisson regression
+    Y <- as.darray(data.matrix(mtcars["carb"]))
+    X <- as.darray(data.matrix(mtcars[-which(colnames(mtcars)=="carb")]))
     # building linear regression model
-    reg <- hpdglm(Y,X)
+    reg <- hpdglm(Y,X, poisson, completeModel=TRUE)
     summary(reg)
  }    
 }

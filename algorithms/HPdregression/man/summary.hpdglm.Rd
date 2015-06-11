@@ -35,26 +35,30 @@ summary.hpdglm(object, dispersion = NULL, correlation = FALSE,
 \item{family}{the component from \code{object}.}
 \item{deviance}{the component from \code{object}.}
 \item{df.residual}{the component from \code{object}.}
-\item{null.deviance}{the component from \code{object}.}
+\item{null.deviance}{the component from \code{object}. 
+    It is NA for an incomplete model.}
 \item{df.null}{the component from \code{object}.}
 \item{deviance.resid}{(only when completeModel=TRUE) the deviance residuals:
-see \code{\link{residuals.hpdglm}}.}
+    see \code{\link{residuals.hpdglm}}. It is NA for an incomplete model.}
 \item{coefficients}{the matrix of coefficients, standard errors,
-z-values and p-values.  Aliased coefficients are omitted.}
+    z-values and p-values.  Aliased coefficients are omitted. 
+    Except coefficients, other values are NA for an incomplete model.}
 \item{aliased}{named logical vector showing if the original
-coefficients are aliased.} 
+    coefficients are aliased.} 
 \item{dispersion}{either the supplied argument or the inferred/estimated
-dispersion if the latter is \code{NULL}.}
+    dispersion if the latter is \code{NULL}.}
 \item{df}{a 3-vector of the rank of the model and the number of
-residual degrees of freedom, plus number of non-aliased coefficients.}
+    residual degrees of freedom, plus number of non-aliased coefficients.}
 \item{cov.unscaled}{the unscaled (\code{dispersion = 1}) estimated covariance
-matrix of the estimated coefficients.}
-\item{cov.scaled}{ditto, scaled by \code{dispersion}.}
+    matrix of the estimated coefficients. It is not available for an incomplete model.}
+\item{cov.scaled}{ditto, scaled by \code{dispersion}. 
+    It is not available for an incomplete model.}
 \item{correlation}{(only if \code{correlation} is true.)  The estimated
-correlations of the estimated coefficients.}
+    correlations of the estimated coefficients.}
 \item{symbolic.cor}{(only if \code{correlation} is true.)  The value
-of the argument \code{symbolic.cor}.}
-\item{minMax}{it contains the minimum and the maximum of the deviance residuals.}
+    of the argument \code{symbolic.cor}.}
+\item{minMax}{it contains the minimum and the maximum of the deviance residuals.
+    They are NA for an incomplete model.}
 }
 \author{
     HP Vertica Analytics Team

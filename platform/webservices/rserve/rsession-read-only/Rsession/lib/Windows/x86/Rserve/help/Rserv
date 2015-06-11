@@ -1,0 +1,45 @@
+Rserve                package:Rserve                R Documentation
+
+_S_e_r_v_e_r _p_r_o_v_i_d_i_n_g _R _f_u_n_c_t_i_o_n_a_l_i_t_y _t_o _a_p_p_l_i_c_a_t_i_o_n_s _v_i_a _T_C_P/_I_P _o_r _l_o_c_a_l _u_n_i_x _s_o_c_k_e_t_s
+
+_D_e_s_c_r_i_p_t_i_o_n:
+
+     Starts Rserve in daemon mode (unix only). Any additional
+     parameters not related to Rserve will be passed straight to the
+     underlying R. For configuration, usage and command line parameters
+     please consult the online documentation at
+     http://www.rosuda.org/Rserve. Use 'R CMD Rserve --help' for a
+     brief help.
+
+     The 'Rserve' function is provided for convenience only, it is
+     recommended to start Rserve directly from the command line, not
+     from R itself. Also note that the debug version of Rserve doesn't
+     fork and thus will block until closed.
+
+_U_s_a_g_e:
+
+     # R CMD Rserve [<parameters>]
+
+     Rserve(debug = FALSE, port = 6311, args = NULL)
+
+_A_r_g_u_m_e_n_t_s:
+
+   debug: determines whether regular Rserve or debug version of Rserve
+          ('Rserve.dbg') should be started.
+
+    port: port used by Rserve to listen for connections
+
+    args: further arguments passed to Rserve (as a string that will be
+          passed to the 'system' command thus use quotes where
+          necessary).
+
+_D_e_t_a_i_l_s:
+
+     Rserve is not just a package, but an application. It is provided
+     as a R package for convenience only. For details see
+     http://www.rosuda.org/Rserve
+
+_A_u_t_h_o_r(_s):
+
+     Simon Urbanek
+

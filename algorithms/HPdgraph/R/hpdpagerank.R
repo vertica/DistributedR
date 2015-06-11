@@ -138,40 +138,41 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
         cat("Calculating the number of outgoing edges in each partition\n")
         starttime<-proc.time()
       }
+      env <- environment()
+      env$index <- 0
       if (is.null(weights)) { # when there is no weight on the edges
         #In parallel perform rowsums
-        i <- 0
-        while(i < nparts){
-            foreach(j, 1:min(nWorkers, nparts - i), progress=trace, sumarray<-function(dg=splits(dgraph,j+i), tp=splits(OutDegree,j)){
+        while(env$index < nparts){
+            foreach(j, 1:min(nWorkers, nparts - env$index), progress=trace, sumarray<-function(dg=splits(dgraph,j+env$index), tp=splits(OutDegree,j)){
                 if(class(dg) == "matrix")
                     tp <- tp + rowSums(dg)
                 else
                     tp <- tp + .Call("rowSums", dg, PACKAGE="MatrixHelper")
                 update(tp)
             }, scheduler=1)
-            i <- i + nWorkers
+            env$index <- env$index + nWorkers
         } #while
 
       } else {  # when there are weights on the edges
         #In parallel perform rowsums
-        i <- 0
-        while(i < nparts){
-            foreach(j, 1:min(nWorkers, nparts - i), progress=trace, 
-                    sumarray<-function(dg=splits(dgraph,j+i), tp=splits(OutDegree,j), wi=splits(weights,j+i)){
+        while(env$index < nparts){
+            foreach(j, 1:min(nWorkers, nparts - env$index), progress=trace, 
+                    sumarray<-function(dg=splits(dgraph,j+env$index), tp=splits(OutDegree,j), wi=splits(weights,j+env$index)){
                 if(class(dg) == "matrix")
                     tp <- tp + rowSums(dg * wi)
                 else
                     tp <- tp + .Call("rowSums", dg * wi, PACKAGE="MatrixHelper")
                 update(tp)
             }, scheduler=1)
-            i <- i + nWorkers
+            env$index <- env$index + nWorkers
         } #while
 
       } # if-else
       #Finally sum up the OutDegree vector. Final value will be stored in the first partition
       if(nWorkers > 1) {
-          for(i in 2:nWorkers){
-              foreach(j, 1, progress=trace, sumarray<-function(tpi=splits(OutDegree,i), tp1=splits(OutDegree,1)){
+          for(iWorker in 2:nWorkers){
+              env$index <- iWorker
+              foreach(j, 1, progress=trace, sumarray<-function(tpi=splits(OutDegree,env$index), tp1=splits(OutDegree,1)){
                   tp1 <- tp1 + tpi
                   update(tp1)    
               }, scheduler=1)

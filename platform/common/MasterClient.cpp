@@ -69,6 +69,9 @@ void MasterClient::Pusher() {
     message_t zmq_req(req.ByteSize());
     req.SerializeToArray(zmq_req.data(), zmq_req.size());
 
+    //notify observers
+    Notify(req);
+
     try {
       socket.send(zmq_req);
     } catch (zmq::error_t err) {
@@ -209,5 +212,6 @@ void MasterClient::WorkerAborting(const WorkerAbortRequest& workerabort) {
 
 //   res->ParseFromArray(zmq_reply.data(), zmq_reply.size());
 // }
+
 
 }  // namespace presto

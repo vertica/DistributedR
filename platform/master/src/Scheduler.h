@@ -316,10 +316,14 @@ class Scheduler {
   bool IsExecTask(uint64_t taskid);
   void SetForeachError(bool value);
 
-  void TaskErrorMsg(const char* error_msg) {
+  void TaskErrorMsg(const char* error_msg, std::string node = "") {
     foreach_status_->error_stream.str(std::string()); 
-    foreach_status_->error_stream << error_msg 
-    <<"\nCheck your code.";    
+    if(node.empty())
+      foreach_status_->error_stream << " in Master: " << error_msg 
+      <<"\nCheck your code."; 
+    else
+      foreach_status_->error_stream << " in Worker " << node << ": " << error_msg
+      <<"\nCheck your code.";  
   }
 
   void ResetForeach() {
@@ -479,6 +483,7 @@ class InMemoryScheduler : public Scheduler {
     int num_dependencies;
     Worker *worker;
     bool inited;
+    bool launched;
     TaskArg *task;
   };
 

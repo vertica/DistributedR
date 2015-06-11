@@ -307,8 +307,6 @@ setMethod("+", signature("darray", "darray"),
           function(e1, e2) {
 	   if(is.invalid(e1) || is.invalid(e2)) stop("Operation not supported on empty arrays.")
 	   if(!all(dim(e1)==dim(e2))){
-	      print(dim(e1))
-	      print(dim(e2))
               stop("non-conformable arrays. Check dimensions of input arrays.")
             }
 	   e1_psize<-partitionsize(e1)
@@ -343,9 +341,6 @@ setMethod("-", signature("darray", "darray"),
           function(e1, e2) {
 	   if(is.invalid(e1) || is.invalid(e2)) stop("Operation not supported on empty arrays.")
 	   if(!all(dim(e1)==dim(e2))){
-	      print(dim(e1))
-	      print(dim(e2))
-	      print(class(e2))
               stop("non-conformable arrays. Check dimensions of input arrays.")
             }
 	   e1_psize<-partitionsize(e1)

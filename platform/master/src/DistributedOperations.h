@@ -32,6 +32,7 @@ namespace presto {
                                          SEXP arg_names_exp,
                                          SEXP split_names_exp,
                                          SEXP arg_vals_exp,
+                                         SEXP list_args_exp,
                                          SEXP raw_names_exp,
                                          SEXP raw_vals_exp,
                                          SEXP wait_exp,

@@ -15,12 +15,15 @@
 
 \details{ \code{npartitions} returns the total number of partitions in
   the distributed object. Use \code{npartitions2D} to obtain the
-  number of partitions along each direction.  For example, in
-  \code{darray(dim=c(9,10), blocks=c(3,5))}, the distributed array is
+  number of partitions along each direction.  
+
+  In \code{darray(dim=c(9,10), blocks=c(3,5))}, the distributed array is
   partitioned blockwise.  \code{npartittions} will return 6 (total
   number of partitions) while \code{npartitions2D} will return (3,2),
   i.e., 3 partitions along the row and 2 along the column
-  axis. Mathematically,
+  axis. 
+
+  Mathematically,
   \code{npartitions(x)=npartitions2D(x)[1]*npartitions2D(x)[2]}}
 
 \value{ \code{npartitions} return an integer that denotes the number of partitions.

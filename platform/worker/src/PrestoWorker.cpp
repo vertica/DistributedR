@@ -39,12 +39,14 @@
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/algorithm/string.hpp>
 
+
 #include <Rinterface.h>
 
 #include <string>
 #include <vector>
 #include <dirent.h>
 #include <fstream>
+#include <algorithm>
 
 #include "atomicio.h"
 #include "PrestoWorker.h"
@@ -53,6 +55,8 @@
 #include "ArrayData.h"
 
 #include "timer.h"
+
+#include "RequestLogger.h"
 
 using namespace std;
 using namespace boost;
@@ -652,14 +656,14 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
   // Otherwise, use worker to create a composite
   if (arr_type == DATA_FRAME) {
     // deal with the data frame!!
-    vector<ArrayData*> splits;
     vector<pair<std::int64_t, std::int64_t> > offsets;
     for (int i = 0; i<req.arraynames_size(); i++) {
-       splits.push_back(ParseShm(req.arraynames(i)));
+       ArrayData *ad = ParseShm(req.arraynames(i));
        offsets.push_back(make_pair(req.offsets(i).val(0), req.offsets(i).val(1)));
        composite->offsets.push_back(offsets.back());
-       composite->dims.push_back(splits.back()->GetDims());
+       composite->dims.push_back(ad->GetDims());
        composite->splitnames.push_back(req.arraynames(i));
+       delete ad;
     }    
     composite->dobjecttype = DFRAME;
  
@@ -676,14 +680,14 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
     lock.unlock();
   } else if (arr_type == LIST) {
     //Create Composite Array for lists
-    vector<ArrayData*> splits;
     vector<pair<std::int64_t, std::int64_t> > offsets;
     for (int i = 0; i<req.arraynames_size(); i++) {
-       splits.push_back(ParseShm(req.arraynames(i)));
+       ArrayData* ad = ParseShm(req.arraynames(i));
        offsets.push_back(make_pair(req.offsets(i).val(0), req.offsets(i).val(1)));
        composite->offsets.push_back(offsets.back());
-       composite->dims.push_back(splits.back()->GetDims());
+       composite->dims.push_back(ad->GetDims());
        composite->splitnames.push_back(req.arraynames(i));
+       delete ad;
     }
     composite->dobjecttype = DLIST;
 
@@ -794,6 +798,8 @@ PrestoWorker::PrestoWorker(
   total_bytes_fetched_ = total_bytes_sent_ =
       total_fetch_time_ = total_send_time_ =
       total_exec_time_ = total_cc_time_ = 0;
+
+  mRequestLogger = new RequestLogger("MasterRequestLogger");
 }
 
 /** PrestoWorker destructor
@@ -860,6 +866,10 @@ PrestoWorker::~PrestoWorker() {
   cmd_to_master = NULL;
   master_.reset();
   ShutdownProtobufLibrary();
+
+  if (mRequestLogger) {
+      delete mRequestLogger;
+  }
 }
 
 /** A handler to process request from master or other workers. This function is called from Run function as it fills an appropriate task queue
@@ -1094,6 +1104,10 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
     worker_req = new WorkerRequest;
     worker_req->Clear();
     worker_req->ParseFromArray(request.data(), request.size());
+
+    //notify the request to all the observers
+    Notify(*worker_req);
+
     int type = MISC;
     //LOG_INFO("PrestoWorker::Run getting a message type: %s", WorkerRequest::Type_Name(worker_req.type()).c_str());
     switch (worker_req->type()) {
@@ -1222,6 +1236,17 @@ void PrestoWorker::hello(ServerInfo master_location,
     // master_ pointer is accessed to send message to the master node
     master_.reset(new MasterClient(master_location.name(),
                                    master_location.presto_port(), zmq_ctx_));
+
+
+    FILE* f2 = fopen("/tmp/r_master_request_tracer", "r");
+    if(f2) {
+        //register observers
+        master_->Subscribe(mRequestLogger);
+        fclose(f2);
+    }
+
+
+
     LOG_INFO("Worker opened connection to Master at %s:%d", master_location.name().c_str(), master_location.presto_port());
     // enable to send message to master dirctly from executor pool
     executorpool_->master = master_.get();
@@ -1464,14 +1489,16 @@ void PrestoWorker::verticaload(VerticaDLRequest verticaload) {
               <RepeatedPtrField<string>::const_iterator,
                string>(verticaload.query_result().begin(),
                        verticaload.query_result_size(), &qry_res);
-    ::uint64_t npartitions = data_loader_->SendResult(qry_res);
+    std::pair<DLStatus, ::uint64_t> worker_result = data_loader_->SendResult(qry_res);
 
-    LOG_INFO("<DataLoader> Number of partitions generated is %d", npartitions);
+    LOG_INFO("<DataLoader> Number of partitions generated is %d", worker_result.second);
 
     TaskDoneRequest reply;
     reply.set_id(verticaload.id());
     reply.set_uid(verticaload.uid());
-    reply.set_npartitions(npartitions);
+    reply.set_npartitions(worker_result.second);
+    reply.set_task_result(worker_result.first.transfer_success_);
+    reply.set_task_message(worker_result.first.transfer_error_msg_);
     reply.mutable_location()->CopyFrom(my_location_);
 
     master_->TaskDone(reply);
@@ -1620,7 +1647,7 @@ static unsigned long long auto_shared_memory() {
   unsigned long long shmall = 0;
   FILE *f = fopen(SHMALL_SYS_FILE, "r");
   if (f != NULL) {
-    if (fscanf(f, "%ld", &shmall) != 1) {
+    if (fscanf(f, "%llu", &shmall) != 1) {
         shmall = 0;
     }    
     fclose(f);
@@ -1695,7 +1722,7 @@ int main(int argc, char **argv) {
   int32_t end_port = 50100;
   unsigned long long shared_memory = auto_shared_memory();
   int executors = auto_executors();
-  int log_level = 2;
+  int log_level = 3;
   std::string master_addr, worker_addr;
   int master_port= -1;
   boost::unordered_map<string, presto::ArrayStore*> array_stores;
@@ -1777,6 +1804,18 @@ int main(int argc, char **argv) {
   }  
   LOG_INFO("Starting worker.");
 
+  //sleep for N secs if that file exists
+  FILE* f = fopen("/tmp/r_worker_startup_sleep_secs", "r");
+  if(f) {
+    char buffer[10];
+    size_t nread = fread(buffer, 1, 10, f);
+    int secs = atoi(buffer);
+    if(secs > 0 and secs < 120) {
+      LOG_INFO("Sleeping for %d secs, pid: %d\n", secs, getpid());
+      sleep(secs);
+    }
+  }
+
   vector<boost::shared_ptr<presto::PrestoWorker> > worker_handles;
 
   context_t zmq_ctx(NUM_CTX_THREADS);
@@ -1794,6 +1833,16 @@ int main(int argc, char **argv) {
     LOG_INFO("Worker %s:(%d~%d) with %d executors and %llu Shared Memory. Master - %s:%d", 
       hostname, start_port, end_port, executors, shared_memory, master_addr.c_str(), master_port);
     presto::worker_ptr = worker;  // to enable clean worker shutdown
+
+
+    FILE* f2 = fopen("/tmp/r_worker_request_tracer", "r");
+    presto::RequestLogger requestLogger("WorkerRequestLogger");
+    if(f2) {
+        //register observers
+        worker->Subscribe(&requestLogger);
+        fclose(f2);
+    }
+
     worker->Run(master_addr, master_port, worker_addr);
     delete worker;
   } catch (zmq::error_t err) {
@@ -1805,4 +1854,3 @@ int main(int argc, char **argv) {
   printf("exiting\n");
   return 0;
 }
-

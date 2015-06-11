@@ -21,6 +21,8 @@
 # dsn: ODBC DSN name
 # modelName: Name with which the model will be saved in Vertica db
 
+.max_model_size <- 2147483647L  # R has limitation in the size of the vector that can be created
+
 deploy.model <- function(model, dsn, modelName, modelComments="", localTmpFilePath = '/tmp') {
 
    if(missing(model))
@@ -42,34 +44,34 @@ deploy.model <- function(model, dsn, modelName, modelComments="", localTmpFilePa
    # Get model type
    modelType <- .get.modeltype(class(model))
 
-   if (inherits(model, "glm") || inherits(model, "hpdglm")) {
-     isInvalidGlm <- ifelse(is.null(model$call$completeModel), FALSE, model$call$completeModel)
-     if(isInvalidGlm)
-       stop("Model generated with completeModel=TRUE cannot be deployed to Vertica. \n  Re-run hpdglm() with completeModel=FALSE")
-
-     family <- model$family$family
-     link <- model$family$link
+   # Get model to be deployed to Vertica
+   model_to_deploy <- NULL
+   if (inherits(model, "hpdglm") || inherits(model, "hpdkmeans") || inherits(model, "hpdrandomForest")) {
+     tryCatch({
+        model_to_deploy <- .getDeployableModel(model)
+     }, error=function(e) {
+        stop(e)
+     })
+   } else
+     model_to_deploy <- model
+  
+  # Extract model metadata information to display be displayed in R_models metadata table.
+  if(inherits(model_to_deploy, "glm") || inherits(model_to_deploy, "hpdglm")) {
+     family <- model_to_deploy$family$family
+     link <- model_to_deploy$family$link
 
      if(is.null(family) || is.null(link))
-       print("Warning: glm model is missing family or link.")
+       message("Warning: glm model is missing family or link.")
      else
        modelType <- paste(modelType, " [family(", family, "), link(", link, ")]", sep="")
    } 
-   else if (inherits(model, "randomForest") || inherits(model, "hpdrandomForest")) {
-     isInvalidRF <- ifelse(is.null(model$call$completeModel), FALSE, model$call$completeModel)
-     if(isInvalidRF)
-       stop("Model generated with completeModel=TRUE cannot be deployed to Vertica. \n  Re-run hpdrandomForest() with completeModel=FALSE")
- 
-     type <- model$type
+   else if (inherits(model_to_deploy, "randomForest") || inherits(model_to_deploy, "hpdrandomForest")) {
+     type <- model_to_deploy$type
        
      if(is.null(type))
-       print("Warning: randomForest model is missing type.")
+       message("Warning: randomForest model is missing type.")
      else
        modelType <- paste(modelType, " [type(", type, ")]", sep="")
-   } 
-   else if (inherits(model, "hpdkmeans") && !is.null(model$cluster)) {
-     stop("Model generated with completeModel=TRUE cannot be deployed to Vertica. \n  Re-run hpdkmeans() with completeModel=FALSE")
-     #stop("Model has darray components and cannot be deployed to Vertica. \n  Re-run hpdkmeans() with completeModel=FALSE")
    }
    
    if (! require(vRODBC) )
@@ -103,12 +105,16 @@ deploy.model <- function(model, dsn, modelName, modelComments="", localTmpFilePa
      stop(paste("User '", user[[1]][[1]], "' has a model deployed in Vertica with same name '", modelName, "'", sep=""))
    } else {
      # serialize model to a file
-     .serialize.obj <- rawToChar(serialize(model, NULL, ascii=T))
+     .ascii.rep <- serialize(model_to_deploy, NULL, ascii=T)
+     if(length(.ascii.rep) >= .max_model_size) { stop(paste("Model is too large for deployment to Vertica upon serialization:", round(length(.ascii.rep)/1e9, 3), "GB")) }
+ 
+     .deployable.obj <- rawToChar(.ascii.rep)
      local_tmp_file <- tempfile(pattern = Sys.getenv("USER"), tmpdir = localTmpFilePath, fileext = '.rmodel')
-     write(.serialize.obj, file=local_tmp_file)
+     write(.deployable.obj, file=local_tmp_file)
 
      current_time <- Sys.time()
      modelSize <- file.info(local_tmp_file)$size
+
      #Call COPY command to pass the model to Vertica
      qryString <- paste("COPY ", schema, ".", tableName, " FROM LOCAL '", local_tmp_file, "' WITH PARSER public.DeployModelToVertica(model_name='", modelName, "', model_type='", modelType,"', model_description='", modelComments ,"', model_size=", modelSize, ", user_name='", user[[1]][[1]], "', timestamp='", current_time, "');", sep="")
      deploy_model <- sqlQuery(db_connect, qryString)
@@ -178,4 +184,7 @@ deploy.model <- function(model, dsn, modelName, modelComments="", localTmpFilePa
       }
     }
 }
+
+
+".getDeployableModel" <- function(model, ...) UseMethod("deploy")
 

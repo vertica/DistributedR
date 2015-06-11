@@ -27,10 +27,10 @@ db2darrays(tableName, dsn, resp = list(...), pred = list(...),
     this optional argument specifies the desired number of partitions in the distributed array. If not specified, it will be equal to the number of active R instances in the distributed R cluster. It should be noted that the number of splits in the returned result might not be exactly the same as npartitions. Please read the details for more information.
   }
   \item{verticaConnector}{
-    when it is TRUE (default), Vertica Connector for Distributed R will be used to load data.
+    when it is TRUE (default), Vertica Connector for Distributed R will be used to load data. Must install Distributed R Extensions package in Vertica to use Vertica Connector.
   }
   \item{loadPolicy}{
-    it is the data loading policy used for Vertica Connector for Distributed R. It can have two values, "local" or "uniform". By default, "local" policy is used. Views will always be loa    ded with "uniform" policy. See details section for more information. 
+    it is the data loading policy used for Vertica Connector for Distributed R. It can have two values, "local" or "uniform". By default, "local" policy is used. Views and external tables will always be loaded with "uniform" policy. See details section for more information. 
   }
 }
 

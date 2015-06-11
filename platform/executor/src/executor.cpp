@@ -39,6 +39,10 @@
 #include <signal.h>
 #include <zmq.hpp>
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <unistd.h>
+
 #include <tuple>
 #include <cstdio>
 #include <map>
@@ -66,6 +70,7 @@ using namespace presto;
 
 namespace presto {
 
+    
 uint64_t abs_start_time;
 
 FILE *logfile;
@@ -87,10 +92,10 @@ static SEXP RSymbol_x = NULL;
 
 // contains a list of variables to update
 // (a function that usually called within foreach)
-set<tuple<string, bool, int64_t, int64_t> > *updatesptr;
+set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>> *updatesptr;
 
-/** Propages new value to other workers. 
- * This is generally called from Presto R funtion update(). 
+/** Propagates new value to other workers. 
+ * This is generally called from Presto R function update(). 
  * It keeps the variable within a global variable updatesptr
  * @param updates_ptr_sexp R variable (updates.ptr...) that keeps track of a name of update object. 
  * This variable shared between R and C++ library using RInside.
@@ -111,17 +116,26 @@ set<tuple<string, bool, int64_t, int64_t> > *updatesptr;
       typedef Rcpp::CharacterVector::iterator char_itr;
       typedef Rcpp::LogicalVector::iterator log_itr;
       typedef Rcpp::NumericVector::iterator numeric_itr;
-
+      
       char_itr name_itr = name_vec.begin();
       log_itr empty_itr = empty_vec.begin();
       numeric_itr dim_itr = dim_vec.begin();
 
       std::string name = std::string(name_itr[0]);
       bool empty = empty_vec[0];
-      int64_t nr = dim_vec[0];
-      int64_t nc = dim_vec[1];
-
-      updatesptr->insert(make_tuple(name, empty, nr, nc));
+      
+      if(dim_vec.size() % 2 != 0){
+          LOG_ERROR("Received dimensions list has an odd number of elements.");
+          throw PrestoWarningException("dframe dimensions received had an odd number of elements");
+      }
+      
+      std::vector<pair<int64_t,int64_t>> dimensions;
+      
+      for(int i=0;i < dim_vec.size(); i+=2){
+          dimensions.push_back(std::make_pair<int64_t,int64_t>(dim_vec[i],dim_vec[i+1]));
+      }
+      
+      updatesptr->insert(make_tuple(name, empty, dimensions));
   return Rcpp::wrap(true);
   END_RCPP
 }
@@ -307,7 +321,8 @@ void IncreaseRHeap(const RInside &R) {
  */
 void ClearTaskData(RInside &R,  // NOLINT
         map<string, ArrayData*>& var_to_ArrayData,
-        map<string, Composite*>& var_to_Composite) {
+        map<string, Composite*>& var_to_Composite,
+        map<string, Composite*>& var_to_list_type) {
   R.parseEvalQ("rm(list=ls(all.names=TRUE));gc()");
 
   // delete splits information in this task
@@ -321,14 +336,21 @@ void ClearTaskData(RInside &R,  // NOLINT
        i != var_to_Composite.end(); i++) {
     delete i->second;
   }
+  // delete information for list_type composites
+   for (map<string, Composite*>::iterator i =
+           var_to_list_type.begin();
+       i != var_to_list_type.end(); i++) {
+    delete i->second;
+  }
 }
 
 /** Parse arguments that are related to splits. The split array information will be loaded from R into the shared memory session
  * @param R the R-session that the task is running on
  * @param v2a map of a variable name in R to ArrayData in the shared memory region
+ * @param v2l map of a list-type variable name in R to Composite objects holding split information
  * @return the number of split variables: NOTE: -1 means worker shutdown
  */
-int ReadSplitArgs(RInside& R, map<string, ArrayData*>& v2a) {  // NOLINT
+int ReadSplitArgs(RInside& R, map<string, ArrayData*>& v2a, map<string, Composite*>& v2l) {  // NOLINT
   int vars;
   char shmname[100], varname[100];
   Timer timer;
@@ -356,11 +378,68 @@ int ReadSplitArgs(RInside& R, map<string, ArrayData*>& v2a) {  // NOLINT
       throw PrestoWarningException
         ("ParseSplitArgs::Executor cannot recognize commands from a worker");
     }
+    
+  //check to see if it's a list_type argument being received
+  std::string list_string("list_type...");
+  //list-type argument detected
+  if(list_string.compare(shmname) == 0){
+      int nsplits;
+      int result = scanf(" %d ", &nsplits);
+      if (result != 1) {
+        LOG_ERROR("ReadSplitArgs => Bad file format for Executor. Executor cannot recognize commands from Worker.");
+        throw PrestoWarningException
+          ("ParseSplitArgs::Executor cannot recognize commands from a worker");
+      }
+      
+      
+      //Use the composite class to store splits information about this list-type argument
+      Composite* composite = new Composite;
+
+      Rcpp::List list(nsplits);
+      
+      for(int m = 0;m < nsplits;m ++){
+        result = scanf(" %s ", shmname);
+        if (result != 1) {
+            LOG_ERROR("ReadSplitArgs => Bad file format for Executor. Executor cannot recognize commands from Worker.");
+            throw PrestoWarningException
+              ("ParseSplitArgs::Executor cannot recognize commands from a worker");
+        }
+        composite->splitnames.push_back(shmname);
+        
+        char new_name[100];
+        strcpy(new_name,varname);
+        //create a name for this array to store in v2a for deletion
+        char num[10];
+        sprintf(num,"%d",m);
+        strcat(new_name,num);
+        
+        //add to v2a a fake name so it's cleaned up later     
+        v2a[new_name] = ParseShm(shmname);   
+        v2a[new_name]->LoadInR(R,varname);
+        
+        list[m] = R[varname];
+      }
+     
+      R[varname] = list;
+      
+      // Need to store a flag in executor to disambiguate a list of splits of a dframe and a single dlist 
+      // of data frames (for getting dimensions -- see executor.R)
+      char flagstr[100];
+      strcpy(flagstr, ".");
+      strcat(flagstr, varname);
+      strcat(flagstr, ".isListType");
+      R[flagstr] = true;
+      
+      v2l[varname] = composite;
+  }else{
+    
     // mapping of R-session variable name to shared memory segments
-    v2a[varname] = ParseShm(shmname);
-    // Load the shared memory segment into R-session
-    // with corresponding variable name
-    v2a[varname]->LoadInR(R, varname);
+     v2a[varname] = ParseShm(shmname);
+     // Load the shared memory segment into R-session
+     // with corresponding variable name
+     v2a[varname]->LoadInR(R, varname);
+   
+  }
   }
   return vars;
 }
@@ -387,7 +466,7 @@ int ReadRawArgs(RInside& R) {  // NOLINT
     char name[256];
     int size;
     res = scanf(" %s %d:", name, &size);
-    LOG_DEBUG("Read Raw variable %s", name);
+    LOG_DEBUG("Read Raw variable %s index: %d total: %d", name,i,raw_vars);
     if (res != 2) {
       LOG_WARN("ReadRawArgs => Variable %s - Bad file format for Executor. Executor cannot recognize commands from Worker.", name);
       throw PrestoWarningException
@@ -398,7 +477,7 @@ int ReadRawArgs(RInside& R) {  // NOLINT
     snprintf(cmd, CMD_BUF_SIZE,
              "%s <- unserialize(rawtmpvar...)", name);
     
-    // if the raw varaible is passed through protobuf (size > 0)
+    // if the raw variable is passed through protobuf (size > 0)
     if (size > 0) {
       Rcpp::RawVector raw(size);  // the value of this variable
       for (int j = 0; j < size; j++) {
@@ -533,14 +612,15 @@ int ReadCompositeArgs(RInside& R,  // NOLINT
 }
 
 int main(int argc, char *argv[]) {
+
   // let this executor to be killed when a parent process (worker) terminates.
   prctl(PR_SET_PDEATHSIG, SIGKILL);
   Timer timer;
 
   presto::presto_malloc_init_hook();
 
-  string scoping_prefix = "f <- function() {";
-  string scoping_postfix = "} ; f()";
+  string scoping_prefix = ".DistributedR_exec_func <- function() {";
+  string scoping_postfix = "} ; .DistributedR_exec_func()";
 // In order to automatically add tryCatch block to prevent the executor
 // being killed while evaluating R-command.
 #ifndef EXECUTOR_TRYCATCH
@@ -563,9 +643,22 @@ int main(int argc, char *argv[]) {
   InitializeConsoleLogger();
   LOG_INFO("Executor started.");
   LoggerFilter(atoi(argv[4]));
+
+  //sleep for N secs if that file exists
+  FILE* f = fopen("/tmp/r_executor_startup_sleep_secs", "r");
+  if(f) {
+    char buffer[10];
+    size_t nread = fread(buffer, 1, 10, f);
+    int secs = atoi(buffer);
+    if(secs > 0 and secs < 120) {
+      LOG_INFO("Sleeping for %d secs, pid: %d\n", secs, getpid());
+      sleep(secs);
+    }
+  }
+
   
   // name of shared memory segment
-  // to synchorize/share memory between worker and executor
+  // to synchronize/share memory between worker and executor
   //  const char *sync_struct_name = argv[1];
   // a pipe to send/receive task and result between worker and executor
   
@@ -589,16 +682,18 @@ int main(int argc, char *argv[]) {
   // load packages
   R.parseEvalQ("tryCatch({library(Matrix);library(MatrixHelper);library(Executor);gc.time()}, error=function(ex){Sys.sleep(2);library(Matrix);library(MatrixHelper);library(Executor);gc.time()})");
   
-  updatesptr = new set<tuple<string, bool, int64_t, int64_t> >();
-  set<tuple<string, bool, int64_t, int64_t> > &updates = *updatesptr;
+  updatesptr = new set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>>;
+  set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>> &updates = *updatesptr;
   LOG_DEBUG("New Update pointer to maintain list of updated split/composite variables in Function execution created.");
   // map of variable name (in R) with corresponding ArrayData object
   map<string, ArrayData*> var_to_ArrayData;
-  // map of variable name (in R) with correspponding Composite array
+  // map of variable name (in R) with corresponding Composite array
   map<string, Composite*> var_to_Composite;
+  map<string, Composite*> var_to_list_type;
   // update pointer in R-session
-  Rcpp::XPtr<set<tuple<string, bool,int64_t,int64_t> > > updates_ptr(&updates, false);
+  Rcpp::XPtr<set<tuple<string, bool,std::vector<std::pair<int64_t,int64_t>>> > > updates_ptr(&updates, false);
   Rcpp::Language exec_call;
+
   string prev_cmd;
   // a buffer to keep the task result from RInside
   char err_msg[EXCEPTION_MSG_SIZE];
@@ -611,7 +706,7 @@ int main(int argc, char *argv[]) {
 
       AppendTaskResult(TASK_EXCEPTION, err_msg, out);      
       LOG_INFO("TASK_EXCEPTION sent as Task result to Worker");
-      ClearTaskData(R, var_to_ArrayData, var_to_Composite);
+      ClearTaskData(R, var_to_ArrayData, var_to_Composite, var_to_list_type);
       LOG_INFO("Flushing Task Data from Executor memory");
     }
     memset(err_msg, 0x00, sizeof(err_msg));
@@ -621,11 +716,12 @@ int main(int argc, char *argv[]) {
       // keep a pointer of update variable in R-session
       R["updates.ptr..."] = updates_ptr;
       var_to_ArrayData.clear();
+      var_to_list_type.clear();
       var_to_Composite.clear();
 
       updates.clear();  // clear update vector
       LOG_INFO("*** No Task under execution. Waiting from Task from Worker **");
-      res = ReadSplitArgs(R, var_to_ArrayData);  // Read split arguments
+      res = ReadSplitArgs(R, var_to_ArrayData,var_to_list_type);  // Read split arguments
       if (res == EXECUTOR_SHUTDOWN_CODE) {
         LOG_INFO("SHUTDOWN message received from Worker. Shutting down Executor");
         break;
@@ -642,7 +738,7 @@ int main(int argc, char *argv[]) {
       char c;
       string cmd;
       cmd += scoping_prefix;  // append function definition
-      cmd += ft_prefix;  // apend tryCatch block
+      cmd += ft_prefix;  // append tryCatch block
       
       size_t fun_str_length;  // the length of function string
       if (scanf(" %zu ", &fun_str_length) != 1) {
@@ -685,13 +781,12 @@ int main(int argc, char *argv[]) {
       
       LOG_INFO("There are %d variables that are updated. Sending them to the Worker.", updates.size());
 
-      for (set<tuple<string, bool,int64_t,int64_t> >::iterator i = updates.begin();
+      for (set<tuple<string, bool,std::vector<std::pair<int64_t,int64_t>>> >::iterator i = updates.begin();
            i != updates.end(); i++) {
         
 	const string &name = get<0>(*i);   // name of variable in R-session
         bool empty = get<1>(*i);
-        int64_t obj_nrow = get<2>(*i);
-        int64_t obj_ncol = get<3>(*i);
+        std::vector<std::pair<int64_t,int64_t>> dimensions = get<2>(*i);
 
         // if the variable is a composite array
         if (contains_key(var_to_Composite, name)) {
@@ -784,9 +879,25 @@ int main(int argc, char *argv[]) {
 	    throw PrestoWarningException("Update to composite dframe is not supported.");
 	  }
         } else {
-          // updating a split
-          CreateUpdate(name, var_to_ArrayData[name]->GetName(), R,
-                       empty, obj_nrow, obj_ncol);
+          //if this check is true, then we're updating a list-type argument
+          if(contains_key(var_to_list_type,name)){
+              Composite *composite = var_to_list_type[name];
+              if (NULL == composite) {
+                LOG_ERROR("Invalid Composite variable name: %s", name.c_str());
+                continue;
+              }
+              //if updating a list of splits we need to update one split at a time
+              for(int z = 0; z < composite->splitnames.size(); z++){
+                  char cmd[CMD_BUF_SIZE];
+                  snprintf(cmd, CMD_BUF_SIZE,"tmpvar... <- %s[[%d]]", name.c_str(),z+1);
+	          R.parseEvalQ(cmd);
+                  string tmp_var = string("tmpvar...");
+                  CreateUpdate(tmp_var,composite->splitnames[z],R,empty,dimensions.at(z).first, dimensions.at(z).second);
+              }
+          }else{      // updating a split
+            CreateUpdate(name, var_to_ArrayData[name]->GetName(), R,
+                         empty, dimensions.at(0).first, dimensions.at(0).second);
+          }
         }
       }
     }catch (const Rcpp::eval_error& eval_err) {
@@ -807,7 +918,7 @@ int main(int argc, char *argv[]) {
     timer.start();
 
     timer.start();
-    ClearTaskData(R, var_to_ArrayData, var_to_Composite);
+    ClearTaskData(R, var_to_ArrayData, var_to_Composite, var_to_list_type);
     LOG_DEBUG("Flushing Task Data from Executor memory");
 
     /*static int gci = 0;

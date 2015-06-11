@@ -1,7 +1,7 @@
 Package: vRODBC
-Version: 1.0.0
+Version: 1.1.0
 Revision: $Rev: 1 $
-Date: 2013-08-15
+Date: 2015-04-17
 Author: Shreya Prasad. RODBC package authored by Brian Ripley, and from 1999 to Oct 2002 Michael Lapsley.
 Maintainer: Shreya Prasad <shreya.prasad@hp.com>
 Title: ODBC Database Access

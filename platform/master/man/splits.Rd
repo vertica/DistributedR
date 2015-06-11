@@ -12,7 +12,7 @@
 
   \item{x}{input distributed array, distributed data frame or distributed list.}
 
-  \item{y}{index of partition to fetch.}
+  \item{y}{index or indices of partition to fetch; this can be an expression that evaluates to a scalar, vector, or list}
   
 %  \item{z}{column-index of the partition in a 2-D partitioning scheme
 %    (number of partitions to the left). } 
@@ -23,6 +23,17 @@
 
   If y is missing then the full input
   \code{\link{darray}}, \code{\link{dframe}} or \code{\link{dlist}} is returned.
+
+  y can be either evaluate to a scalar value, a vector, or an R list object.
+
+  If y is a scalar, it represents one split.
+  If y is a vector or a list, then it represents anything from one to multiple splits.
+
+  If y is defined to be a vector or a list (of length > 1), then \code{splits(x,y)} will represent multiple splits. For example, in the statement, \code{foreach(i,1:2,function(B=splits(A,1:3)){})}, B will contain splits 1-3 of dobject A. Inside the body of the foreach function statement, B will be a list -- i.e., \code{B[[1]]} will contain the first split of A. 
+
+  Similarly, one can may also write \code{B = splits(A,list(2,4,5))}, in which case \code{B[[1]]} would be equivalent to \code{splits(A,2)}.
+
+  In place of y may also be a function. If this function evaluates to a scalar,list,or vector, then it will be a valid splits statement.
 
 %  2-D partitioning is valid only for \code{\link{darray}} and \code{\link{dframe}}.
 %  Since \code{\link{dlist}} is paritioned length wise, only argument \code{y} is used to
@@ -84,6 +95,30 @@ foreach(i, 1:npartitions(da),
     update(c)
   })
 getpartition(result)
+distributedR_shutdown()
+}
+\dontrun{
+library(distributedR)
+distributedR_start()
+
+da <- darray(dim=c(6,9),blocks=c(3,3),sparse=FALSE,data=0)
+
+##First index gets c(1,2,3), second index gets c(4,5,6), etc.
+get.three.indices <- function(index){
+    start = 3*(index-1) + 1
+    indices = c(start:(start+2))
+    indices
+}
+
+##Update darray 3 splits at a time, with parallelism of 2
+foreach(i,1:2,function(a=splits(da,get.three.indices(i)),data=get.three.indices(i)){
+       a[[1]] = matrix(data[[1]],nrow(a[[1]]),ncol(a[[1]]))
+       a[[2]] = matrix(data[[2]],nrow(a[[2]]),ncol(a[[2]]))
+       a[[3]] = matrix(data[[3]],nrow(a[[3]]),ncol(a[[3]]))
+       update(a)
+    })
+
+getpartition(da) ##counts from 1 to 6 in 3x3 blocks!
 distributedR_shutdown()
 }
 }

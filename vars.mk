@@ -34,7 +34,7 @@ BIN_DIR = $(PWD)/bin
 CONF_DIR = $(PWD)/conf
 R_INSTALL_DIR = $(PWD)/install
 
-R_HOME = $(shell R RHOME)
+R_HOME = $(shell R RHOME | grep -v WARNING)
 R_INCLUDE_FLAGS = `${R_HOME}/bin/R CMD config --cppflags`
 R_LD_FLAGS = `${R_HOME}/bin/R CMD config --ldflags`
 
@@ -87,14 +87,16 @@ DOC_DIR_PLATFORM = $(DOC_DIR)/platform
 DOC_DIR_ALGORITHMS = $(DOC_DIR)/algorithms
 MAN_OUTPUT = $(PWD)/doc/platform/Distributed-R-Manual.pdf
 MAN_DIR = $(PWD)/platform/master/man
-MAN_FILES = $(MAN_DIR)/package.Rd $(MAN_DIR)/start.Rd $(MAN_DIR)/shutdown.Rd $(MAN_DIR)/status.Rd $(MAN_DIR)/darray.Rd $(MAN_DIR)/dframe.Rd $(MAN_DIR)/dlist.Rd $(MAN_DIR)/as.darray.Rd $(MAN_DIR)/is.darray.Rd $(MAN_DIR)/npartitions.Rd $(MAN_DIR)/partitionsize.Rd $(MAN_DIR)/getpartition.Rd $(MAN_DIR)/clone.Rd $(MAN_DIR)/foreach.Rd $(MAN_DIR)/splits.Rd $(MAN_DIR)/update.Rd
+MAN_FILES = $(MAN_DIR)/package.Rd $(MAN_DIR)/start.Rd $(MAN_DIR)/shutdown.Rd $(MAN_DIR)/status.Rd $(MAN_DIR)/darray.Rd $(MAN_DIR)/dframe.Rd $(MAN_DIR)/dlist.Rd $(MAN_DIR)/as.darray.Rd $(MAN_DIR)/as.dframe.Rd $(MAN_DIR)/is.darray.Rd $(MAN_DIR)/is.dframe.Rd $(MAN_DIR)/is.dlist.Rd $(MAN_DIR)/as.factor.dframe.Rd $(MAN_DIR)/factor.dframe.Rd $(MAN_DIR)/unfactor.dframe.Rd $(MAN_DIR)/levels.dframe.Rd $(MAN_DIR)/npartitions.Rd $(MAN_DIR)/partitionsize.Rd $(MAN_DIR)/getpartition.Rd $(MAN_DIR)/clone.Rd $(MAN_DIR)/foreach.Rd $(MAN_DIR)/splits.Rd $(MAN_DIR)/update.Rd
 TUTORIAL_DIR = $(PWD)/platform/master/vignettes
 TUTORIAL_FILE = Tutorial
 TUTORIAL_DATA_FILE = Data
 FAQ_FILE = FAQ
+TEST_OUTPUT_FILES=$(PWD)/test_platform.out
 
-INCLUDE_FLAGS = -DBOOST_LOG_DYN_LINK -DCSTACK_DEFNS -DHAVE_NETINET_IN_H -DHAVE_INTTYPES_H -I ${BOOST_DIR} -I ${GEN_DIR} -I ${BOOST_THREADPOOL_DIR} -I ${ATOMICIO_DIR} -I ${PRESTO_COMMON_DIR} ${R_INCLUDE_FLAGS} ${RCPP_INCLUDE_FLAGS} ${RINSIDE_INCLUDE_FLAGS}
-LINK_FLAGS = -lm -rdynamic -L ${LIB_DIR} -Wl,-rpath,${LIB_DIR} ${R_LD_FLAGS} -lpthread -L$(BOOST_LIB_DIR) -Wl,-rpath,${BOOST_LIB_DIR} -lboost_thread -lboost_system -lboost_log -lboost_log_setup -lboost_chrono -lboost_filesystem -lboost_date_time -L ${ATOMICIO_DIR} -Wl,-rpath,${ATOMICIO_DIR} -latomicio ${RCPP_LD_FLAGS} ${RINSIDE_LD_FLAGS} -lrt #-laio 
+BLAS_LIBS = $(shell R CMD config BLAS_LIBS | grep -v WARNING)
+INCLUDE_FLAGS = -DBOOST_LOG_DYN_LINK -DHAVE_NETINET_IN_H -DHAVE_INTTYPES_H -I ${BOOST_DIR} -I ${GEN_DIR} -I ${BOOST_THREADPOOL_DIR} -I ${ATOMICIO_DIR} -I ${PRESTO_COMMON_DIR} ${R_INCLUDE_FLAGS} ${RCPP_INCLUDE_FLAGS} ${RINSIDE_INCLUDE_FLAGS}
+LINK_FLAGS = -lm -rdynamic -L ${LIB_DIR} -Wl,-rpath,${LIB_DIR} ${R_LD_FLAGS} -lpthread -L$(BOOST_LIB_DIR) -Wl,-rpath,${BOOST_LIB_DIR} -lboost_thread -lboost_system -lboost_log -lboost_log_setup -lboost_chrono -lboost_filesystem -lboost_date_time -L ${ATOMICIO_DIR} -Wl,-rpath,${ATOMICIO_DIR} -latomicio ${RCPP_LD_FLAGS} ${RINSIDE_LD_FLAGS} -lrt $(BLAS_LIBS) #-laio 
 
 DEBUG = -g
 #PROFILING = -DPROFILING

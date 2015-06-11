@@ -20,7 +20,6 @@
 #
 #  This code is a distributed version of glm function availabel in R stats package.
 #  
-#  Aarsh Fard (afard@vertica.com)
 
 #########################################################
 ## A copy of glm.R license:
@@ -95,9 +94,12 @@ hpdglm <- function(responses, predictors, family = gaussian, weights = NULL,
             stop("'weights' should be of type darray")
         if(weights@sparse)
             stop("Sparse darray is not supported for 'weights'")
+
+        if( any(partitionsize(weights) != partitionsize(responses)) )
+            stop(gettextf("'weights' should have the same partitioning pattern as 'responses', and single column"), domain = NA)
         ## check that there is no negative value for weights
         if (trace) {
-            cat("Checking weights\n")
+            message("Checking weights")
             starttime <- proc.time()
         }
         testArray1 <- darray(dim=c(1, npartitions(weights)), c(1,1), data=0)
@@ -115,16 +117,13 @@ hpdglm <- function(responses, predictors, family = gaussian, weights = NULL,
         if (trace) {    # end of timing step
             endtime <- proc.time()
             spentTime <- endtime-starttime
-            cat("Spent time:",(spentTime)[3],"sec\n")
+            message("Spent time: ",(spentTime)[3]," sec")
         }
 
         if( ! all( getpartition(testArray1) == 1 ) )
         	stop("all weights should be non-negative")
         if( ! all( getpartition(testArray2) == 1 ) )
         	binaryWeights <- FALSE
-
-        if(NROW(weights) != NROW(responses) || npartitions(weights) != nparts || ncol(weights) != 1)
-            stop(gettextf("'weights' should have the same splits as 'responses', and single column"), domain = NA)
     }
     ## check etastart
     if(!is.null(etastart)) {
@@ -132,7 +131,7 @@ hpdglm <- function(responses, predictors, family = gaussian, weights = NULL,
             stop("'etastart' should be of type darray")
         if(etastart@sparse)
             stop("Sparse darray is not supported for 'etastart'")
-        if(NROW(etastart) != NROW(responses) || npartitions(etastart) != nparts)
+        if( any(partitionsize(etastart) != partitionsize(responses)) )
             stop(gettextf("'etastart' should have the same pattern as 'respnses'"), domain = NA)
     }
     ## check mustart
@@ -141,12 +140,12 @@ hpdglm <- function(responses, predictors, family = gaussian, weights = NULL,
             stop("'mustart' should be of type darray")
         if(mustart@sparse)
             stop("Sparse darray is not supported for 'mustart'")
-        if(NROW(mustart) != NROW(responses) || npartitions(mustart) != nparts)
-            stop(gettextf("'mustart' should have the same pattern as 'respnses'"), domain = NA)
+        if( any(partitionsize(mustart) != partitionsize(responses)) )
+            stop(gettextf("'mustart' should have the same partitioning pattern as 'respnses'"), domain = NA)
         if(family$link == "logit" || family$link == "log") {
             testArray <- darray(dim=c(1, nparts), c(1,1), data=0)
             if (trace) {
-                cat("Checking mustart\n")
+                message("Checking mustart")
                 starttime <- proc.time()
             }
             foreach(i, 1:nparts, progress=trace, function(mustarti=splits(mustart,i), 
@@ -158,7 +157,7 @@ hpdglm <- function(responses, predictors, family = gaussian, weights = NULL,
             if (trace) {    # end of timing step
                 endtime <- proc.time()
                 spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
+                message("Spent time: ",(spentTime)[3]," sec")
             }
             
             if( ! all( getpartition(testArray) == 1 ) )
@@ -170,16 +169,16 @@ hpdglm <- function(responses, predictors, family = gaussian, weights = NULL,
     if(!is.null(offset)) {
         if(! is.darray(offset))
             stop("'offset' should be of type darray")
-        if(NROW(offset) != NROW(responses) || npartitions(offset) != nparts)
+        if( any(partitionsize(offset) != partitionsize(responses)) )
             stop(gettextf("'offset' should have the same pattern as 'responses'"), domain = NA)
     }
 
     ## The call to method (hpdglm.fit)
     if (trace) {
         ps <- distributedR_status()
-        cat("Number of executors:",ps$Inst,"\n")
-        cat("System memory usage before fitting (MB): ",ps$MemUsed,"\n")
-        cat("Memory used to store darrays before fitting (MB):",ps$DarrayUsed,"\n")
+        message("Number of executors:",ps$Inst)
+        message("System memory usage before fitting (MB): ",ps$MemUsed)
+        message("Memory used to store darrays before fitting (MB):",ps$DarrayUsed)
         startFitTime <- proc.time()
     }
     fit <- eval(call(if(is.function(method)) "method" else "hpdglm.fit",
@@ -191,31 +190,24 @@ hpdglm <- function(responses, predictors, family = gaussian, weights = NULL,
                      
     if (trace) {
         endFitTime <- proc.time()
-        cat("Fitting time:",(endFitTime - startFitTime)[3],"sec\n")
+        message("Fitting time:",(endFitTime - startFitTime)[3]," sec")
         ps <- distributedR_status()
-        cat("System memory usage after fitting (MB):",ps$MemUsed,"\n")
-        cat("Memory used to store darrays after fitting (MB):",ps$DarrayUsed,"\n")
+        message("System memory usage after fitting (MB):",ps$MemUsed)
+        message("Memory used to store darrays after fitting (MB):",ps$DarrayUsed)
     }
 
     if(! is.null(colnames(predictors)))
         rownames(fit$coefficients) <- c("(Intercept)", colnames(predictors))
     ## adding some parameters to fit
-    if(completeModel) {
-        fit <- c(fit, list(call = call, offset = offset, control = control, method = method))
-    } else {
-        fit$summary$call <- call
-        if(! is.null(colnames(predictors)))
-            rownames(fit$summary$coefficients) <- c("(Intercept)", colnames(predictors))
-        fit <- c(fit, list(call = call, control = control, method = method))
-    }
+    fit <- c(fit, list(call = call, offset = offset, control = control, method = method))
 
-    class(fit) <- c(fit$class, c("hpdglm", "glm", "lm"))
+    class(fit) <- c("hpdglm", "glm", "lm")
 
     if (trace) {
         endTotalTime <- proc.time()
         totalTime <- endTotalTime - startTotalTime
-        cat("*****************************\n")
-        cat("Total running time:",(totalTime)[3],"sec\n")
+        message("*****************************")
+        message("Total running time:",(totalTime)[3]," sec")
     }
 
     fit
@@ -253,6 +245,10 @@ hpdglm.fit <-
 
     trace <- ifelse(control$trace, TRUE, FALSE)
 
+    if (trace) {
+        starttime_preLoop<-proc.time()
+    }
+
     ## define weights
     if (is.null(weights)) {
 	    weights <- clone(X, ncol=1, data=1)
@@ -263,7 +259,7 @@ hpdglm.fit <-
         # .naCheck function may alter weights
         nOmit <- .naCheck(X, Y, weights, trace)
         if (trace) {
-            cat("Finding number of good observations\n")
+            message("Finding number of good observations")
             starttime<-proc.time()
         }
         foreach(i, 1:nparts, progress=trace, function(weightsi=splits(weights,i), testArrayi=splits(testArray,i)) {
@@ -274,7 +270,7 @@ hpdglm.fit <-
         if (trace) {    # end of timing step
             endtime <- proc.time()
             spentTime <- endtime-starttime
-            cat("Spent time:",(spentTime)[3],"sec\n")
+            message("Spent time: ",(spentTime)[3]," sec")
         }
     }
     
@@ -337,14 +333,14 @@ hpdglm.fit <-
             else {
                 coefold <- start
                 if (trace) {
-                    cat("Initializing eta\n")
+                    message("Initializing eta")
                     starttime<-proc.time()
                 }
                 foreach(i, 1:nparts, progress=trace, function(etai=splits(eta,i), offseti=splits(offset,i), Xi=splits(X,i),
                          st=as.matrix(start), weightsi=splits(weights,i)){
                     good <- weightsi > 0
                     if(all(good)) {
-                        etai = as.matrix(offseti) + cbind(1,Xi) %*% st
+                        etai = as.matrix(offseti) + (Xi %*% st[-1,] + st[1,1])
                         update(etai)
                     } else if(any(good)) {
                         if(sum(good) == 1)
@@ -357,13 +353,13 @@ hpdglm.fit <-
                 if (trace) {    # end of timing step
                     endtime <- proc.time()
                     spentTime <- endtime-starttime
-                    cat("Spent time:",(spentTime)[3],"sec\n")
+                    message("Spent time: ",(spentTime)[3]," sec")
                 }
              }
         } else {
             ## mustart is already initialized
             if (trace) {
-                cat("Initializing eta\n")
+                message("Initializing eta")
                 starttime<-proc.time()
             }
             foreach(i, 1:nparts, progress=trace, mustartFunction <- function(mustarti=splits(mustart,i), etai=splits(eta,i),
@@ -380,36 +376,41 @@ hpdglm.fit <-
             if (trace) {    # end of timing step
                 endtime <- proc.time()
                 spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
+                message("Spent time: ",(spentTime)[3]," sec")
             }
         }
     }
     ## Setting mu
-    mu <- clone(X, ncol = 1, data = 0)
-    if (trace) {
-        cat("Updating mu\n")
-        starttime<-proc.time()
-    }
-    foreach(i, 1:nparts, progress=trace, function(etai=splits(eta,i), mui=splits(mu,i), func=linkinv, weightsi=splits(weights,i)){
-        good <- weightsi > 0
-        if(all(good)) {
-            mui <- func(etai)
-            update(mui)
-        } else if(any(good)) {
-            mui[good,] <- func(etai[good,])
-            update(mui)
+    if(is.null(etastart)) {
+        mu <- mustart
+    } else {
+        mu <- clone(X, ncol = 1, data = 0)
+        if (trace) {
+            message("Updating mu")
+            starttime<-proc.time()
         }
-    })
-    if (trace) {    # end of timing step
-        endtime <- proc.time()
-        spentTime <- endtime-starttime
-        cat("Spent time:",(spentTime)[3],"sec\n")
+        foreach(i, 1:nparts, progress=trace, function(etai=splits(eta,i), mui=splits(mu,i), func=linkinv, weightsi=splits(weights,i)){
+            good <- weightsi > 0
+            if(all(good)) {
+                mui <- func(etai)
+                update(mui)
+            } else if(any(good)) {
+                mui[good,] <- func(etai[good,])
+                update(mui)
+            }
+        })
+
+        if (trace) {    # end of timing step
+            endtime <- proc.time()
+            spentTime <- endtime-starttime
+            message("Spent time: ",(spentTime)[3]," sec")
+        }
     }
 
     if(control$rigorous) {
         ## validating mu and eta
         if (trace) {
-            cat("Validating mu and eta\n")
+            message("Validating mu and eta")
             starttime<-proc.time()
         }
         foreach(i, 1:nparts, progress=trace, function(mui=splits(mu,i), etai=splits(eta,i), testArrayi=splits(testArray,i), validmu=validmu,
@@ -426,7 +427,7 @@ hpdglm.fit <-
         if (trace) {    # end of timing step
             endtime <- proc.time()
             spentTime <- endtime-starttime
-            cat("Spent time:",(spentTime)[3],"sec\n")
+            message("Spent time: ",(spentTime)[3]," sec")
         }
         if( ! all( getpartition(testArray) == 1 ) )
             stop("cannot find valid starting values: please specify some", call. = FALSE)
@@ -435,7 +436,7 @@ hpdglm.fit <-
     ## calculate initial deviance and coefficient
     devArray <- darray(dim=c(nparts,1), blocks=c(1,1), data=0)
     if (trace) {
-        cat("Calculating initial deviance\n")
+        message("Calculating initial deviance")
         starttime<-proc.time()
     }
     foreach(i, 1:nparts, progress=trace, function(devArrayi=splits(devArray,i), Yi=splits(Y,i), mui=splits(mu,i),
@@ -453,7 +454,7 @@ hpdglm.fit <-
     if (trace) {    # end of timing step
         endtime <- proc.time()
         spentTime <- endtime-starttime
-        cat("Spent time:",(spentTime)[3],"sec\n")
+        message("Spent time: ",(spentTime)[3]," sec")
     }
 
     dev <- devold   # the value of deviance
@@ -470,9 +471,13 @@ hpdglm.fit <-
     }
 
     if (trace) {
+        stoptime_preLoop<-proc.time()
+        preLoopTime <- stoptime_preLoop-starttime_preLoop
+        message("***** Pre-Loop time:",(preLoopTime)[3],"sec *****")
+
         ps <- distributedR_status()
-        cat("System memory usage before L.S. iteration (MB):",ps$MemUsed,"\n")
-        cat("Memory used to store darrays before L.S. iteration (MB):",ps$DarrayUsed,"\n")
+        message("System memory usage before L.S. iteration (MB):",ps$MemUsed)
+        message("Memory used to store darrays before L.S. iteration (MB):",ps$DarrayUsed)
         startItTime <- proc.time()
     }
 
@@ -481,7 +486,7 @@ hpdglm.fit <-
 
         if(control$rigorous) {
             if (trace) {
-                cat("Checking any NAs or 0s in V(mu)\n")
+                message("Checking any NAs or 0s in V(mu)")
                 starttime<-proc.time()
             }
             foreach(i, 1:nparts, progress=trace, function(mui=splits(mu,i), weightsi=splits(weights,i), testArrayi=splits(testArray,i), variance=variance){
@@ -496,7 +501,7 @@ hpdglm.fit <-
             if (trace) {    # end of timing step
                 endtime <- proc.time()
                 spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
+                message("Spent time: ",(spentTime)[3]," sec")
             }
             if( any( getpartition(testArray) != 0 ) )
                 stop("NAs or 0s in V(mu)")
@@ -505,7 +510,7 @@ hpdglm.fit <-
         if(! binaryWeights || isInitialOffset) {
             ## The routine when weights are not binary or there is an initial offset. It is more time consuming.
             if (trace) {
-                cat("Calculating mu.eta.val\n")
+                message("Calculating mu.eta.val")
                 starttime<-proc.time()
             }
             foreach(i, 1:nparts, progress=trace, function(etai=splits(eta,i), mu.eta.val.i=splits(mu.eta.val,i), weightsi=splits(weights,i),
@@ -526,14 +531,14 @@ hpdglm.fit <-
             if (trace) {    # end of timing step
                 endtime <- proc.time()
                 spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
+                message("Spent time: ",(spentTime)[3]," sec")
             }
             if( any( getpartition(testArray) == 1 ) )
                 stop("NAs in d(mu)/d(eta)")
 
             ## drop observations for which w will be zero
             if (trace) {
-                cat("Calculating dGood\n")
+                message("Calculating dGood")
                 starttime<-proc.time()
             }
             foreach(i, 1:nparts, progress=trace, function(dGoodi=splits(dGood,i), weightsi=splits(weights,i), mu.eta.val.i=splits(mu.eta.val,i),
@@ -546,7 +551,7 @@ hpdglm.fit <-
             if (trace) {    # end of timing step
                 endtime <- proc.time()
                 spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
+                message("Spent time: ",(spentTime)[3]," sec")
             }
             if (all(getpartition(testArray) == 0)) {
                 conv <- FALSE
@@ -557,7 +562,7 @@ hpdglm.fit <-
 #O            z <- (eta - offset)[good] + (y - mu)[good]/mu.eta.val[good]       
  
             if (trace) {
-                cat("Calculating Z\n")
+                message("Calculating Z")
                 starttime<-proc.time()
             }
             foreach(i, 1:nparts, progress=trace, function(Zi=splits(Z,i), Yi=splits(Y,i), mui=splits(mu,i), etai=splits(eta,i), offseti=splits(offset,i), 
@@ -574,13 +579,13 @@ hpdglm.fit <-
             if (trace) {    # end of timing step
                 endtime <- proc.time()
                 spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
+                message("Spent time: ",(spentTime)[3]," sec")
             }
             
 #O            w <- sqrt((weights[good] * mu.eta.val[good]^2)/variance(mu)[good])
 
             if (trace) {
-                cat("Calculating W\n")
+                message("Calculating W")
                 starttime<-proc.time()
             }
             foreach(i, 1:nparts, progress=trace, function(Wi=splits(W,i), weightsi=splits(weights,i), dGoodi=splits(dGood,i),
@@ -597,7 +602,7 @@ hpdglm.fit <-
             if (trace) {    # end of timing step
                 endtime <- proc.time()
                 spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
+                message("Spent time: ",(spentTime)[3]," sec")
             }
             ## call Fortran code via C wrapper
 #O            if(!is.loaded('DisCdqrls'))dyn.load('./dlm.so')
@@ -622,7 +627,7 @@ hpdglm.fit <-
                 stop("Unknown method")
             if (trace) {
                 endNewtonTime <- proc.time()
-                cat("NewtonTime:", (endNewtonTime - startNewtonTime)[3], "sec\n")
+                message("NewtonTime:", (endNewtonTime - startNewtonTime)[3], " sec")
             }
         } # binaryWeights
 
@@ -634,14 +639,14 @@ hpdglm.fit <-
         ## calculate updated values of eta and mu with the new coef:
         start <- coefficients
         if (trace) {
-            cat("Calculate updated values of eta and mu\n")
+            message("Calculate updated values of eta and mu")
             starttime<-proc.time()
         }
         foreach(i, 1:nparts, progress=trace, function(etai=splits(eta,i), Xi=splits(X,i), start=start, mui=splits(mu,i), offseti=splits(offset,i),
                  devArrayi=splits(devArray,i), Yi=splits(Y,i), weightsi=splits(weights,i), linkinv=linkinv, dev.resids=dev.resids){
             good <- weightsi > 0
             if(all(good)) {
-                etai <- cbind(1,Xi) %*% start + as.matrix(offseti)
+                etai <- (Xi %*% start[-1,] + start[1,1]) + as.matrix(offseti)
                 mui <- linkinv(etai)
                 devArrayi <- sum(dev.resids(Yi, mui, weightsi))
                 update(etai)
@@ -663,13 +668,13 @@ hpdglm.fit <-
         if (trace) {    # end of timing step
             endtime <- proc.time()
             spentTime <- endtime-starttime
-            cat("Spent time:",(spentTime)[3],"sec\n")
+            message("Spent time: ",(spentTime)[3]," sec")
         }
         # calculating new devience
         dev <- sum(devArray)
 
         if (control$trace)
-            cat("Deviance =", dev, "Iterations -", iter, "\n", "coefficients", coefficients, "\n")
+            message("Deviance = ", dev, " Iterations -", iter)
         ## check for divergence
         boundary <- FALSE
         if (!is.finite(dev)) {
@@ -684,14 +689,14 @@ hpdglm.fit <-
                 start <- (start + coefold)/2
                 ## calculating deviance
                 if (trace) {
-                    cat("Calculating deviance\n")
+                    message("Calculating deviance")
                     starttime<-proc.time()
                 }
                 foreach(i, 1:nparts, progress=trace, function(etai=splits(eta,i), Xi=splits(X,i), st=start, offseti=splits(offset,i), mui=splits(mu,i), 
                         devArrayi=splits(devArray,i), Yi=splits(Y,i), weightsi=splits(weights,i), linkinv=linkinv, dev.resids=dev.resids){
                     good <- weightsi > 0
                     if(all(good)) {
-                        etai <- cbind(1,Xi) %*% st + as.matrix(offseti)
+                        etai <- (Xi %*% st[-1,] + st[1,1]) + as.matrix(offseti)
                         mui <- linkinv(etai)
                         devArrayi <- sum(dev.resids(Yi, mui, weightsi))
                         update(etai)
@@ -713,19 +718,19 @@ hpdglm.fit <-
                 if (trace) {    # end of timing step
                     endtime <- proc.time()
                     spentTime <- endtime-starttime
-                    cat("Spent time:",(spentTime)[3],"sec\n")
+                    message("Spent time: ",(spentTime)[3]," sec")
                 }
             }
             boundary <- TRUE
             if (control$trace)
-                if (trace) cat("Step halved: new deviance =", dev, "\n", "coefficients", coefficients, "\n")
+                if (trace) message("Step halved: new deviance =", dev, "\n", "coefficients", coefficients)
         }
 
         if(control$rigorous) {
             ## check for fitted values outside domain.
             ## validating mu and eta    
             if (trace) {
-                cat("Revalidating mu and eta\n")
+                message("Revalidating mu and eta")
                 starttime<-proc.time()
             }
             foreach(i, 1:nparts, progress=trace, function(mui=splits(mu,i), etai=splits(eta,i), testArrayi=splits(testArray,i), 
@@ -742,7 +747,7 @@ hpdglm.fit <-
             if (trace) {    # end of timing step
                 endtime <- proc.time()
                 spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
+                message("Spent time: ",(spentTime)[3]," sec")
             }
             if( ! all( getpartition(testArray) == 1 ) ) {
                 notValid <- TRUE
@@ -756,7 +761,7 @@ hpdglm.fit <-
                     ii <- ii + 1
                     start <- (start + coefold)/2
                     if (trace) {
-                        cat("Updating eta and mu\n")
+                        message("Updating eta and mu")
                         starttime<-proc.time()
                     }
                     foreach(i, 1:nparts, progress=trace, function(etai=splits(eta,i), Xi=splits(X,i), offseti=splits(offset,i), 
@@ -780,11 +785,11 @@ hpdglm.fit <-
                     if (trace) {    # end of timing step
                         endtime <- proc.time()
                         spentTime <- endtime-starttime
-                        cat("Spent time:",(spentTime)[3],"sec\n")
+                        message("Spent time: ",(spentTime)[3]," sec")
                     }
                     ## finding the condition for while loop
                     if (trace) {
-                        cat("Validating eta and mu\n")
+                        message("Validating eta and mu")
                         starttime<-proc.time()
                     }
                     foreach(i, 1:nparts, progress=trace, function(mui=splits(mu,i), etai=splits(eta,i), testArrayi=splits(testArray,i), 
@@ -801,7 +806,7 @@ hpdglm.fit <-
                     if (trace) {    # end of timing step
                         endtime <- proc.time()
                         spentTime <- endtime-starttime
-                        cat("Spent time:",(spentTime)[3],"sec\n")
+                        message("Spent time: ",(spentTime)[3]," sec")
                     }
                     if( all( getpartition(testArray) == 1 ) )
                         notValid <- FALSE
@@ -809,7 +814,7 @@ hpdglm.fit <-
                 boundary <- TRUE
                 ## calculating deviance
                 if (trace) {
-                    cat("Calculating deviance\n")
+                    message("Calculating deviance")
                     starttime<-proc.time()
                 }
                 foreach(i, 1:nparts, progress=trace, function(mui=splits(mu,i), devArrayi=splits(devArray,i), Yi=splits(Y,i), 
@@ -827,10 +832,10 @@ hpdglm.fit <-
                 if (trace) {    # end of timing step
                     endtime <- proc.time()
                     spentTime <- endtime-starttime
-                    cat("Spent time:",(spentTime)[3],"sec\n")
+                    message("Spent time: ",(spentTime)[3]," sec")
                 }
                 if (control$trace)
-                    cat("Step halved: new deviance =", dev, "\n")
+                    message("Step halved: new deviance =", dev)
             }
         } ## rigorous
 
@@ -847,15 +852,16 @@ hpdglm.fit <-
     } ##-------------- end IRLS iteration -------------------------------
     if (trace) {
         endItTime <- proc.time()
-        cat("LS Iteration time:",(endItTime - startItTime)[3],"sec\n")
+        message("***** LS Iteration time:",(endItTime - startItTime)[3],"sec *****")
         ps <- distributedR_status()
-        cat("System memory usage after LS iteration (MB):",ps$MemUsed,"\n")
-        cat("Memory used to store darrays after LS iteration (MB):",ps$DarrayUsed,"\n")
+        message("System memory usage after LS iteration (MB):",ps$MemUsed)
+        message("Memory used to store darrays after LS iteration (MB):",ps$DarrayUsed)
+
+        starttime_postLoop<-proc.time()
     }
 
-     # cov-matrix will be more accurate if we use initial weight when it is binary
-    if(binaryWeights && isInitialOffset)
-        W = weights
+    if(! is.null(colnames(X)))
+        rownames(coef) <- c("(Intercept)", colnames(X)) 
 
     if(!conv && iter==1)
         stop("hpdglm.fit failed to converge at the first iteration.")
@@ -864,153 +870,6 @@ hpdglm.fit <-
 
     if (boundary)
         warning("hpdglm.fit: algorithm stopped at boundary value", call. = FALSE)
-    eps <- 10*.Machine$double.eps
-
-    if(control$rigorous) {
-        if (family$family == "binomial") {
-            if (trace) {
-                cat("Checking the quality of the result\n")
-                starttime<-proc.time()
-            }
-            foreach(i, 1:nparts, progress=trace, function(testArrayi=splits(testArray,i), mui=splits(mu,i), weightsi=splits(weights,i), eps=eps) {
-                good <- weightsi > 0
-                if(all(good)) {
-                    testArrayi <- as.numeric(any(mui > 1 -eps) || any(mui < eps))
-                } else if(any(good))
-                    testArrayi <- as.numeric(any(mui[good,] > 1 -eps) || any(mui[good,] < eps))
-                else
-                    testArrayi <- as.numeric(0)
-                update(testArrayi)
-            })            
-            if (trace) {    # end of timing step
-                endtime <- proc.time()
-                spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
-            }
-            if(any(getpartition(testArray) == 1))
-                warning("hpdglm.fit: fitted probabilities numerically 0 or 1 occurred", call. = FALSE)
-        }
-
-        if (family$family == "poisson") {
-            if (trace) {
-                cat("Checking the quality of the result\n")
-                starttime<-proc.time()
-            }
-            foreach(i, 1:nparts, progress=trace, function(testArrayi=splits(testArray,i), mui=splits(mu,i), weightsi=splits(weights,i), eps=eps) {
-                good <- weightsi > 0
-                if(all(good)) {
-                    testArrayi <- as.numeric(any(mui < eps))
-                } else if(any(good))
-                    testArrayi <- as.numeric(any(mui[good,] < eps))
-                else
-                    testArrayi <- as.numeric(0)
-                update(testArrayi)
-            })            
-            if (trace) {    # end of timing step
-                endtime <- proc.time()
-                spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
-            }
-            if(any(getpartition(testArray) == 1))
-                warning("hpdglm.fit: fitted rates numerically 0 occurred", call. = FALSE)
-        }
-    }
-
-    ## update by accurate calculation
-    residuals <- clone(X, ncol = ncol(Y), data = NA)
-    if (trace) {
-        cat("Calculating residuals\n")
-        starttime<-proc.time()
-    }
-    foreach(i, 1:nparts, progress=trace, function(resi=splits(residuals,i), Yi=splits(Y,i), mui=splits(mu,i), etai=splits(eta,i),
-             mu.eta=mu.eta, weightsi=splits(weights,i)){
-        good <- weightsi > 0
-        if(all(good)) {
-            resi <- (Yi - mui)/mu.eta(etai)
-            update(resi)
-        } else if(any(good)) {
-            resi[good,] <- (Yi[good,1] - mui[good,])/mu.eta(etai[good,])
-            update(resi)
-        }
-    })
-    if (trace) {    # end of timing step
-        endtime <- proc.time()
-        spentTime <- endtime-starttime
-        cat("Spent time:",(spentTime)[3],"sec\n")
-    }
-
-    ## calculate null deviance -- corrected in glm() if offset and intercept
-    nullArray <- darray(dim=c(1,nparts),blocks=c(1,1), data=0)
-    if (intercept) {
-        sumMul <- darray(dim=c(1,nparts),blocks=c(1,1), data=0)
-        sumWeight <- darray(dim=c(1,nparts),blocks=c(1,1), data=0)
-        if (trace) {
-            cat("Calculating wtdmu\n")
-            starttime<-proc.time()
-        }
-        foreach(i, 1:nparts, progress=trace, function(sumMuli=splits(sumMul,i), sumWeighti=splits(sumWeight,i), Yi=splits(Y,i), weightsi=splits(weights,i)) {
-            good <- weightsi > 0
-            if(all(good)) {
-                sumMuli <- sum(weightsi * Yi)
-                sumWeighti <- sum(weightsi)
-                update(sumMuli)
-                update(sumWeighti)
-            } else if(any(good)) {
-                sumMuli <- sum(weightsi[good,] * Yi[good,1])
-                sumWeighti <- sum(weightsi[good,])
-                update(sumMuli)
-                update(sumWeighti)
-            }
-        })
-        wtdmu <- sum(sumMul)/sum(sumWeight)
-        if (trace) {    # end of timing step
-            endtime <- proc.time()
-            spentTime <- endtime-starttime
-            cat("Spent time:",(spentTime)[3],"sec\n")
-        }
-        if (trace) {
-            cat("Calculating null deviance\n")
-            starttime<-proc.time()
-        }
-        foreach(i, 1:nparts, progress=trace, function(nullArrayi=splits(nullArray,i), Yi=splits(Y,i), wtdmu=wtdmu, 
-                weightsi=splits(weights,i), dev.resids=dev.resids){
-            good <- weightsi > 0
-            if(all(good)) {
-                nullArrayi <- sum(dev.resids(Yi, wtdmu, weightsi))
-                update(nullArrayi)
-            } else if(any(good)) {
-                nullArrayi <- sum(dev.resids(Yi[good,1], wtdmu, weightsi[good,]))
-                update(nullArrayi)
-            }
-        })
-        if (trace) {    # end of timing step
-            endtime <- proc.time()
-            spentTime <- endtime-starttime
-            cat("Spent time:",(spentTime)[3],"sec\n")
-        }
-    } else {  
-        if (trace) {
-            cat("Calculating null deviance\n")
-            starttime<-proc.time()
-        }
-        foreach(i, 1:nparts, progress=trace, function(nullArrayi=splits(nullArray,i), Yi=splits(Y,i), weightsi=splits(weights,i),
-                 offseti=splits(offset,i), dev.resids=dev.resids, linkinv=linkinv){
-            good <- weightsi > 0
-            if(all(good)) {
-                nullArrayi <- sum(dev.resids(Yi, linkinv(as.matrix(offseti)), weightsi))
-                update(nullArrayi)
-            } else if(any(good)) {
-                nullArrayi <- sum(dev.resids(Yi[good,1], linkinv(as.matrix(offseti[good])), weightsi[good,]))
-                update(nullArrayi)
-            }
-        })
-        if (trace) {    # end of timing step
-            endtime <- proc.time()
-            spentTime <- endtime-starttime
-            cat("Spent time:",(spentTime)[3],"sec\n")
-        }
-    }
-    nulldev <- sum(nullArray)
 
     ## calculate df
     nulldf <- ngoodObs - as.integer(intercept)
@@ -1019,34 +878,210 @@ hpdglm.fit <-
     ## The accurate rank cannot be found through our approach. So it is assumed equal to nvars.
     rank <- if(EMPTY) 0 else min(nvars, ngoodObs)
     resdf  <- ngoodObs - rank
-    ## calculate AIC
-    aic.model <- .d.aic(family, Y, mu, weights, dev, trace, ngoodObs) + 2 * rank
 
-    ## effects, Rmat, qr are not computed through our approach in comparison to glm
-    
-    fit <- list(coefficients = coef, d.residuals = residuals, d.fitted.values = mu,
-        family = family, d.linear.predictors = eta, deviance = dev, aic = aic.model,
-        null.deviance = nulldev, iter = iter, weights = W,
-        prior.weights = weights, df.residual = resdf, df.null = nulldf,
-        converged = conv, boundary = boundary, responses = Y, predictors = X)
+    # cov-matrix will be more accurate if we use initial weight when it is binary
+    if(binaryWeights && isInitialOffset)
+        W = weights
 
-    if(! completeModel) {
-        fitSummary <- summary.hpdglm(fit, trace=trace)
-        fit <- .remove.darray(fit)
-        fit$summary <- .remove.darray(fitSummary)
-        class(fit$summary) <- "summary.hpdglm"
+    eps <- 10*.Machine$double.eps
+
+    if(completeModel) {
+
+        if(control$rigorous) {
+            if (family$family == "binomial") {
+                if (trace) {
+                    message("Checking the quality of the result")
+                    starttime<-proc.time()
+                }
+                foreach(i, 1:nparts, progress=trace, function(testArrayi=splits(testArray,i), mui=splits(mu,i), weightsi=splits(weights,i), eps=eps) {
+                    good <- weightsi > 0
+                    if(all(good)) {
+                        testArrayi <- as.numeric(any(mui > 1 -eps) || any(mui < eps))
+                    } else if(any(good))
+                        testArrayi <- as.numeric(any(mui[good,] > 1 -eps) || any(mui[good,] < eps))
+                    else
+                        testArrayi <- as.numeric(0)
+                    update(testArrayi)
+                })            
+                if (trace) {    # end of timing step
+                    endtime <- proc.time()
+                    spentTime <- endtime-starttime
+                    message("Spent time: ",(spentTime)[3]," sec")
+                }
+                if(any(getpartition(testArray) == 1))
+                    warning("hpdglm.fit: fitted probabilities numerically 0 or 1 occurred", call. = FALSE)
+            }
+
+            if (family$family == "poisson") {
+                if (trace) {
+                    message("Checking the quality of the result")
+                    starttime<-proc.time()
+                }
+                foreach(i, 1:nparts, progress=trace, function(testArrayi=splits(testArray,i), mui=splits(mu,i), weightsi=splits(weights,i), eps=eps) {
+                    good <- weightsi > 0
+                    if(all(good)) {
+                        testArrayi <- as.numeric(any(mui < eps))
+                    } else if(any(good))
+                        testArrayi <- as.numeric(any(mui[good,] < eps))
+                    else
+                        testArrayi <- as.numeric(0)
+                    update(testArrayi)
+                })            
+                if (trace) {    # end of timing step
+                    endtime <- proc.time()
+                    spentTime <- endtime-starttime
+                    message("Spent time: ",(spentTime)[3]," sec")
+                }
+                if(any(getpartition(testArray) == 1))
+                    warning("hpdglm.fit: fitted rates numerically 0 occurred", call. = FALSE)
+            }
+        }
+
+        ## update by accurate calculation
+        residuals <- clone(X, ncol = ncol(Y), data = NA)
+        if (trace) {
+            message("Calculating residuals")
+            starttime<-proc.time()
+        }
+        foreach(i, 1:nparts, progress=trace, function(resi=splits(residuals,i), Yi=splits(Y,i), mui=splits(mu,i), etai=splits(eta,i),
+                 mu.eta=mu.eta, weightsi=splits(weights,i)){
+            good <- weightsi > 0
+            if(all(good)) {
+                resi <- (Yi - mui)/mu.eta(etai)
+                update(resi)
+            } else if(any(good)) {
+                resi[good,] <- (Yi[good,1] - mui[good,])/mu.eta(etai[good,])
+                update(resi)
+            }
+        })
+        if (trace) {    # end of timing step
+            endtime <- proc.time()
+            spentTime <- endtime-starttime
+            message("Spent time: ",(spentTime)[3]," sec")
+        }
+
+        ## calculate null deviance -- corrected in glm() if offset and intercept
+        nullArray <- darray(dim=c(1,nparts),blocks=c(1,1), data=0)
+        if (intercept) {
+            sumMul <- darray(dim=c(1,nparts),blocks=c(1,1), data=0)
+            sumWeight <- darray(dim=c(1,nparts),blocks=c(1,1), data=0)
+            if (trace) {
+                message("Calculating wtdmu")
+                starttime<-proc.time()
+            }
+            foreach(i, 1:nparts, progress=trace, function(sumMuli=splits(sumMul,i), sumWeighti=splits(sumWeight,i), Yi=splits(Y,i), weightsi=splits(weights,i)) {
+                good <- weightsi > 0
+                if(all(good)) {
+                    sumMuli <- sum(weightsi * Yi)
+                    sumWeighti <- sum(weightsi)
+                    update(sumMuli)
+                    update(sumWeighti)
+                } else if(any(good)) {
+                    sumMuli <- sum(weightsi[good,] * Yi[good,1])
+                    sumWeighti <- sum(weightsi[good,])
+                    update(sumMuli)
+                    update(sumWeighti)
+                }
+            })
+            wtdmu <- sum(sumMul)/sum(sumWeight)
+            if (trace) {    # end of timing step
+                endtime <- proc.time()
+                spentTime <- endtime-starttime
+                message("Spent time: ",(spentTime)[3]," sec")
+            }
+            if (trace) {
+                message("Calculating null deviance")
+                starttime<-proc.time()
+            }
+            foreach(i, 1:nparts, progress=trace, function(nullArrayi=splits(nullArray,i), Yi=splits(Y,i), wtdmu=wtdmu, 
+                    weightsi=splits(weights,i), dev.resids=dev.resids){
+                good <- weightsi > 0
+                if(all(good)) {
+                    nullArrayi <- sum(dev.resids(Yi, wtdmu, weightsi))
+                    update(nullArrayi)
+                } else if(any(good)) {
+                    nullArrayi <- sum(dev.resids(Yi[good,1], wtdmu, weightsi[good,]))
+                    update(nullArrayi)
+                }
+            })
+            if (trace) {    # end of timing step
+                endtime <- proc.time()
+                spentTime <- endtime-starttime
+                message("Spent time: ",(spentTime)[3]," sec")
+            }
+        } else {  
+            if (trace) {
+                message("Calculating null deviance")
+                starttime<-proc.time()
+            }
+            foreach(i, 1:nparts, progress=trace, function(nullArrayi=splits(nullArray,i), Yi=splits(Y,i), weightsi=splits(weights,i),
+                     offseti=splits(offset,i), dev.resids=dev.resids, linkinv=linkinv){
+                good <- weightsi > 0
+                if(all(good)) {
+                    nullArrayi <- sum(dev.resids(Yi, linkinv(as.matrix(offseti)), weightsi))
+                    update(nullArrayi)
+                } else if(any(good)) {
+                    nullArrayi <- sum(dev.resids(Yi[good,1], linkinv(as.matrix(offseti[good])), weightsi[good,]))
+                    update(nullArrayi)
+                }
+            })
+            if (trace) {    # end of timing step
+                endtime <- proc.time()
+                spentTime <- endtime-starttime
+                message("Spent time: ",(spentTime)[3]," sec")
+            }
+        }
+        nulldev <- sum(nullArray)
+
+        ## calculate AIC
+        aic.model <- .d.aic(family, Y, mu, weights, dev, trace, ngoodObs) + 2 * rank
+
+        ## effects, Rmat, qr are not computed through our approach in comparison to glm
+        
+        fit <- list(coefficients = coef, d.residuals = residuals, d.fitted.values = mu,
+            family = family, d.linear.predictors = eta, deviance = dev, aic = aic.model,
+            null.deviance = nulldev, iter = iter, weights = W,
+            prior.weights = weights, df.residual = resdf, df.null = nulldf,
+            converged = conv, boundary = boundary, responses = Y, predictors = X)
+
+    } else { # test
+        fit <- list(coefficients = coef, d.fitted.values = mu, 
+            family = family, d.linear.predictors = eta, deviance = dev, aic = NA,
+            null.deviance = NA, iter = iter, weights = W,
+            prior.weights = weights, df.residual = resdf, df.null = nulldf,
+            converged = conv, boundary = boundary, responses = Y, predictors = X)
     }
     
     if(nOmit > 0)
         fit$na_action <- list(type="exclude", numbers=nOmit)
 
+    class(fit) <- c("hpdglm", "glm", "lm")
+
+    if (trace) {
+        endtime_postLoop <- proc.time()
+        message("***** Post-Loop time:",(endtime_postLoop - starttime_postLoop)[3],"sec *****")
+    }
     fit
 } # end of hpdglm.fit function
 
-.remove.darray <- function(theList)
-{
-    theList <- theList[-(which(sapply(theList, is.darray), arr.ind=TRUE))]
-    theList
+## A supplementary function for deployment
+# inputModel: it is the model that is going to be prepared for deployment
+deploy.hpdglm <- function(inputModel) {
+    if(is.null(inputModel$coefficients) || !length(inputModel$coefficients))
+        stop("the model does not contain coefficients and cannot be used for prediction")
+    fitSummary <- summary.hpdglm(inputModel)
+    distributed_objects <- sapply(fitSummary, is.darray)
+    if(any(distributed_objects))
+        fitSummary <- fitSummary[-(which(distributed_objects, arr.ind=TRUE))]
+    inputModel$summary <- fitSummary
+    class(inputModel$summary) <- "summary.hpdglm"
+
+    distributed_objects <- sapply(inputModel, is.darray)
+    if(any(distributed_objects))
+        inputModel <- inputModel[-(which(distributed_objects, arr.ind=TRUE))]
+    class(inputModel) <- c("hpdglm", "glm", "lm")
+
+    inputModel
 }
 
 print.hpdglm <- function(x, digits= max(3, getOption("digits") - 3), ...)
@@ -1074,78 +1109,80 @@ print.hpdglm <- function(x, digits= max(3, getOption("digits") - 3), ...)
 summary.hpdglm <- function(object, dispersion = NULL,
 			correlation = FALSE, symbolic.cor = FALSE, trace=FALSE, ...)
 {
-    if(!is.null(object$summary))
-        return(object$summary)
     est.disp <- FALSE
     df.r <- object$df.residual
-    if(is.null(dispersion)){	# calculate dispersion if needed
-	    if(object$family$family %in% c("poisson", "binomial"))
-            dispersion <- 1
-	    else if(df.r > 0) {
-            est.disp <- TRUE
-#O    		if(any(object$weights==0))
-#O    		    warning("observations with zero weight not used for calculating dispersion")
-#O		    sum((object$weights*object$residuals^2)[object$weights > 0])/ df.r
-            w <- object$weights
-            tempArray <- darray(dim=c(1,npartitions(w)), blocks=c(1,1), data=0)
-            foreach(i, 1:npartitions(w), progress=trace, function(wi=splits(w,i), ri=splits(object$d.residuals,i), tempArrayi=splits(tempArray,i), df.r=df.r){
-                good <- wi > 0
-                if(all(good)) {
-                    tempArrayi <- sum((wi * ri^2))/ df.r
-                    update(tempArrayi)
-                } else if(any(good)) {
-                    tempArrayi <- sum((wi * ri^2)[good,])/ df.r
-                    update(tempArrayi)
-                }
-            })
-            dispersion <- sum(tempArray)
-	    } else {
-            est.disp <- TRUE
-            dispersion <- NaN
+    completeModel <- !is.null(object$d.residuals)
+
+    if(completeModel) { # runs only in complete mode
+        if(is.null(dispersion)){	# calculate dispersion if needed
+	        if(object$family$family %in% c("poisson", "binomial"))
+                dispersion <- 1
+	        else if(df.r > 0) {
+                est.disp <- TRUE
+    #O    		if(any(object$weights==0))
+    #O    		    warning("observations with zero weight not used for calculating dispersion")
+    #O		    sum((object$weights*object$residuals^2)[object$weights > 0])/ df.r
+                w <- object$weights
+                tempArray <- darray(dim=c(1,npartitions(w)), blocks=c(1,1), data=0)
+                foreach(i, 1:npartitions(w), progress=trace, function(wi=splits(w,i), ri=splits(object$d.residuals,i), tempArrayi=splits(tempArray,i), df.r=df.r){
+                    good <- wi > 0
+                    if(all(good)) {
+                        tempArrayi <- sum((wi * ri^2))/ df.r
+                        update(tempArrayi)
+                    } else if(any(good)) {
+                        tempArrayi <- sum((wi * ri^2)[good,])/ df.r
+                        update(tempArrayi)
+                    }
+                })
+                dispersion <- sum(tempArray)
+	        } else {
+                est.disp <- TRUE
+                dispersion <- NaN
+            }
         }
-    }
+    } # runs only in complete mode
     ## calculate scaled and unscaled covariance matrix
 
     aliased <- is.na(coef(object))  # used in print method
 #O    p <- object$rank  rank is not available for current approach
     p <- length(object$coefficients)
+
     if (p > 0) {
-#O        p1 <- 1L:p
-#O	    Qr <- qr.lm(object)
-        ## WATCHIT! doesn't this rely on pivoting not permuting 1L:p? -- that's quaranteed
-#O        coef.p <- object$coefficients[Qr$pivot[p1]]
-        coef.p <- object$coefficients
-#O        covmat.unscaled <- chol2inv(Qr$qr[p1,p1,drop=FALSE])
-#O        dimnames(covmat.unscaled) <- list(names(coef.p),names(coef.p))
-        covmat.unscaled <- .covariantMatrix(object, trace=trace)
-        covmat <- dispersion * covmat.unscaled
-        var.cf <- diag(covmat)
+        if(!completeModel) { # incomplete mode
+            coef.table <- cbind(object$coefficients, NA, NA, NA)
+            dimnames(coef.table) <- list(rownames(object$coefficients), c("Estimate", "Std. Error", "t value","Pr(>|t|)"))
+            covmat.unscaled <- covmat <- matrix(, 0L, 0L)           
+        } else { # complete mode
 
-        ## calculate coef table
+            coef.p <- object$coefficients
+            covmat.unscaled <- .covariantMatrix(object, trace=trace)
+            covmat <- dispersion * covmat.unscaled
+            var.cf <- diag(covmat)
 
-        s.err <- sqrt(var.cf)
-        tvalue <- coef.p/s.err
+            ## calculate coef table
 
-        dn <- c("Estimate", "Std. Error")
-        if(!est.disp) { # known dispersion
-            pvalue <- 2*pnorm(-abs(tvalue))
-            coef.table <- cbind(coef.p, s.err, tvalue, pvalue)
-            dimnames(coef.table) <- list(rownames(coef.p),
-                                         c(dn, "z value","Pr(>|z|)"))
-        } else if(df.r > 0) {
-            pvalue <- 2*pt(-abs(tvalue), df.r)
-            coef.table <- cbind(coef.p, s.err, tvalue, pvalue)
-            dimnames(coef.table) <- list(rownames(coef.p),
-                                         c(dn, "t value","Pr(>|t|)"))
-        } else { # df.r == 0
-            coef.table <- cbind(coef.p, NaN, NaN, NaN)
-            dimnames(coef.table) <- list(rownames(coef.p),
-                                         c(dn, "t value","Pr(>|t|)"))
-        }
-#O        df.f <- NCOL(Qr$qr)
+            s.err <- sqrt(var.cf)
+            tvalue <- coef.p/s.err
 
-        
+            dn <- c("Estimate", "Std. Error")
+            if(!est.disp) { # known dispersion
+                pvalue <- 2*pnorm(-abs(tvalue))
+                coef.table <- cbind(coef.p, s.err, tvalue, pvalue)
+                dimnames(coef.table) <- list(rownames(coef.p),
+                                             c(dn, "z value","Pr(>|z|)"))
+            } else if(df.r > 0) {
+                pvalue <- 2*pt(-abs(tvalue), df.r)
+                coef.table <- cbind(coef.p, s.err, tvalue, pvalue)
+                dimnames(coef.table) <- list(rownames(coef.p),
+                                             c(dn, "t value","Pr(>|t|)"))
+            } else { # df.r == 0
+                coef.table <- cbind(coef.p, NaN, NaN, NaN)
+                dimnames(coef.table) <- list(rownames(coef.p),
+                                             c(dn, "t value","Pr(>|t|)"))
+            }
+        }          
         df.f <- p
+
     } else {
         coef.table <- matrix(, 0L, 4L)
         dimnames(coef.table) <-
@@ -1159,8 +1196,13 @@ summary.hpdglm <- function(object, dispersion = NULL,
     keep <- match(c("call","family","deviance", "aic",
 		      "df.residual","null.deviance","df.null",
               "iter", "na_action"), names(object), 0L)
+    if(completeModel) { # complete mode
+        deviance.resid <- residuals.hpdglm(object, type = "deviance", trace=FALSE)
+    } else { # incomplete mode
+        deviance.resid <- NA
+    }
     ans <- c(object[keep],
-	     list(deviance.resid = residuals.hpdglm(object, type = "deviance", trace=FALSE),
+	     list(deviance.resid = deviance.resid,
 		  coefficients = coef.table,
                   aliased = aliased,
 		  dispersion = dispersion,
@@ -1169,7 +1211,7 @@ summary.hpdglm <- function(object, dispersion = NULL,
 		  cov.unscaled = covmat.unscaled,
 		  cov.scaled = covmat))
 
-    if(correlation && p > 0) {
+    if(correlation && p > 0 && completeModel) {
     	dd <- sqrt(diag(covmat.unscaled))
 	    ans$correlation <-
 	    covmat.unscaled/outer(dd,dd)
@@ -1177,7 +1219,11 @@ summary.hpdglm <- function(object, dispersion = NULL,
     }
 
     # it was better if it was quantiles
-    ans$minMax <- drop(cbind(min(ans$deviance.resid, na.rm=TRUE),max(ans$deviance.resid, na.rm=TRUE)))
+    if(completeModel) { # incomplete mode
+        ans$minMax <- drop(cbind(min(ans$deviance.resid, na.rm=TRUE),max(ans$deviance.resid, na.rm=TRUE)))
+    } else { # incomplete mode
+        ans$minMax <- c(NA,NA)
+    }
     names(ans$minMax) <- c("Min", "Max")
 
     class(ans) <- "summary.hpdglm"
@@ -1265,16 +1311,12 @@ print.summary.hpdglm <-
 
 ## GLM Methods for Generic Functions :
 
-## needed to avoid deviance.lm
-deviance.hpdglm <- function(object, ...) object$deviance
-family.hpdglm <- function(object, ...) object$family
-
 residuals.hpdglm <-
     function(object,
 	     type = c("deviance", "pearson", "working", "response", "partial"), trace=FALSE,
 	     ...)
 {
-    if(is.null(object$responses))
+    if(is.null(object$d.residuals))
         stop("This function is only available for complete models.")
     type <- match.arg(type)
     Y <- object$responses
@@ -1289,7 +1331,7 @@ residuals.hpdglm <-
            mu.eta <- object$family$mu.eta
            eta <- object$d.linear.predictors
            Y <- clone(mu, ncol = ncol(mu))
-           cat("Building Y\n")
+           message("Building Y")
            foreach(i, 1:nparts, function(Yi=splits(Y,i), mui=splits(mu,i), ri=splits(r,i), etai=splits(eta,i)){
                 Yi[,1] <- mui + ri * mu.eta(etai)
                 update(Yi)
@@ -1302,7 +1344,7 @@ residuals.hpdglm <-
             res <- clone(mu, ncol = ncol(mu), data = NA)
             d.res <- clone(mu, ncol = ncol(mu), data = 0)
             if(trace)
-                cat("Building residuals\n")
+                message("Building residuals")
             foreach(i, 1:nparts, progress=trace, function(resi=splits(res,i), d.resi=splits(d.res,i), Yi=splits(Y,i), mui=splits(mu,i),
                      wtsi=splits(wts,i), func=(object$family$dev.resids)){
                 good <- wtsi > 0
@@ -1322,7 +1364,7 @@ residuals.hpdglm <-
         pearson = {
             res <- clone(mu, ncol = ncol(mu), data = NA)
             if(trace)
-                cat("Building residuals\n")
+                message("Building residuals")
             foreach(i, 1:nparts, progress=trace, function(resi=splits(res,i), Yi=splits(Y,i), mui=splits(mu,i), wtsi=splits(wts,i),
                      func=object$family$variance){
                 resi <- (Yi[,1]-mui)*sqrt(wtsi)/sqrt(func(mui))
@@ -1367,7 +1409,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
                 mustart <- clone(X, ncol = 1, data = 0)
                     ## anything, e.g. NA/NaN, for cases with zero weight is OK.
                     if (trace) {
-                        cat("Initilizing mustart\n")
+                        message("Initilizing mustart")
                         starttime<-proc.time()
                     }
                     errArray <- darray(dim=c(nparts,1), blocks=c(1,1), data=0)
@@ -1399,7 +1441,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
                     if (trace) {    # end of timing step
                         endtime <- proc.time()
                         spentTime <- endtime-starttime
-                        cat("Spent time:",(spentTime)[3],"sec\n")
+                        message("Spent time: ",(spentTime)[3]," sec")
                     }
 #O                  m <- weights * y
 #O                  if(any(abs(m - round(m)) > 1e-3))
@@ -1414,7 +1456,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
         "poisson" = {
             ex1 <- expression({
                 if (trace) {
-                    cat("Initilizing\n")
+                    message("Initilizing")
                     starttime<-proc.time()
                 }
                 foreach(i, 1:nparts, progress=trace, function(Yi=splits(Y,i), testArrayi=splits(testArray,i), weightsi=splits(weights,i)) {
@@ -1442,7 +1484,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
                 if (trace) {    # end of timing step
                     endtime <- proc.time()
                     spentTime <- endtime-starttime
-                    cat("Spent time:",(spentTime)[3],"sec\n")
+                    message("Spent time: ",(spentTime)[3]," sec")
                 }
             })
         },
@@ -1455,7 +1497,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
             ex1 <- expression({
                 mustart <- clone(X, ncol = 1, data = 0)
                 if (trace) {
-                    cat("Initilizing mustart\n")
+                    message("Initilizing mustart")
                     starttime<-proc.time()
                 }
                 foreach(i, 1:nparts, progress=trace, function(testArrayi=splits(testArray,i), Yi=splits(Y,i), mustarti=splits(mustart,i),
@@ -1477,7 +1519,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
                 if (trace) {    # end of timing step
                     endtime <- proc.time()
                     spentTime <- endtime-starttime
-                    cat("Spent time:",(spentTime)[3],"sec\n")
+                    message("Spent time: ",(spentTime)[3]," sec")
                 }
                 if(is.null(etastart) && is.null(start) && is.null(mustart) &&
                           (any(getpartition(testArray) == 1)))
@@ -1520,7 +1562,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
 
     # Calculate gradient and hessian locally
     if (trace) {
-        cat("Calculating local gradient and hessian\n")
+        message("Calculating local gradient and hessian")
         starttime<-proc.time()
     }
     foreach(i, 1:npartitions(X), progress=trace, sigmoid <- function(x = splits(X,i), y=splits(Y,i), hess=splits(distHessian,i),
@@ -1574,16 +1616,15 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
     if (trace) {    # end of timing step
         endtime <- proc.time()
         spentTime <- endtime-starttime
-        cat("Spent time:",(spentTime)[3],"sec\n")
+        message("Spent time: ",(spentTime)[3]," sec")
     }
 
     #Fetch all gradients and sum them up to get one vector: 1 x (npredictors+1)
-    grad<-rowSums(getpartition(distGrad))
+    grad<-rowSums(distGrad)
 
     #Fetch all hessians, sum them up, and convert to a (npredictors+1 x npredictors+1) matrix
     #We should idealy use reduce() when number of partitions is large
-    hessian<-getpartition(distHessian)
-    hessian<-matrix(rowSums(hessian),nrow=npredictors+1) 
+    hessian<-matrix(rowSums(distHessian),nrow=npredictors+1) 
     
     switch(family$family,
         "binomial"={
@@ -1612,7 +1653,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
             #Stores the partial hessian distributed across workers:  (npredictors+1 x npredictors+1) matrix flattened out 
             distHessian <- darray(dim=c((npredictors+1)*(npredictors+1), nparts), blocks=c((npredictors+1)*(npredictors+1),1), FALSE, data=0)
 
-            if (trace) cat("Calculating the covariant matrix\n")
+            if (trace) message("Calculating the covariant matrix")
             foreach(i, 1:nparts, progress=trace, errorCalc <- function(Xi = splits(X,i), hess=splits(distHessian,i), theta=object$coefficients,
                      Wi=splits(W,i), linkinv=object$family$linkinv) {
                 good <- Wi > 0
@@ -1648,8 +1689,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
             })
 
             #Fetch all hessians, sum them up, and convert to a (npredictors+1 x npredictors+1) matrix
-            hessian <- getpartition(distHessian)
-            hessian <- matrix(rowSums(hessian),nrow=npredictors+1)
+            hessian <- matrix(rowSums(distHessian),nrow=npredictors+1)
             covmat <- solve(hessian)
         },
         "quasibinomial" = {
@@ -1659,7 +1699,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
             #Stores the partial hessian distributed across workers:  (npredictors+1 x npredictors+1) matrix flattened out 
             distHessian <- darray(dim=c((npredictors+1)*(npredictors+1), nparts), blocks=c((npredictors+1)*(npredictors+1),1), FALSE, data=0)
 
-            if (trace) cat("Calculating the covariant matrix\n")
+            if (trace) message("Calculating the covariant matrix")
             foreach(i, 1:nparts, progress=trace, errorCalc <- function(Xi = splits(X,i), hess=splits(distHessian,i), theta=object$coefficients,
                      Wi=splits(W,i), linkinv=object$family$linkinv) {
                 good <- Wi > 0
@@ -1695,8 +1735,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
             })
 
             #Fetch all hessians, sum them up, and convert to a (npredictors+1 x npredictors+1) matrix
-            hessian <- getpartition(distHessian)
-            hessian <- matrix(rowSums(hessian),nrow=npredictors+1)
+            hessian <- matrix(rowSums(distHessian),nrow=npredictors+1)
             covmat <- solve(hessian)
         },
         "quasipoisson" = {
@@ -1706,7 +1745,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
             #Stores the partial hessian distributed across workers:  (npredictors+1 x npredictors+1) matrix flattened out 
             distHessian <- darray(dim=c((npredictors+1)*(npredictors+1), nparts), blocks=c((npredictors+1)*(npredictors+1),1), FALSE, data=0)
 
-            if (trace) cat("Calculating the covariant matrix\n")
+            if (trace) message("Calculating the covariant matrix")
             foreach(i, 1:nparts, progress=trace, errorCalc <- function(Xi = splits(X,i), hess=splits(distHessian,i), theta=object$coefficients,
                      Wi=splits(W,i)) {
                 good <- Wi > 0
@@ -1732,8 +1771,7 @@ weights.hpdglm <- function(object, type = c("prior", "working"), ...)
             })
 
             #Fetch all hessians, sum them up, and convert to a (npredictors+1 x npredictors+1) matrix
-            hessian <- getpartition(distHessian)
-            hessian <- matrix(rowSums(hessian),nrow=npredictors+1)
+            hessian <- matrix(rowSums(distHessian),nrow=npredictors+1)
             covmat <- solve(hessian)
         },
         "Gamma" = {
@@ -1779,7 +1817,7 @@ predict.hpdglm <-
         pred <- clone(newdata, ncol = pred.col, data = NA)
 
         if(is.null(mask)) {     # no mask
-            if (trace) cat("Calculating link prediction\n")
+            if (trace) message("Calculating link prediction")
             foreach(i, 1:nparts, progress=trace, function(newdatai=splits(newdata,i), predi=splits(pred,i), coef=coef){
                 predi <- cbind(1,newdatai) %*% coef
                 update(predi)
@@ -1787,7 +1825,7 @@ predict.hpdglm <-
 
             switch(type,
 	            response = {
-                    if (trace) cat("Calculating response prediction\n")
+                    if (trace) message("Calculating response prediction")
                     foreach(i, 1:nparts, progress=trace, function(predi=splits(pred,i), func=family(object)$linkinv){
                         predi <- func(predi)    
                         update(predi)
@@ -1799,7 +1837,7 @@ predict.hpdglm <-
                 stop("newdata and mask should be of the same type")
             if( nrow(mask) != pred.row || ncol(mask) != 1 || any(partitionsize(mask)[,1] != partitionsize(newdata)[,1]))
                 stop("'mask' must have the same partitioning pattern as newdata")
-            if (trace) cat("Calculating link prediction\n")
+            if (trace) message("Calculating link prediction")
             foreach(i, 1:nparts, progress=trace, function(newdatai=splits(newdata,i), predi=splits(pred,i), coef=coef, maski=splits(mask,i)){
                 good <- maski > 0
                 if(all(good)) {
@@ -1816,7 +1854,7 @@ predict.hpdglm <-
 
             switch(type,
 	            response = {
-                    if (trace) cat("Calculating response prediction\n")
+                    if (trace) message("Calculating response prediction")
                     foreach(i, 1:nparts, progress=trace, function(predi=splits(pred,i), func=family(object)$linkinv, maski=splits(mask,i)){
                         good <- maski > 0
                         if(all(good)) {
@@ -1832,11 +1870,11 @@ predict.hpdglm <-
         }
     } else {                # newdata is a normal array
         if(is.null(mask)) { # no mask
-            if (trace) cat("Calculating link prediction\n")
+            if (trace) message("Calculating link prediction")
             pred <- cbind(1,newdata) %*% coef
             switch(type,
 	            response = {
-                    if (trace) cat("Calculating response prediction\n")
+                    if (trace) message("Calculating response prediction")
                     pred <- family(object)$linkinv(pred)
                 },
 	            link = )
@@ -1846,11 +1884,11 @@ predict.hpdglm <-
             if( nrow(mask) != NROW(newdata) || ncol(mask) != 1 )
                 stop("'mask' must have a single column and the same number of rows as newdata")
             pred <- matrix(NA, NROW(newdata), 1)
-            if (trace) cat("Calculating link prediction\n")
+            if (trace) message("Calculating link prediction")
             pred[mask > 0,] <- cbind(1,newdata[mask > 0,]) %*% coef
             switch(type,
 	            response = {
-                    if (trace) cat("Calculating response prediction\n")
+                    if (trace) message("Calculating response prediction")
                     pred[mask > 0,] <- family(object)$linkinv(pred[mask > 0,])
                 },
 	            link = )
@@ -1871,7 +1909,7 @@ fitted.hpdglm <- function (object, ...) {
     switch(family$family,
         "binomial" = {            
             if (trace) {
-                cat("Calculating aic\n")
+                message("Calculating aic")
                 starttime<-proc.time()
             }
 
@@ -1892,12 +1930,12 @@ fitted.hpdglm <- function (object, ...) {
             if (trace) {    # end of timing step
                 endtime <- proc.time()
                 spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
+                message("Spent time: ",(spentTime)[3]," sec")
             }
         },
         "gaussian" = {
             if (trace) {
-                cat("Calculating aic\n")
+                message("Calculating aic")
                 starttime<-proc.time()
             }
             foreach(i, 1:nparts, progress=trace, function(tempArrayi=splits(tempArray,i), wti=splits(wt,i)){
@@ -1913,13 +1951,13 @@ fitted.hpdglm <- function (object, ...) {
             if (trace) {    # end of timing step
                 endtime <- proc.time()
                 spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
+                message("Spent time: ",(spentTime)[3]," sec")
             }
             aic <- nobs*(log(dev/nobs*2*pi)+1)+2 - sum(tempArray)             
         },
         "poisson" = {
             if (trace) {
-                cat("Calculating aic\n")
+                message("Calculating aic")
                 starttime<-proc.time()
             }
             foreach(i, 1:nparts, progress=trace, function(tempArrayi=splits(tempArray,i), mui=splits(mu,i), yi=splits(y,i),
@@ -1937,7 +1975,7 @@ fitted.hpdglm <- function (object, ...) {
             if (trace) {    # end of timing step
                 endtime <- proc.time()
                 spentTime <- endtime-starttime
-                cat("Spent time:",(spentTime)[3],"sec\n")
+                message("Spent time: ",(spentTime)[3]," sec")
             }
         },
         stop(sQuote(family$family), " family not supported yet")
@@ -1953,7 +1991,7 @@ fitted.hpdglm <- function (object, ...) {
     tempArray = darray(dim=c(1,nparts), blocks=c(1,1), data=0)
 
     if (trace) {
-        cat("Checking for missed values\n")
+        message("Checking for missed values")
         starttime<-proc.time()
     }
     foreach(i, 1:nparts, progress=trace, function(tempArrayi=splits(tempArray,i), wi=splits(weights,i), xi=splits(X,i), yi=splits(Y,i)){
@@ -1972,9 +2010,8 @@ fitted.hpdglm <- function (object, ...) {
     if (trace) {    # end of timing step
         endtime <- proc.time()
         spentTime <- endtime-starttime
-        cat("Spent time:",(spentTime)[3],"sec\n")
+        message("Spent time: ",(spentTime)[3]," sec")
     }
     
     nOmits
-} 
-
+}

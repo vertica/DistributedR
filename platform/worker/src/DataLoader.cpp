@@ -48,7 +48,6 @@ DataLoader::DataLoader(
   total_nrows = 0;
   file_id = 0;
   vnode_EOFs.clear();
-  transfer_complete_ = false;
   read_pool = pool(10);
 
   //Initialize buffer
@@ -59,6 +58,11 @@ DataLoader::DataLoader(
   }
   buffer.size = 0;
   buffer.buffersize = 0;
+
+  //Initialize Result
+  result.transfer_complete_ = false;
+  result.transfer_success_ = true;
+  result.transfer_error_msg_.clear();
 }
 
 
@@ -92,10 +96,10 @@ DataLoader::~DataLoader() {
  * - Frees buffer
  * 
  **/
-::uint64_t DataLoader::SendResult(std::vector<std::string> qry_result) {
+std::pair<DLStatus, ::uint64_t> DataLoader::SendResult(std::vector<std::string> qry_result) {
    
    read_pool.wait();
-   transfer_complete_ = true;
+   result.transfer_complete_ = true;
 
    map<std::string, int> result_EOFs;
    result_EOFs.clear();
@@ -119,7 +123,7 @@ DataLoader::~DataLoader() {
      free(buffer.buf);
      buffer.buf = NULL;
    }
-   return file_id;
+   return std::pair<DLStatus, ::uint64_t>(result, file_id);
 }
 
 
@@ -130,10 +134,11 @@ DataLoader::~DataLoader() {
 void DataLoader::CreateCsvShm(std::string shm_name, ::uint64_t data_size) {
   size_t free_shm_size = get_free_shm_size();
   if (free_shm_size > 0 && free_shm_size <= data_size) {
+     file_id--;
      ostringstream msg;
      msg << "<DataLoader> Cannot allocate " << data_size << " bytes to Shared Memory. "
          << "Free shared memory size is " << free_shm_size;
-     LOG_ERROR("%s", msg.str().c_str());
+     RegisterTransferError(msg.str().c_str());
      close(sock_fd_);
   } else { 
      boost::interprocess::shared_memory_object csv_shm(boost::interprocess::open_or_create, shm_name.c_str(), boost::interprocess::read_write);
@@ -154,6 +159,14 @@ std::string DataLoader::getNextShmName() {
   std::string shm_name = shm_file_name.str();
   lock.unlock();
   return shm_name;
+}
+
+void DataLoader::RegisterTransferError(const char* error_msg) {
+  boost::unique_lock<boost::mutex> lock(metadata_update_mutex_);
+  LOG_ERROR(error_msg);
+  result.transfer_success_ = false;
+  result.transfer_error_msg_= std::string(error_msg);
+  lock.unlock();
 }
 
 /**
@@ -189,7 +202,7 @@ void DataLoader::AppendDataBytes(const char* shm_file, ::uint64_t data_size, uin
      if(buffer.buf == NULL)  {
        ostringstream msg;
        msg << "<DataLoader> Unable to reserve data buffer of " << total_data_size << " bytes.";
-       LOG_ERROR("%s", msg.str().c_str());
+       RegisterTransferError(msg.str().c_str());
        close(sock_fd_);
      }
      
@@ -228,9 +241,9 @@ void DataLoader::ReadFromVertica(int32_t connection_fd) {
   struct Metadata metadata;
   int n = recv(connection_fd, &metadata, sizeof(metadata), 0);
   if(n == 0) 
-    LOG_ERROR("<DataLoader> No Metadata received from Vertica");
+    RegisterTransferError("<DataLoader> No Metadata received from Vertica");
   else if (n<0)
-    LOG_ERROR("<DataLoader> Error in receiving Metadata from Vertica");
+    RegisterTransferError("<DataLoader> Error in receiving Metadata from Vertica");
   
  
   ::uint64_t data_size = metadata.size;
@@ -246,10 +259,10 @@ void DataLoader::ReadFromVertica(int32_t connection_fd) {
     //data_buffer[b_read]='\0';
     while((errno = 0, (n = recv(connection_fd, data_buffer, sizeof(data_buffer), 0))>0) || errno == EINTR) {
       if(n == 0) {
-       LOG_ERROR("<DataLoader> No data bytes received from Vertica");
+       RegisterTransferError("<DataLoader> No data bytes received from Vertica");
        break;
       } else if (n<0){
-       LOG_ERROR("<DataLoader> Error in receiving Metadata from Vertica");
+       RegisterTransferError("<DataLoader> Error in receiving Metadata from Vertica");
        break;
       } else {
        data_buffer[n]='\0';
@@ -279,6 +292,7 @@ void DataLoader::ReadFromVertica(int32_t connection_fd) {
  **/
 void DataLoader::Run() {
   try { 
+    LOG_DEBUG("Started DataLoader thread");
     struct sockaddr_in their_addr;
     socklen_t sin_size = sizeof(their_addr);   
     while(true) {
@@ -286,14 +300,16 @@ void DataLoader::Run() {
       int ret = listen(sock_fd_, 10);
       boost::this_thread::interruption_point();
       if (ret < 0) {
-        LOG_ERROR("<DataLoader> Data Loader stopped listening for data connections");
+        RegisterTransferError("<DataLoader> Data Loader stopped listening for data connections");
         break;
       }
 
       int32_t connection_fd = accept(sock_fd_, (struct sockaddr *) &their_addr,
                    &sin_size);
       if (connection_fd < 0) {
-        LOG_ERROR("<DataLoader> Connection failure. %s", strerror(errno));
+        std::ostringstream error;
+        error << "<DataLoader> Connection failure: "<< strerror(errno);
+        RegisterTransferError(error.str().c_str());
         close(connection_fd);
         break;
       } else {
