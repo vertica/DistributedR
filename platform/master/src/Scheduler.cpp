@@ -51,7 +51,7 @@ static Scheduler *sch = NULL;
  */
 static void dispatch_task(WorkerInfo *wi, TaskArg *t,
                           ::uint64_t id, ::uint64_t uid) {
-    
+
   NewExecuteRRequest req;
   req.set_id(id);
   req.set_uid(uid);
@@ -81,7 +81,7 @@ static void dispatch_task(WorkerInfo *wi, TaskArg *t,
   // add arguments other than split and composite args
   for (int i = 0; i < t->raw_args.size(); i++)
     req.add_raw_args()->CopyFrom(t->raw_args[i]);
-  
+
   wi->NewExecuteR(req);
   LOG_INFO("EXECUTE TaskID %14d - Sent to Worker %s", static_cast<int>(uid), wi->hostname().c_str());
 }
@@ -176,9 +176,9 @@ void Scheduler::InitiateDataLoader(WorkerInfo* wi,
   req.set_split_size(split_size);
   req.set_split_name(split_prefix);
   req.set_id(000);
-  req.set_uid(taskid);     
-  wi->VerticaLoad(req);     
-  
+  req.set_uid(taskid);
+  wi->VerticaLoad(req);
+
   LOG_INFO("VerticaDL::START TaskID %11d - Sent to Worker %s", taskid, wi->hostname().c_str());
 }
 
@@ -195,16 +195,16 @@ void Scheduler::FetchLoaderStatus(WorkerInfo* wi,
    fetchresultreq[taskid] = wi;
    lock.unlock();
 
-   VerticaDLRequest req; 
+   VerticaDLRequest req;
    req.set_type(VerticaDLRequest::FETCH);
    req.set_id(000);
-   req.set_uid(taskid);     
-   
+   req.set_uid(taskid);
+
    for(int i = 0; i<vnodenames.size(); i++) {
      req.add_query_result(vnodenames[i]);
-   } 
+   }
 
-   wi->VerticaLoad(req);     
+   wi->VerticaLoad(req);
    LOG_INFO("VerticaDL::FETCH TaskID %11d - Sent to Worker %s", static_cast<int>(taskid), wi->hostname().c_str());
 }
 
@@ -219,12 +219,12 @@ void Scheduler::StopDataLoader(WorkerInfo* wi) {
   dataloadereq[taskid]=wi;
   lock.unlock();
 
-  VerticaDLRequest req; 
+  VerticaDLRequest req;
   req.set_type(VerticaDLRequest::STOP);
   req.set_id(000);
-  req.set_uid(taskid);     
-  wi->VerticaLoad(req);     
-  
+  req.set_uid(taskid);
+  wi->VerticaLoad(req);
+
   LOG_INFO("VerticaDL::STOP TaskID %12d - Sent to Worker %s", taskid, wi->hostname().c_str());
 }
 
@@ -253,7 +253,7 @@ std::pair<bool, bool> Scheduler::UpdateTaskResult(TaskDoneRequest* req, bool val
   } else if (!validated)
     foreach_status_->is_error = true;
 
-  taskdones_[taskid] = req; 
+  taskdones_[taskid] = req;
   std::pair<bool, bool> result = std::make_pair((foreach_status_->num_tasks==0), foreach_status_->is_error);
 
   unique_lock<recursive_mutex> lock(metadata_mutex);
@@ -491,7 +491,7 @@ bool Scheduler::Done(TaskDoneRequest* req) {
     LOG_DEBUG("VerticaDL::START TaskID %5d - Received TASKDONE from Worker", static_cast<int>(taskid));
     // Data-Loader started
     std::string hostname = req->location().name();
-    int loader_port = req->loader_port(); 
+    int loader_port = req->loader_port();
     WorkerInfo* workerinfo = dataloadereq[taskid];
 
     presto_master_->GetDataLoader()->HandlePortAssignment(dataloadereq[taskid], loader_port);
@@ -509,10 +509,10 @@ bool Scheduler::Done(TaskDoneRequest* req) {
   if (type == EXEC || type == FETCH || type == LOAD || type == MOVETODRAM ||
       type == CREATECOMPOSITE) {
     double consumed = (double)worker->used / (double)worker->size; // NOLINT
-    
+
     if (consumed > PRESTO_GC_THRESHOLD) {
-      LOG_WARN("Worker %s memory consumption(%1.6f) exceeded PRESTO_GC_THRESHOLD(%1.3f). Removing old versions of Split.", 
-            server_to_string(worker->server).c_str(), consumed, PRESTO_GC_THRESHOLD); 
+      LOG_WARN("Worker %s memory consumption(%1.6f) exceeded PRESTO_GC_THRESHOLD(%1.3f). Removing old versions of Split.",
+            server_to_string(worker->server).c_str(), consumed, PRESTO_GC_THRESHOLD);
       GarbageCollect(worker, GC_DEFAULT_GEN);
     }
   }
@@ -625,7 +625,7 @@ void Scheduler::AddSplit(const string &name, size_t size,
   if (workers.count(w) == 0) {
     ostringstream msg;
     msg << "AddSplit: cannot find a worker to add \"" << w << "\"";
-    throw PrestoWarningException(msg.str());    
+    throw PrestoWarningException(msg.str());
   }
   Worker *worker = workers[w];  // a worker pointer that keeps this split
 
@@ -1011,7 +1011,7 @@ void Scheduler::DeleteSplit(Split *split) {
 
 void Scheduler::AddWorker(
     WorkerInfo *wi, size_t shared_memory,
-    int executors, vector<ArrayStoreData> array_stores) {  
+    int executors, vector<ArrayStoreData> array_stores) {
   string name = wi->hostname()+":"+int_to_string(wi->port());
   if (workers.count(name) != 0) {
     LOG_WARN("Already registered worker (%s) tries to reconnect", name.c_str());
@@ -1210,8 +1210,9 @@ Worker* Scheduler::GetRndAvailableWorker() {
   if (worker_vector.size() == 0) {
     throw PrestoWarningException("GetRndAvailableWorker: no available worker");
   }
-  srand(time(NULL) + getpid());
-  return worker_vector[rand()%worker_vector.size()];
+  current_Worker = (current_Worker+1)%worker_vector.size();
+  //srand(time(NULL) + getpid());
+  return worker_vector[current_Worker];
 }
 
 Scheduler::~Scheduler() {
@@ -1229,7 +1230,7 @@ Scheduler::~Scheduler() {
   for(; fetch_it != fetchtasks.end(); ++fetch_it) {
     delete fetch_it->second;
   }
-  
+
   boost::unordered_map< ::uint64_t, SaveTask*>::iterator save_it = savetasks.begin();
   for(; save_it != savetasks.end(); ++save_it) {
     delete save_it->second;
