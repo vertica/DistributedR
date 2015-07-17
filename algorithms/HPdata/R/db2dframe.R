@@ -19,12 +19,13 @@
  
 ## A simple function for reading a dframe from a table
 # tableName: name of the table
-# features: a list containing the name of columns corresponding to attributes of the dframe (features of samples)
 # dsn: ODBC DSN name
+# features: a list containing the name of columns corresponding to attributes of the dframe (features of samples)
+# except: the list of column names that should be excluded (optional)
 # npartitions: number of partitions in the dframe (it is an optional argument)
 # verticaConnector: when it is TRUE (default), Vertica Connector for Distributed R will be used
 # loadPolicy: it determines data loading policy of the Vertica Connector for Distributed R
-db2dframe <- function(tableName, dsn, features = list(...), npartitions, verticaConnector=TRUE, loadPolicy="local") {
+db2dframe <- function(tableName, dsn, features = list(...), except=list(...), npartitions, verticaConnector=TRUE, loadPolicy="local") {
 
     if(!is.character(tableName))
         stop("The name of the table should be specified")
@@ -43,12 +44,14 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
     db_connect <- odbcConnect(dsn)
     loadPolicy <- tolower(loadPolicy)
 
+    #Close the connection on exit
+    on.exit(odbcClose(db_connect))
+
     #Validate table name
     table <- ""
     schema <- ""
     table_info <- unlist(strsplit(tableName, split=".", fixed=TRUE))
     if(length(table_info) > 2) {
-       odbcClose(db_connect)
        stop("Invalid table name. Table name should be in format <schema_name>.<table_name>. If the table is in 'public' schema, Schema name can be ignored while specifying table name")
     } else if(length(table_info) == 2){
        schema <- table_info[1]
@@ -66,7 +69,6 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
     if(missing(features) || length(features)==0 || features=="") {
       table_columns <- sqlQuery(db_connect, paste("select column_name, data_type_id from columns where table_schema ILIKE '", schema ,"' and table_name ILIKE '", table,"'", sep=""))
       if(!is.data.frame(table_columns)) {
-        odbcClose(db_connect)
         stop(table_columns)
       }
 
@@ -74,12 +76,10 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
          ## check if its a view
          view_columns <- sqlQuery(db_connect, paste("select column_name, data_type_id from view_columns where table_schema ILIKE '", schema ,"' and table_name ILIKE '", table,"'", sep=""))
          if(!is.data.frame(view_columns)) {
-           odbcClose(db_connect)
            stop(view_columns)
          } 
 
          if(nrow(view_columns) == 0) {
-           odbcClose(db_connect)
            norelation <- TRUE
            stop(paste("Table/View ", schema, ".", tableName, " does not exist", sep=""))
          } else { 
@@ -91,7 +91,6 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
         # get type of table - external or regular
         table_type <- sqlQuery(db_connect, paste("select table_definition from tables where table_schema ILIKE '", schema, "' and table_name ILIKE '", table, "'", sep=""))
         if(!is.data.frame(table_type)) {
-           odbcClose(db_connect)
            stop(table_columns)
         }
         relation_type <- ifelse((is.null(table_type[[1]][[1]]) || is.na(table_type[[1]][[1]])), "table", "external_table")
@@ -104,7 +103,6 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
       if(nrow(istable) == 0) {
          isview <- sqlQuery(db_connect, paste("select data_type_id from view_columns where table_name ILIKE '", table, "' and table_schema ILIKE '", schema, "' and lower(column_name) in (", tolower(.toColumnString(features, TRUE)), ")", sep=""))
          if(nrow(isview) == 0) {
-           odbcClose(db_connect)
            norelation <- TRUE
            stop(paste("Table/View ", schema, ".", tableName, " does not exist with specified 'features'", sep=""))
          } else {
@@ -116,7 +114,6 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
         # get type of table - external or regular
         table_type <- sqlQuery(db_connect, paste("select table_definition from tables where table_schema ILIKE '", schema, "' and table_name ILIKE '", table, "'", sep=""))
         if(!is.data.frame(table_type)) {
-           odbcClose(db_connect)
            stop(table_columns)
         }
         relation_type <- ifelse((is.null(table_type[[1]][[1]]) || is.na(table_type[[1]][[1]])), "table", "external_table")
@@ -125,6 +122,10 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
 
       feature_columns <- features
     }
+
+    # excluding the elements in the except list
+    if(!missing(except) && length(except)!=0 && except!="")
+        feature_columns <- feature_columns[sapply(feature_columns, function(x) !(x %in% except))]
 
     # we have columns, construct column string
     nFeatures <- length(feature_columns)  # number of features
@@ -141,7 +142,6 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
     } else {
         npartitions <- round(npartitions)
         if(npartitions <= 0) {
-            odbcClose(db_connect)
             stop("npartitions should be a positive integer number.")
         }
     }
@@ -151,7 +151,6 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
     oneLine <- sqlQuery(db_connect, qryString)
     # check valid response from the database
     if (! is.data.frame(oneLine) ) {
-        odbcClose(db_connect)
         stop(oneLine)
     }
 
@@ -159,7 +158,6 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
     supported_types <- list("Integer", "Boolean", "Float", "Numeric", "Char", "Varchar", "Long Varchar")     # derived from types table
     supported_type_ids <- sqlQuery(db_connect, paste("select type_id from types where type_name in (", .toColumnString(supported_types, TRUE), ")", sep=""))
     if(!all(feature_data_type %in% supported_type_ids[[1]])) {
-      odbcClose(db_connect)
       stop("Only numeric, logical and character data types are supported")
     }
     
@@ -168,11 +166,9 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
     nobs <- sqlQuery(db_connect, qryString)
     # check valid response from the database
     if (! is.data.frame(nobs) ) {
-        odbcClose(db_connect)
         stop(nobs)
     }
     if(nobs == 0) {
-        odbcClose(db_connect)
         stop("The table is empty!")
     }
     X <- FALSE
@@ -267,7 +263,6 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
              .vertica.connector(e)
           } , finally = {
              stopDataLoader()
-             try({ odbcClose(db_connect)}, silent=TRUE)
           })
 
 
@@ -277,7 +272,6 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
         qryString <- paste("select count(distinct rowid) from", tableName, "where rowid >=0 and rowid <", nobs)
         distinct_nobs <- sqlQuery(db_connect, qryString)
         if( nobs != distinct_nobs ) {
-            odbcClose(db_connect)
             stop("There is something wrong with rowid. Check the assumptions about rowid column in the manual.")
         }
     
@@ -325,7 +319,6 @@ db2dframe <- function(tableName, dsn, features = list(...), npartitions, vertica
             colnames(x) <- feature_columns
             update(x)
         })
-        odbcClose(db_connect)
     } # if-else (verticaConnector)
 
     X

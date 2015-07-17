@@ -11,7 +11,8 @@ void destroyForest(SEXP R_forest)
   if(forest->trees != NULL)
     {
       for(int i = 0; i < forest->ntree; i++)
-	destroyTree(forest->trees[i]);
+	if(forest->trees[i] != NULL)
+	  destroyTree(forest->trees[i]);
       free(forest->trees);
       if(forest->leaf_nodes != NULL)
 	free(forest->leaf_nodes);
@@ -122,11 +123,11 @@ extern "C"
   {
     hpdRFforest *forest = (hpdRFforest *) malloc(sizeof(hpdRFforest));
     SEXP R_forest = PROTECT(R_MakeExternalPtr(forest, R_NilValue, R_NilValue));
-
     forest->ntree = INTEGER(R_ntree)[0];
     forest->nleaves = forest->ntree;
     forest->trees = (hpdRFnode **) malloc(sizeof(hpdRFnode *)*(forest->ntree));
-    forest->leaf_nodes = (hpdRFnode **) malloc(sizeof(hpdRFnode *)*(forest->ntree));
+    forest->leaf_nodes = 
+      (hpdRFnode **) malloc(sizeof(hpdRFnode *)*(forest->ntree));
     forest->max_nodes = (int *) malloc(sizeof(int)*(forest->ntree));
     forest->features_num = INTEGER(R_features_num)[0];
     forest->nrow = length(VECTOR_ELT(R_responses,0));
@@ -134,9 +135,12 @@ extern "C"
     forest->bin_num = (int *) malloc(sizeof(int)*(forest->nfeature)); 
     forest->features_min = (double *) malloc(sizeof(double)*(forest->nfeature));
     forest->features_max = (double *) malloc(sizeof(double)*(forest->nfeature));
-    memcpy(forest->features_min, REAL(features_min), sizeof(double)*(forest->nfeature));
-    memcpy(forest->features_max, REAL(features_max), sizeof(double)*(forest->nfeature));
-    forest->features_cardinality = (int *) malloc(sizeof(int)*(forest->nfeature));
+    memcpy(forest->features_min, 
+	   REAL(features_min), sizeof(double)*(forest->nfeature));
+    memcpy(forest->features_max, 
+	   REAL(features_max), sizeof(double)*(forest->nfeature));
+    forest->features_cardinality = 
+      (int *) malloc(sizeof(int)*(forest->nfeature));
     memcpy(forest->features_cardinality,INTEGER(features_cardinality), 
 	   sizeof(int)*(forest->nfeature));
     forest->response_cardinality = INTEGER(response_cardinality)[0];
@@ -151,7 +155,6 @@ extern "C"
 	  R_NilValue: VECTOR_ELT(R_weights,i);
 	SEXP observation_indices = R_observation_indices == R_NilValue ? 
 	  R_NilValue: VECTOR_ELT(R_observation_indices,i);
-
 	forest->trees[i] = createChildNode(NULL,  
 					   TRUE,INTEGER(observation_indices), 
 					   REAL(weight), length(weight),
@@ -165,6 +168,7 @@ extern "C"
 	else
 	  tree->treeID = INTEGER(R_tree_ids)[i];
 	tree->additional_info->leafID = i+1;
+
       }
 
 
@@ -191,14 +195,18 @@ extern "C"
       max_depth = INTEGER(R_max_depth)[0];
     for(int i = 0; i < forest->ntree; i++)
       {
+	if(forest->trees[i] == NULL)
+	  continue;
 	printf("Tree %d:\n", i+1);
 	printNode(forest->trees[i],1,max_depth, classes);
       }
+    /*
     for(int i = 0; i < forest->nleaves; i++)
       {
 	printf("Leaf %d:\n", i+1);
 	printNode(forest->leaf_nodes[i],1, max_depth, classes);
       }
+    */
   }
 
   SEXP getMaxNodes(SEXP R_forest)
@@ -327,6 +335,7 @@ extern "C"
     int* bin_num = forest->bin_num;
     
     hpdRFnode** leaf_nodes = forest->leaf_nodes;
+    int count = 0;
     for(int i = 0; i < forest->nleaves; i++)
       {
 	if(TYPEOF(VECTOR_ELT(R_responses,0)) == INTSXP)
@@ -337,10 +346,9 @@ extern "C"
 	  updateLeafNodeWithPredictions<double>(R_responses, 
 						forest->leaf_nodes[i],
 						forest->response_cardinality);
-	
-	
 	cleanSingleNode(forest->leaf_nodes[i]);
       }
+    forest->nleaves = count;
     return R_NilValue;
   }
 
@@ -360,7 +368,6 @@ extern "C"
 	UNPROTECT(1);
 	serializeTree(forest->trees[i], INTEGER(tree_buffer));
       }
-
     buffer_size = sizeof(int)*(6 + forest->ntree + forest->nfeature*2)
       + sizeof(double)*(forest->nfeature*2);
     SEXP meta_data_buffer;
@@ -450,26 +457,65 @@ extern "C"
     return R_forest;
   }
 
-  SEXP stitchForest(SEXP R_forest, SEXP R_temp_forests, SEXP R_nodes)
+  SEXP stitchForest(SEXP R_forest, SEXP R_temp_forests, 
+		    SEXP R_forest_nodes, SEXP R_temp_forest_nodes)
   {
      hpdRFforest * forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
      int partitions = length(R_temp_forests);
+
      for(int i = 0; i < partitions; i++)
        {
 	 hpdRFforest * temp_forest = 
 	   (hpdRFforest *) R_ExternalPtrAddr(VECTOR_ELT(R_temp_forests,i));
-	 int* nodes = INTEGER(VECTOR_ELT(R_nodes,i));
-	 int num_nodes = length(VECTOR_ELT(R_nodes,i));
+	 hpdRFnode **leaf_nodes = (hpdRFnode**)
+	   malloc(sizeof(hpdRFnode*)*
+		  (forest->nleaves+temp_forest->nleaves));  
+	 memcpy(leaf_nodes,forest->leaf_nodes,
+		sizeof(hpdRFnode*)*(forest->nleaves));
+	 memcpy(leaf_nodes+forest->nleaves,temp_forest->leaf_nodes,
+		sizeof(hpdRFnode*)*(temp_forest->nleaves));
+	 
+	 int* nodes = INTEGER(VECTOR_ELT(R_forest_nodes,i));
+	 int* tree_nodes = INTEGER(VECTOR_ELT(R_temp_forest_nodes,i));
+	 int num_nodes = length(VECTOR_ELT(R_forest_nodes,i));
 	 for(int j = 0; j < num_nodes; j++)
 	   {
-	     memcpy(forest->leaf_nodes[nodes[j]-1], temp_forest->trees[j],
+	     cleanSingleNode(leaf_nodes[nodes[j]-1]);
+	     memcpy(leaf_nodes[nodes[j]-1], 
+		    temp_forest->trees[tree_nodes[j]-1],
 		    sizeof(hpdRFnode));
-	     forest->leaf_nodes[nodes[j]-1] = NULL;
-	     forest->nleaves--;
+	     temp_forest->trees[tree_nodes[j]-1] = NULL;
+	     leaf_nodes[nodes[j]-1] = NULL;
 	   }
+
+	 free(forest->leaf_nodes);
+	 forest->leaf_nodes = leaf_nodes;
+	 forest->nleaves = forest->nleaves + temp_forest->nleaves;
+
        }
-     return R_NilValue;
   }
+  SEXP removeNullLeaves(SEXP R_forest)
+  {
+     hpdRFforest * forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
+     int valid = 0;
+     for(int i = 0; i < forest->nleaves; i++)
+       if(forest->leaf_nodes[i] != NULL)
+	 valid++;
+     SEXP R_leaf_table;
+     hpdRFnode **leaf_nodes = (hpdRFnode**)malloc(sizeof(hpdRFnode*)*valid); 
+     int j = 0;
+     for(int i = 0; i < valid; i++)
+       {
+	 while(forest->leaf_nodes[j] == NULL)
+	   j++;
+	 leaf_nodes[i] = forest->leaf_nodes[j++];
+       }
+     free(forest->leaf_nodes);
+     forest->leaf_nodes = leaf_nodes;
+     forest->nleaves = valid;
+
+  }
+
 
   SEXP reformatForest(SEXP R_old_forest)
   {
@@ -557,22 +603,30 @@ extern "C"
     memcpy(max_nodes,forest1->max_nodes,sizeof(int)*(forest1->ntree));
     memcpy(max_nodes+forest1->ntree,forest2->max_nodes,
 	   sizeof(int)*(forest2->ntree));
+    hpdRFnode** leaf_nodes = (hpdRFnode**) 
+      malloc(sizeof(hpdRFnode*)* (forest1->nleaves + forest2->nleaves));
+    if(forest1->leaf_nodes)
+      memcpy(leaf_nodes,forest1->leaf_nodes,
+	     sizeof(hpdRFnode*)*(forest1->nleaves));
+    if(forest2->leaf_nodes)
+      memcpy(leaf_nodes+forest1->nleaves,forest2->leaf_nodes,
+	     sizeof(hpdRFnode*)*(forest2->nleaves));
+
     free(forest1->max_nodes);
     free(forest2->max_nodes);
     free(forest1->trees);
     free(forest2->trees);
-    
     if(forest2->leaf_nodes)
       free(forest2->leaf_nodes);
     free(forest2->features_cardinality);
     free(forest2->features_min);
     free(forest2->features_max);
     free(forest2->bin_num);
-    
 
     forest1->trees = trees;
     forest1->ntree = forest1->ntree + forest2->ntree;
     forest1->max_nodes = max_nodes;
+    forest1->leaf_nodes = leaf_nodes;
     forest2->trees = NULL;
     forest2->ntree = 0;
     forest2->max_nodes = NULL;
@@ -581,7 +635,8 @@ extern "C"
     forest2->features_max = NULL;
     forest2->bin_num = NULL;
     forest2->leaf_nodes = NULL;
-
+    forest1->nleaves += forest2->nleaves;
+    forest2->nleaves = 0;
     return R_NilValue;
   }
 
@@ -616,6 +671,87 @@ extern "C"
     SET_VECTOR_ELT(new_local_data,3,observations_indices_local);
     UNPROTECT(5);
     return new_local_data;
+  }
+
+
+  SEXP eliminateTreesFromModel(SEXP R_forest, SEXP R_treeIDs)
+  {
+    hpdRFforest* forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
+    int* treeIDs = INTEGER(R_treeIDs);
+    int* max_nodes = (int*)malloc(sizeof(int)*length(R_treeIDs));
+    hpdRFnode** new_trees = (hpdRFnode**)
+      malloc(sizeof(hpdRFnode*)*length(R_treeIDs));
+    int j = 0;
+    for(int i = 0; i < forest->ntree; i++)
+      {
+	if(treeIDs[j]-1 == i)
+	  {
+	    max_nodes[j] = forest->max_nodes[i];
+	    new_trees[j++] = forest->trees[i];
+	  }
+	else
+	  destroyTree(forest->trees[i]);
+      }
+    free(forest->trees);
+    forest->trees = new_trees;
+    free(forest->max_nodes);
+    forest->max_nodes = max_nodes;
+    forest->ntree = length(R_treeIDs);
+
+    return R_NilValue;
+  }
+
+  SEXP getLeafCounts(SEXP R_forest)
+  {
+    hpdRFforest * forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
+    SEXP counts;
+    PROTECT(counts = allocVector(INTSXP,forest->nleaves));
+    for(int i = 0 ; i < forest->nleaves; i++)
+      {
+	if(forest->leaf_nodes != NULL &&
+	   forest->leaf_nodes[i] != NULL && 
+	   forest->leaf_nodes[i]->additional_info != NULL)
+	  INTEGER(counts)[i] = forest->leaf_nodes[i]->additional_info->num_obs;
+	else
+	  INTEGER(counts)[i] = 0;
+      }
+    UNPROTECT(1);
+    return counts;
+  }
+  SEXP getLeafIDs(SEXP R_forest)
+  {
+    hpdRFforest * forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
+    SEXP leaf_ids;
+    PROTECT(leaf_ids = allocVector(INTSXP,forest->nleaves));
+    for(int i = 0 ; i < forest->nleaves; i++)
+      {
+	if(forest->leaf_nodes != NULL &&
+	   forest->leaf_nodes[i] != NULL && 
+	   forest->leaf_nodes[i]->additional_info != NULL)
+	  INTEGER(leaf_ids)[i] = 
+	    forest->leaf_nodes[i]->additional_info->leafID;
+	else
+	  INTEGER(leaf_ids)[i] = 0;
+      }
+    UNPROTECT(1);
+    return leaf_ids;
+  }
+  SEXP getLeafTreeIDs(SEXP R_forest)
+  {
+    hpdRFforest * forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
+    SEXP tree_ids;
+    PROTECT(tree_ids = allocVector(INTSXP,forest->nleaves));
+    for(int i = 0 ; i < forest->nleaves; i++)
+      {
+	if(forest->leaf_nodes != NULL &&
+	   forest->leaf_nodes[i] != NULL)
+	  INTEGER(tree_ids)[i] = forest->leaf_nodes[i]->treeID;
+	else
+	  INTEGER(tree_ids)[i] = 0;
+      }
+    UNPROTECT(1);
+    return tree_ids;
+
   }
 
 }

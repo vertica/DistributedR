@@ -120,6 +120,26 @@ start_workers <- function(cluster_conf,
   if (rmt_uid==""){
     rmt_uid = Sys.getenv(c("USER"))
   }
+
+  library(XML)
+  resourcePool <- data.frame()
+  iscolocated <- isColocated(cluster_conf)
+  if(isTRUE(iscolocated)){
+	dsnName <- getDSN_Name(cluster_conf)
+	if(is.null(dsnName) | dsnName == 'NULL'){
+		stop("DSN Name in the config file cannot be null when Co-locating with Vertica.")
+	}
+	
+	if(! require(vRODBC))
+	     library(RODBC)
+	connect <- odbcConnect(dsnName)
+	resourcePool <- sqlQuery(connect, "select memory_size_kb, cpu_affinity_mask, cpu_affinity_mode from resource_pool_status where pool_name = 'distributedr' limit 1");
+	close(connect)
+	if(nrow(resourcePool)!=1){
+		stop("Could not locate the distritubedr resource pool. Please create a resource pool named distributedr.")
+	}
+  }
+
   worker_conf <- conf2df(cluster_conf)
   master_addr <- get_pm_object()$get_master_addr()
   master_port <- get_pm_object()$get_master_port()
@@ -150,11 +170,19 @@ start_workers <- function(cluster_conf,
       sp_opt <- getOption("scipen")  # This option value determines whether exponentional or fixed expression will be used (m and e should not not be expressed using exponentional expression)
       options("scipen"=100000)
 
+      if(isTRUE(iscolocated)){
+      cmd <- paste("ssh -n", paste(rmt_uid,"@",r$Hostname,sep=""), "'cd",rmt_home,";", bin_path, 
+                   "-m", m, "-e", e, "-p", r$StartPortRange, "-q", r$EndPortRange, "-l", log, "-a", master_addr, "-b", master_port,
+		   "-c", iscolocated, "-o", resourcePool[1,1], "-k", resourcePool[1,2], "-d", resourcePool[1,3],
+		   "-w", r$Hostname, env_variables, "'", sep=" ")
+      }else{
       cmd <- paste("ssh -n", paste(rmt_uid,"@",r$Hostname,sep=""), "'cd",rmt_home,";", bin_path, 
                    "-m", m, "-e", e, "-p", r$StartPortRange, "-q", r$EndPortRange, "-l", log, "-a", master_addr, "-b", master_port,
                    "-w", r$Hostname, env_variables, "'", sep=" ")
+      }
+      
       options("scipen"=sp_opt)
-      #print(sprintf("cmd: %s",cmd))
+      ##print(sprintf("cmd: %s",cmd))
       system(cmd, wait=FALSE, ignore.stdout=TRUE, ignore.stderr=TRUE)
     }
   }, error = handle_presto_exception)
@@ -255,6 +283,28 @@ conf2df <- function(cluster_conf) {
       conf_df <- data.frame(Hostname=hosts, StartPortRange=port_start, EndPortRange=port_end, Executors=NA, SharedMemory=NA, stringsAsFactors=FALSE)
       return(conf_df)
   }}, error = handle_presto_exception)
+}
+
+# read the config file and determine if the flag isColocated is true or false.
+isColocated <- function(cluster_conf){
+tryCatch({
+   if(file.access(cluster_conf,mode=4)==-1) stop("Cannot read configuration file. Check file permissions.")
+   conf_xml <- xmlToList(cluster_conf)
+   iscolocated <- FALSE
+   if(!is.null(conf_xml$ServerInfo$isColocatedWithVertica)){
+	iscolocated <- conf_xml$ServerInfo$isColocatedWithVertica
+   }
+   return(as.logical(iscolocated))
+}, error = handle_presto_exception)
+}
+
+#read the config file and determine the DSN name.
+getDSN_Name <- function(cluster_conf){
+tryCatch({
+   if(file.access(cluster_conf,mode=4)==-1) stop("Cannot read configuration file. Check file permissions.")
+   conf_xml <- xmlToList(cluster_conf)
+   return(conf_xml$ServerInfo$VerticaDSN)
+}, error = handle_presto_exception)
 }
 
 distributedR_shutdown <- function(pm=NA, quiet=FALSE) {

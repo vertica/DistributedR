@@ -5,7 +5,7 @@
 \code{splitGraphFile} function is an example for splitting an edge-list file of a graph, and distributing the results among the active nodes of a cluster system. The result of this function can be fed to \code{file2dgraph} function to create a darray for adjacency matrix. The input edge-list is assumed zero-based; i.e., the id of the first edge is zero. The total number of vertices will be calculated according to the maximum vertex id in the input file, and for any missed vertex id a dummy vertex will be assumed; i.e., a vertex with no connected edge.
 }
 \usage{
-splitGraphFile(inputFile, npartitions, outputPath, isNFS = FALSE)
+splitGraphFile(inputFile, npartitions, outputPath, isNFS = FALSE, row_wise = FALSE)
 }
 
 \arguments{
@@ -20,6 +20,9 @@ splitGraphFile(inputFile, npartitions, outputPath, isNFS = FALSE)
   }
   \item{isNFS}{
     TRUE indicates that outputPath is on NFS; therefore, only one copy of files will be sent to the destination. When it is FALSE (defualt) a copy of the files will be sent to every active node in the pool.
+  }
+  \item{row_wise}{
+    when it is FALSE (defualt), the file is split based on the second vertices (target) of the edge list. In contrast, when it is TRUE, the file is split based on the first vertices (source).
   }
 }
 

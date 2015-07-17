@@ -43,13 +43,16 @@
 #include <boost/thread/condition_variable.hpp>
 #include <boost/thread/locks.hpp>
 
+#ifdef PERF_TRACE
+#include <ztracer.hpp>
+#endif
 
 //using namespace boost;
 using namespace std;
 using namespace zmq;
 
 namespace presto {
-
+    
 class WorkerInfo {
  public:
   WorkerInfo(const string& hostname, int32_t port, context_t* zmq_ctx, int32_t id = 0);
@@ -108,7 +111,7 @@ class WorkerInfo {
   boost::condition_variable message_queue_empty_;
   list<WorkerRequest> message_queue_;
 };
-
+   
 }  // namespace presto
 
 #endif  // _PRESTO_WORKER_INFO_

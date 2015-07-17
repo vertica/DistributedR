@@ -32,7 +32,7 @@
  @histogram - the histogram that has to be filled in
  */
 template <typename resp_type>
-void buildHistogram(SEXP R_observations_feature, SEXP R_responses,
+double buildHistogram(SEXP R_observations_feature, SEXP R_responses,
 		    double* observations_weights, 
 		    int* node_observations, int node_observations_num, 
 		    int bin_num, int class_num,
@@ -45,6 +45,8 @@ void buildHistogram(SEXP R_observations_feature, SEXP R_responses,
   register double weight;
   double* hist = REAL(histogram);
   register resp_type response;
+  double L2 = 0;
+
   if(response_categorical)
     {
       for(int  observation = 0; observation < node_observations_num; observation++)
@@ -68,8 +70,10 @@ void buildHistogram(SEXP R_observations_feature, SEXP R_responses,
 	  response = responses[node_observations[observation]-1];
 	  hist[bin] += weight;
 	  hist[bin+1] += weight*response;
+	  L2 += weight*response*response;
 	}
     }  
+  return L2;
 }
 
 extern "C"
@@ -170,10 +174,12 @@ extern "C"
 						  features_categorical[featureIndex] != NA_INTEGER, \
 						  response_categorical, histogram_curr)
 
+	    double L2 = 0;
 	    if(TYPEOF(VECTOR_ELT(R_responses,0)) == INTSXP)
-	      buildSingleHistogram(int);
+	      L2 = buildSingleHistogram(int);
 	    else if(TYPEOF(VECTOR_ELT(R_responses,0)) == REALSXP)
-	      buildSingleHistogram(double);
+	      L2 = buildSingleHistogram(double);
+	    setAttrib(histogram_curr,install("L2"),ScalarReal(L2));
 	    SET_VECTOR_ELT(node_histograms,feature,histogram_curr);
 	    SEXP featureAttrib = getAttrib(histogram_curr,install("feature"));
 	    *INTEGER(featureAttrib) = featureIndex+1;

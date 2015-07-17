@@ -22,6 +22,7 @@
 #include<stdlib.h>
 #include<stdio.h>
 #include<string.h>
+#include<time.h>
 
 
 typedef struct 
@@ -82,7 +83,11 @@ int* unserializeTree(hpdRFnode *tree, int* buffer, hpdRFnode**leaf_nodes);
 int countSubTree(hpdRFnode *tree);
 void reformatTree(hpdRFnode* tree, SEXP forest, int* index, 
 		  int *features_cardinality, int nrow, int treeID);
-  
+hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
+				    int *feature_cardinality, int obs_index,
+				    bool na_pass, int* leaf_count, 
+				    double** weight);
+
 /*
  This function takes an array from R and converts it to C format by 
  returning a pointer to the actual data values

@@ -1067,6 +1067,12 @@ hpdglm.fit <-
 ## A supplementary function for deployment
 # inputModel: it is the model that is going to be prepared for deployment
 deploy.hpdglm <- function(inputModel) {
+    # clearing the environments
+    environment(inputModel$family$validmu) <- globalenv()
+    environment(inputModel$family$aic) <- globalenv()
+    environment(inputModel$family$dev.resids) <- globalenv()
+    environment(inputModel$family$variance) <- globalenv()
+
     if(is.null(inputModel$coefficients) || !length(inputModel$coefficients))
         stop("the model does not contain coefficients and cannot be used for prediction")
     fitSummary <- summary.hpdglm(inputModel)

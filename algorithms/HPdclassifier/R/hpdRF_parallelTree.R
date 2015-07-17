@@ -208,12 +208,12 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	
 	#limit 20% of free_mem and free_sh_mem to book keeping
 	max_rows_per_partition = max(partitionsize(responses)[,1])
-	max_trees_per_iteration = as.integer(floor(min(ntree, 
+	max_trees_per_iteration = as.integer(floor(min(10000,ntree, 
 				0.10*free_mem/max_rows_per_partition,
 				0.10*free_sh_mem/max_rows_per_partition)))
 
 	#limit 25% of free_mem and free_sh_mem to building histograms
-	max_nodes_per_iteration = as.integer(floor(min(
+	max_nodes_per_iteration = as.integer(floor(min(10000,
 				0.25*free_mem/sizeof_node_histogram,
 				0.25*free_sh_mem/sizeof_node_histogram)))
 
@@ -339,13 +339,17 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			responses, oob_indices, cutoff, classes, do.trace)
 			},error = function(e)
 			{
-				print("aborting oob computations. received error:", e)
+				print(paste("aborting oob computations. received error:", e))
 			})
 	}
 
 	if(do.trace & completeModel)
 	print("computing additional statistics")
 	timing_info <- Sys.time()
+
+	rm(observations)
+	rm(responses)
+	gc()
 
 	model = list()
 	model$predicted = oob_predictions$oob_predictions
@@ -359,7 +363,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	}
 
 	model$call = match.call()
-	model$ntree = ntree
+	model$ntree = length(model$forest$trees)-1
 	model$mtry = mtry
 	model$test = list()
 	model$terms = variables$terms
@@ -486,7 +490,7 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 	if(!missing(cutoff))
 	{
 		if(length(cutoff) != length(model$classes))
-				  stop("'cutoff' must have exactly as many elements as number of classes")
+			stop("'cutoff' must have exactly as many elements as number of classes")
 		if(any(cutoff <= 0) | any(is.infinite(cutoff)))
 			      stop("'cutoff' must be positive and finite")
 		cutoff = as.numeric(cutoff)
@@ -506,9 +510,14 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 
 
 	newdata = variables$x
-	predictions = .predict.hpdRF_distributedForest(model$forest,
+	
+	prediction_outputs = .predict.hpdRF_distributedForest(model$forest,
 		    newdata, cutoff = cutoff, classes= model$classes, 
-		    trace = do.trace)
+		    trace = do.trace, dforest = model$dforest)
+
+	predictions = prediction_outputs$predictions
+	dforest = prediction_outputs$dforest
+	model$dforest = dforest
 
 	colnames(predictions) <- "predictions"	
 	if(was.data.frame)
@@ -529,7 +538,6 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 	if(trace)
 	print("processing formula")
 	
-
 	terms = dlist(npartitions = npartitions(x))
 	foreach(i,1:npartitions(data), function(
 				       data = splits(data,i),
@@ -555,7 +563,9 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 			update(y)
 			}
 		}
-		x <- model.frame(delete.response(model_terms), data = data)
+		x <- model.frame(delete.response(model_terms), 
+		     	data = data, na.action = na.action)
+
 		attr(x,"terms") <- NULL
 		rm(data)
 		print(gc())
@@ -563,6 +573,7 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 		model_terms = list(model_terms)
 		update(model_terms)
 	},progress = trace)
+
 
 	suppressWarnings({
 	x_levels = levels.dframe(x)
@@ -670,6 +681,8 @@ deploy.hpdRF_parallelTree <- function(model)
 	class(model) <- c("hpdrandomForest", 
 		     "randomForest", "randomForest.formula")
 	model$forest$trees <- NULL
+    # clearing environment
+    environment(model$terms) <- globalenv()
 
 	return(model)
 }
@@ -723,3 +736,4 @@ print.hpdRF_parallelTree <- function(model, max_depth = 2)
 	}
 
 }
+

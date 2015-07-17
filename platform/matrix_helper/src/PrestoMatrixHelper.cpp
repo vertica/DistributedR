@@ -35,6 +35,7 @@ static SEXP RSymbol_x = NULL;
     RSymbol_##symbol = Rf_install(#symbol); \
   }
 
+// Not used, ecxept benchmarks
 /* Calculated the shortest distance given a weight vector(array)
 ** by computing omputes w = min(w, A min.+ v)  reference Bellman-Ford algorithm
 ** value of -1 means infinite distance (no direct path)
@@ -58,6 +59,7 @@ RcppExport SEXP mmult_dense_minplus(signed int *weightArray, unsigned int *numRo
   END_RCPP
 }
 
+// Not used, ecxept benchmarks
 /* Calculated the shortest distance given a weight vector expressed using SparseMatrix
 ** by computing omputes w = min(w, A min.+ v)  reference Bellman-Ford algorithm
 ** emtry entry or -1 in the source/dest vector means no path!
@@ -80,6 +82,13 @@ RcppExport SEXP mmult_sparse_minplus(int *nz, int *row, int *p, int *x, int *sou
   END_RCPP
 }
 
+// used in platform/executor/R/executor.R
+/*
+** This function performs a multiplication of vector/matrix and sparse matrix ("dgCMatrix" format)
+** vec: the input vector or matrix. The number of column should be the same as the number of row of mx.
+** mx: the input sparse matrix
+** size: the number of rows of vec (it should be 1 when vec is a vector)
+*/
 RcppExport SEXP spvm(SEXP vec, SEXP mx, SEXP size) {
   BEGIN_RCPP
   if (RSymbol_dim == NULL)
@@ -125,6 +134,13 @@ RcppExport SEXP spvm(SEXP vec, SEXP mx, SEXP size) {
   END_RCPP
 }
 
+// used in platform/executor/R/executor.R
+/*
+** This function performs a multiplication of sparse matix ("dgCMatrix" format) and vector/dense matrix
+** mx: the input sparse matrix. The number of column should be the same as the number of row of vec
+** vec: the input vector/dense matrix
+** size: the number of columns of vec (it should be 1 when vec is a vector)
+*/
 RcppExport SEXP spmv(SEXP mx, SEXP vec, SEXP size) {
   BEGIN_RCPP
   if (RSymbol_dim == NULL)
@@ -174,6 +190,13 @@ RcppExport SEXP spmv(SEXP mx, SEXP vec, SEXP size) {
   END_RCPP
 }
 
+// Not used
+/*
+** This function performs a multiplication of sparse matix ("triplet" format) and vector/dense matrix
+** mx: the input sparse matrix. The number of column should be the same as the number of row of vec
+** vec: the input vector/dense matrix
+** size: the number of columns of vec (it should be 1 when vec is a vector)
+*/
 RcppExport SEXP spmv_triplet(SEXP mx, SEXP vec, SEXP size) {
   BEGIN_RCPP
   if (RSymbol_dim == NULL)
@@ -223,6 +246,13 @@ RcppExport SEXP spmv_triplet(SEXP mx, SEXP vec, SEXP size) {
   END_RCPP
 }
 
+// Not used
+/*
+** This function performs a multiplication of vector/matrix and sparse matrix ("triplet" format)
+** vec: the input vector or matrix. The number of column should be the same as the number of row of mx.
+** mx: the input sparse matrix
+** size: the number of rows of vec (it should be 1 when vec is a vector)
+*/
 RcppExport SEXP spvm_triplet(SEXP vec, SEXP mx, SEXP size) {
   BEGIN_RCPP
   if (RSymbol_dim == NULL)
@@ -266,6 +296,11 @@ RcppExport SEXP spvm_triplet(SEXP vec, SEXP mx, SEXP size) {
   END_RCPP
 }
 
+// used in algorithms/HPdgraph/R/hpdpagerank.R
+/*
+** rowSum function for a sparse matrix
+** mx: the sparse matrix
+*/
 RcppExport SEXP rowSums(SEXP mx) {
   BEGIN_RCPP
   if (RSymbol_dim == NULL)
@@ -294,380 +329,12 @@ RcppExport SEXP rowSums(SEXP mx) {
   END_RCPP
 }
 
+// used in algorithms/HPdata/R/graphLoader.R
 /*
-**  Calculating K-means clustering based on Lloyd algorithm
-**  Rx: the matrix of samples
-**  Rnorm: the matrix of norms
-**  Rcen: the matrix of centers
-**  Rcl: the vector of cluster labels
-**  Rnc: the number of points in each cluster
-*/
-
-RcppExport SEXP hpdkmeans_Lloyd(SEXP Rx, SEXP Rnorm, SEXP Rcen, SEXP Rcl, SEXP Rnc)
-{
-    BEGIN_RCPP
-    int n, k, p, cencol;
-    int i, j, c, it, inew = 0;
-    double best, dd, tmp;
-    double *x, *norm, *cen;
-    int *cl, *nc;
-    double approxDistance = 0;
-
-    int * dimx = INTEGER(Rf_getAttrib(Rx, R_DimSymbol));
-    n = dimx[0]; // number of samples
-    p = dimx[1]; // number of predictors
-    int *dimc = INTEGER(Rf_getAttrib(Rcen, R_DimSymbol));
-    k = dimc[0]; // number of centers
-    cencol = dimc[1];
-/*
-    int * dimnorm = INTEGER(Rf_getAttrib(Rnorm, R_DimSymbol));
-    if(dimnorm[0] != n)
-        Rf_error("Wrong number of norms");
-    if(dimnorm[1] != 1)
-        Rf_error("There must be only one norm per sample");
-*/
-    Rx = Rf_coerceVector(Rx, REALSXP);
-    Rnorm = Rf_coerceVector(Rnorm, REALSXP);
-    Rcen = Rf_coerceVector(Rcen, REALSXP);
-    Rcl = Rf_coerceVector(Rcl, INTSXP);
-    Rnc = Rf_coerceVector(Rnc, INTSXP);
-
-    x = REAL(Rx);
-    norm = REAL(Rnorm);
-    cen = REAL(Rcen);
-    cl = INTEGER(Rcl);
-    nc = INTEGER(Rnc);
-
-    if(Rf_length(Rnorm) != n)
-        Rf_error("Wrong number of norms");
-    x = REAL(Rx);
-    if( p != cencol )
-        Rf_error("Wrong dimention of matrices");
-    if( Rf_length(Rcl) != n )
-        Rf_error("wrong dimention of cl");
-    if( Rf_length(Rnc) != k )
-        Rf_error("wrong dimention of nc");
-
-    // calculating the norm of centers
-    Rcpp::DoubleVector centerNorm(k);
-    for(i = 0; i < k; i++) // iterating on centers
-        for(j = 0; j < p; j++) // iterating on features
-            centerNorm[i] += cen[i+k*j] * cen[i+k*j];
-    for(i = 0; i < k; i++) // iterating on centers
-        centerNorm[i] = std::sqrt(centerNorm[i]);
-
-    // clear all the cluster labels
-    for(i = 0; i < n; i++) cl[i] = -1;
-    for(i = 0; i < n; i++) { // iterating on samples
-        // find nearest centre for each point 
-        best = R_PosInf;
-        for(j = 0; j < k; j++) { // iterating on centers
-            approxDistance = norm[i] - centerNorm[j];
-            approxDistance *= approxDistance;
-            if(best < approxDistance) continue;
-	        dd = 0.0;
-	        for(c = 0; c < p; c++) { // iterating on features
-	            tmp = x[i+n*c] - cen[j+k*c];
-	            dd += tmp * tmp;
-	        }
-	        if(dd < best) {
-	            best = dd;
-	            inew = j+1;
-	        }
-        }
-        if(cl[i] != inew) {
-               cl[i] = inew;
-        }
-    }
-    // update each centre
-    for(j = 0; j < k*p; j++) cen[j] = 0.0;
-    for(j = 0; j < k; j++) nc[j] = 0;
-    for(i = 0; i < n; i++) {
-        it = cl[i] - 1; nc[it]++;
-        for(c = 0; c < p; c++) cen[it+c*k] += x[i+c*n];
-    }
-    for(j = 0; j < k*p; j++) cen[j] /= nc[j % k];
-
-    return R_NilValue;
-    END_RCPP
-}
-
-/*
-** Calculates the norm of input vectors (used in hpdkmeans)
-**  Rx: the matrix of samples
-**  Rnorm: the matrix of norms
-*/
-RcppExport SEXP calculate_norm(SEXP Rx, SEXP Rnorm) {
-    BEGIN_RCPP
-    int n, p;
-    int i,j;
-    double *x, *norm;
-
-    int * dimx = INTEGER(Rf_getAttrib(Rx, R_DimSymbol));
-    n = dimx[0]; // number of samples
-    p = dimx[1]; // number of predictors
-/*
-    int * dimnorm = INTEGER(Rf_getAttrib(Rnorm, R_DimSymbol));
-    if(dimnorm[0] != n)
-        Rf_error("Wrong number of norms");
-    if(dimnorm[1] != 1)
-        Rf_error("There must be only one norm per sample");
-*/
-    Rx = Rf_coerceVector(Rx, REALSXP);
-    Rnorm = Rf_coerceVector(Rnorm, REALSXP);
-    if(Rf_length(Rnorm) != n)
-        Rf_error("Wrong number of norms");
-    x = REAL(Rx);
-    norm = REAL(Rnorm);
-
-    // calcilating the norm of samples
-    for(i = 0; i < n; i++) // iterating on samples
-        for(j = 0; j < p; j++) // iterating on features
-            norm[i] += x[i+n*j] * x[i+n*j];
-    for(i = 0; i < n; i++) // iterating on samples
-        norm[i] = std::sqrt(norm[i]);
-        
-    return Rnorm;
-    END_RCPP
-}
-
-/*
-** Calculates wss (used in hpdkmeans)
-**  Rx: the matrix of samples
-**  Rcen: the matrix of centers
-**  Rcl: the vector of cluster labels
-*/
-RcppExport SEXP calculate_wss(SEXP Rx, SEXP Rcen, SEXP Rcl) {
-    BEGIN_RCPP
-    int n, k, p, cencol;
-    int i, j, label;
-    double *x, *cen;
-    int *cl;
-    double dd, temp;
-
-    int * dimx = INTEGER(Rf_getAttrib(Rx, R_DimSymbol));
-    n = dimx[0]; // number of samples
-    p = dimx[1]; // number of predictors
-    int *dimc = INTEGER(Rf_getAttrib(Rcen, R_DimSymbol));
-    k = dimc[0]; // number of centers
-    cencol = dimc[1];
-
-    Rx = Rf_coerceVector(Rx, REALSXP);
-    Rcen = Rf_coerceVector(Rcen, REALSXP);
-    Rcl = Rf_coerceVector(Rcl, INTSXP);
-
-    x = REAL(Rx);
-    cen = REAL(Rcen);
-    cl = INTEGER(Rcl);
-
-    if( p != cencol )
-        Rf_error("Wrong dimention of matrices");
-    if( Rf_length(Rcl) != n )
-        Rf_error("wrong dimention of cluster labels");
-
-    // the vector of wss
-    Rcpp::DoubleVector dwss(k);
-    for(i = 0; i < k; i++)
-        dwss[i] = 0;
-
-    for(i = 0; i < n; i++) { // iterating on samples
-        dd = 0;
-        label = cl[i] - 1;
-        for(j = 0; j < p; j++) { // iterating on features
-            temp = x[i+n*j] - cen[label+k*j];
-            dd += temp * temp;
-        }
-        dwss[label] += dd;
-    }
-
-    return dwss;
-    END_RCPP
-}
-
-
-/*
-** The calculation in each iteration of pagerank when the graph (mx) is sparse
-** newPR: the new pagerank vector
-** PR: the old pagerank vector
-** mx: a split of the graph
-** TP: the number of outgoing edges of each vertex
-** damping: damping factor
-** personalized: personalized vector
-** weights: matrix of weights
-*/
-RcppExport SEXP pagerank_spvm(SEXP newPR, SEXP PR, SEXP mx, SEXP TP, SEXP damping, SEXP personalized, SEXP weights) {
-  BEGIN_RCPP
-  if (RSymbol_dim == NULL)
-    RSymbol_dim = R_DimSymbol;
-  INSTALL_SYMBOL(Dim);
-  INSTALL_SYMBOL(i);
-  INSTALL_SYMBOL(p);
-  INSTALL_SYMBOL(x);
-
-  SEXP dim = Rf_getAttrib(mx, RSymbol_Dim);
-  int nVertices = INTEGER(dim)[0]; // the splits are column-wise partitioned, so #rows == nVertices
-  int y = INTEGER(dim)[1];
-
-  int *dim_newpr = INTEGER(Rf_getAttrib(newPR, R_DimSymbol));
-  if (dim_newpr[0] != 1 || dim_newpr[1] != y)
-    Rcpp::stop("The dimensions of newPR are not correct");
-  int *dim_pr = INTEGER(Rf_getAttrib(PR, R_DimSymbol));
-  if (dim_pr[0] != 1 || dim_pr[1] != nVertices)
-    Rcpp::stop("The dimensions of PR are not correct");
-  int *dim_tp = INTEGER(Rf_getAttrib(TP, R_DimSymbol));
-  if (dim_tp[0] != nVertices || dim_tp[1] != 1)
-    Rcpp::stop("The dimensions of TP are not correct");
-
-  bool no_Per = Rf_isNull(personalized);
-  double *personalized_vec;
-  if (! no_Per) {
-    int *dim_persona = INTEGER(Rf_getAttrib(personalized, R_DimSymbol));
-    if (dim_persona[0] != 1 || dim_persona[1] != y)
-      Rcpp::stop("The dimensions of personalized are not correct");
-    personalized_vec = REAL(personalized); // personlized vector
-  }
-
-  bool no_weight = Rf_isNull(weights);
-  double *weights_vec;
-  int *iw_vec;
-  int *pw_vec;
-  if (! no_weight) {
-    int *dim_weights = INTEGER(Rf_getAttrib(weights, RSymbol_Dim));
-    if (dim_weights[0] != nVertices || dim_weights[1] != y)
-      Rcpp::stop("The dimensions of weights are not correct");
-    weights_vec = REAL(Rf_getAttrib(weights, RSymbol_x)); // weights matrix
-    iw_vec = INTEGER(Rf_getAttrib(weights, RSymbol_i));
-    pw_vec = INTEGER(Rf_getAttrib(weights, RSymbol_p));
-  }
-
-  double damp = Rcpp::as<double>(damping);
-
-  double *v1 = REAL(PR);
-  double *v2 = REAL(newPR);
-  double *tp = REAL(TP);
-  double *x_vec = REAL(Rf_getAttrib(mx, RSymbol_x));
-  int *i_vec = INTEGER(Rf_getAttrib(mx, RSymbol_i));
-  int *p_vec = INTEGER(Rf_getAttrib(mx, RSymbol_p));
-  double tempRes;
-
-  for (int i = 0; i < y; i++) {
-    v2[i] = 0;
-    for (int j = p_vec[i]; j < p_vec[i+1]; j++) {
-      tempRes = x_vec[j] * v1[i_vec[j]];
-
-      if (! no_weight) {
-        bool found = false;
-        // to find the corresponding element of weights
-        for (int jw = pw_vec[i]; jw < pw_vec[i+1]; jw++) {
-            if (iw_vec[jw] == i_vec[j]) {
-                tempRes *= weights_vec[jw];
-                found = true;
-                break;
-            }
-        }
-        if (! found)
-            tempRes = 0;
-      }
-
-      if (tp[i_vec[j]] != 0)
-        tempRes /= tp[i_vec[j]];
-
-      v2[i] +=  tempRes ;
-    }
-    v2[i] *= damp;
-    if (no_Per) {
-      v2[i] += ((1 - damp) / nVertices);
-    } else {
-      v2[i] += ((1 - damp) * personalized_vec[i]);
-    }
-  }
-  return R_NilValue;
-  END_RCPP
-}
-
-/*
-** The calculation in each iteration of pagerank when the graph (mx) is dense
-** newPR: the new pagerank vector
-** PR: the old pagerank vector
-** mx: a split of the graph
-** TP: the number of outgoing edges of each vertex
-** damping: damping factor
-** personalized: personalized vector
-** weights: matrix of weights
-*/
-RcppExport SEXP pagerank_vm(SEXP newPR, SEXP PR, SEXP mx, SEXP TP, SEXP damping, SEXP personalized, SEXP weights) {
-  BEGIN_RCPP
-
-  SEXP dim = Rf_getAttrib(mx, R_DimSymbol);
-  int nVertices = INTEGER(dim)[0]; // the splits are column-wise partitioned, so #rows == nVertices
-  int y = INTEGER(dim)[1];
-
-  int *dim_newpr = INTEGER(Rf_getAttrib(newPR, R_DimSymbol));
-  if (dim_newpr[0] != 1 || dim_newpr[1] != y)
-    Rcpp::stop("The dimensions of newPR are not correct");
-  int *dim_pr = INTEGER(Rf_getAttrib(PR, R_DimSymbol));
-  if (dim_pr[0] != 1 || dim_pr[1] != nVertices)
-    Rcpp::stop("The dimensions of PR are not correct");
-  int *dim_tp = INTEGER(Rf_getAttrib(TP, R_DimSymbol));
-  if (dim_tp[0] != nVertices || dim_tp[1] != 1)
-    Rcpp::stop("The dimensions of TP are not correct");
-
-  bool no_Per = Rf_isNull(personalized);
-  double *personalized_vec;
-  if (! no_Per) {
-    int *dim_persona = INTEGER(Rf_getAttrib(personalized, R_DimSymbol));
-    if (dim_persona[0] != 1 || dim_persona[1] != y)
-      Rcpp::stop("The dimensions of personalized are not correct");
-    personalized_vec = REAL(personalized); // personlized vector
-  }
-
-  bool no_weight = Rf_isNull(weights);
-  double *weights_mx;
-  if (! no_weight) {
-    int *dim_weights = INTEGER(Rf_getAttrib(weights, R_DimSymbol));
-    if (dim_weights[0] != nVertices || dim_weights[1] != y)
-      Rcpp::stop("The dimensions of weights are not correct");
-    weights_mx = REAL(weights); // weights matrix
-  }
-
-  double damp = Rcpp::as<double>(damping);
-  double *v1 = REAL(PR);
-  double *v2 = REAL(newPR);
-  double *tp = REAL(TP);
-
-  mx = Rf_coerceVector(mx, INTSXP);
-  int *x_vec = INTEGER(mx);
-  double tempRes;
-
-  for (int i = 0; i < y; i++) {
-    v2[i] = 0;
-    for (int j = 0; j < nVertices; j++) {
-      int k = j+ i * nVertices;
-      tempRes = x_vec[k] * v1[j];
-
-      if (! no_weight)
-        tempRes *= weights_mx[k];
-      if (tp[j] != 0)
-        tempRes /= tp[j];
-
-      v2[i] +=  tempRes ;
-    }
-    v2[i] *= damp;
-    if (no_Per) {
-      v2[i] += ((1 - damp) / nVertices);
-    } else {
-      v2[i] += ((1 - damp) * personalized_vec[i]);
-    }
-
-  }
-  return R_NilValue;
-  END_RCPP
-}
-
-/*
-** Creating a sparse matrix with elemnts x=1
+** Creating a sparse matrix
 ** iIndex: the row indices
 ** jIndex: the col indices
+** xValue: the vector of x values
 ** d: dimensions of the matrix
 */
 RcppExport SEXP hpdsparseMatrix(SEXP iIndex, SEXP jIndex, SEXP xValue, SEXP d) {

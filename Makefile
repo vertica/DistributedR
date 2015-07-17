@@ -26,7 +26,7 @@ all: third_party ${ATOMICIO_LIB} ${WORKER_BIN} ${MASTER_BIN} ${MASTER_RLIB} ${EX
 lint:
 	tools/lint.sh ${PRESTO_WORKER_SRC} ${PRESTO_MASTER_SRC} ${PRESTO_WORKER_HEADERS} ${PRESTO_MASTER_HEADERS} ${PRESTO_COMMON_HEADERS} ${PRESTO_COMMON_SRC} ${PRESTO_EXECUTOR_HEADERS} ${PRESTO_EXECUTOR_SRC}
 
-.PHONY: clean third_party test boost docs manual tutorial faq distclean install
+.PHONY: clean third_party test boost docs manual tutorial faq distclean install blkin trace_build
 
 ${ATOMICIO_LIB}:
 	$(MAKE) -C third_party/atomicio
@@ -41,6 +41,12 @@ install:
 	$(MAKE)
 	sudo bin/install_distributedR.sh
 
+blkin: 
+	$(MAKE) -C third_party -j8 blkin
+
+trace_build: GCC_FLAGS += -I ${BLKIN_INCLUDE} -DPERF_TRACE ${BLKIN_LINKER_FLAGS}
+
+trace_build: clean blkin all
 
 ## === Test targets
 

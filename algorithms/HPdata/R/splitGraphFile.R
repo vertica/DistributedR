@@ -19,7 +19,9 @@
 ## outputPath: it is the path for storing the output split files, it should be similar for master and workers
 ## isNFS: TRUE indicates that outputPath is on NFS; therefore, only one copy of files will be sent the destination.
 ##          When it is FALSE (defualt) a copy of the files will be sent to every node in the pool
-splitGraphFile <- function(inputFile, npartitions, outputPath, isNFS = FALSE) {
+# row_wise: when it is FALSE (defualt), the file is split based on the second vertices (target) of the edge list.
+#           In contrast, when it is TRUE, the file is split based on the first vertices (source).
+splitGraphFile <- function(inputFile, npartitions, outputPath, isNFS = FALSE, row_wise = FALSE) {
     # validating arguments
     if(!is.character(inputFile))
         stop("The name of the input file should be specified as a string")
@@ -39,6 +41,8 @@ splitGraphFile <- function(inputFile, npartitions, outputPath, isNFS = FALSE) {
         if(! is.null(attributes(check)))
             stop("cannot access the output path")
     }
+    if(!is.logical(row_wise))
+        stop("'row_wise' must be TRUE or FALSE.")
     
     # parsing inputPath and fileName
     tokens <- unlist(strsplit(inputFile, "/", fixed=TRUE))
@@ -53,10 +57,14 @@ splitGraphFile <- function(inputFile, npartitions, outputPath, isNFS = FALSE) {
     tempFile <- paste(tempPath,"/",fileName, sep="")
 
     # calling split function
-    result <- .Call("hpdsplitter", inputFile, 1, npartitions, tempFile, PACKAGE="HPdata")
+    if(row_wise) {
+        result <- .Call("hpdsplitter", inputFile, npartitions, 1, tempFile, PACKAGE="HPdata")
+    } else {
+        result <- .Call("hpdsplitter", inputFile, 1, npartitions, tempFile, PACKAGE="HPdata")
+    }
     if(is.null(result)) stop("Split was unsuccessful")
     nVertices <- result$nVertices   
-    nFiles <- result$colsplits    
+    nFiles <- ifelse(row_wise, result$rowsplits, result$colsplits)
 
     if(isNFS) {
         commArg <- paste("mv ", tempFile, "?* ", outputPath, sep="")
@@ -85,8 +93,8 @@ splitGraphFile <- function(inputFile, npartitions, outputPath, isNFS = FALSE) {
     commArg <- paste("rm -r ", tempPath)
     system(commArg)
 
-    list(pathPrefix=paste(outputPath,"/",fileName, sep=""), nVertices=nVertices, verticesInSplit= result$colsplitsize,
-            nFiles=nFiles, isWeighted=result$isWeighted)
+    list(pathPrefix=paste(outputPath,"/",fileName, sep=""), nVertices=nVertices, verticesInSplit= ifelse(row_wise, result$rowsplitsize, result$colsplitsize),
+            nFiles=nFiles, isWeighted=result$isWeighted, row_wise=row_wise)
 }
 
 # Example:

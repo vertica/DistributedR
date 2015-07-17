@@ -30,15 +30,16 @@
 # npartitions: number of partitions in darrays (it is an optional argument)
 # outdegree: when this optional argument is TRUE, the function also returns outdegree of the vertices; otherwise (default) does not return it
 # row_wise: if TRUE the returned darray will be row_wise partitioned
-db2dgraph <- function(tableName, dsn, from, to, weight, npartitions) {
+db2dgraph <- function(tableName, dsn, from, to, weight, npartitions, row_wise = FALSE) {
     outdegree <- FALSE  # reserved for the future
-    row_wise <- FALSE   # it is kept for future
     if(!is.character(tableName))
         stop("The name of the table should be specified")
     if(!is.character(from) || !is.character(to))
         stop("The name of the columns for pair of vertices of edge-list should be specified")
     if(is.null(dsn))
         stop("The ODBC configuration should be specified")
+    if(!is.logical(row_wise))
+        stop("'row_wise' must be TRUE or FALSE.")
 
     missingNparts <- FALSE
     if(missing(npartitions)) {
@@ -130,17 +131,14 @@ db2dgraph <- function(tableName, dsn, from, to, weight, npartitions) {
             if (row_wise) {
                 start <- (myIdx-1) * blockSize # start row in the block
                 end <- nrow(x) + start         # end row in the block
+                qryString <- paste("select \"",from,"\", \"",to,"\", \"",weight, "\" from ", tableName, " where \"",from,"\" >= ", start," and \"", from,"\" < ", end, sep="")
             } else {
                 start <- (myIdx-1) * blockSize # start column in the block
                 end <- ncol(x) + start   # end column in the block
-            }
-
-            if (row_wise) {
-                qryString <- paste("select \"",from,"\", \"",to,"\", \"",weight, "\" from ", tableName, " where \"",from,"\" >= ", start," and \"", from,"\" < ", end, sep="")
-            } else {
                 qryString <- paste("select \"",from,"\", \"",to,"\", \"",weight, "\" from ", tableName, " where \"",to,"\" >= ", start," and \"", to,"\" < ", end, sep="")
             }
-            # each worker connects to Vertica to load its partition of the darray 
+
+            # each executor connects to Vertica to load its partition of the darray 
             connect <- -1
             tryCatch(
                 {
@@ -178,16 +176,13 @@ db2dgraph <- function(tableName, dsn, from, to, weight, npartitions) {
             if (row_wise) {
                 start <- (myIdx-1) * blockSize # start row in the block
                 end <- nrow(x) + start         # end row in the block
+                qryString <- paste("select \"",from,"\", \"",to, "\" from ", tableName, " where \"",from,"\" >= ", start," and \"", from,"\" <", end, sep="")
             } else {
                 start <- (myIdx-1) * blockSize # start column in the block
                 end <- ncol(x) + start   # end column in the block
-            }
-
-            if (row_wise) {
-                qryString <- paste("select \"",from,"\", \"",to, "\" from ", tableName, " where \"",from,"\" >= ", start," and \"", from,"\" <", end, sep="")
-            } else {
                 qryString <- paste("select \"",from,"\", \"",to, "\" from ", tableName, " where \"",to,"\" >= ", start," and \"", to,"\" < ", end, sep="")
             }
+
             # each worker connects to Vertica to load its partition of the darray 
             connect <- -1
             tryCatch(
@@ -246,8 +241,7 @@ db2dgraph <- function(tableName, dsn, from, to, weight, npartitions) {
 # isWeighted: When it is FALSE (defualt) the there is no weight information in the input files
 # row_wise: it should be TRUE if the files are split based on the first vertices (source) of the edge list; 
 #           FALSE if they are split based on the second vertices (target).
-file2dgraph <- function(pathPrefix, nVertices, verticesInSplit, isWeighted) {
-    row_wise <- FALSE   # it is kept for future
+file2dgraph <- function(pathPrefix, nVertices, verticesInSplit, isWeighted, row_wise = FALSE) {
 
     if(!is.character(pathPrefix))
         stop("The pathPrefix should be specified.")

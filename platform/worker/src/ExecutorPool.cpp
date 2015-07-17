@@ -30,6 +30,10 @@
 #include "timer.h"
 #include "ExecutorPool.h"
 
+#ifdef PERF_TRACE
+  #include <ztracer.hpp>
+#endif
+
 #define MAX_LOG_NAME_SIZE 200
 
 using namespace boost;
@@ -135,6 +139,11 @@ ExecutorPool::ExecutorPool(int n_, ServerInfo *my_location_,
       if (executors[i].send != NULL && executors[i].recv != NULL) {
         executors[i].ready = true;
       }
+      
+#ifdef PERF_TRACE
+      fprintf(executors[i].send, "%d \n", i);
+#endif
+      
       LOG_INFO("Created new Executor %d with Process ID %jd", i,(::intmax_t)pid);
     }
   }
@@ -206,12 +215,10 @@ void ExecutorPool::execute(std::vector<std::string> func,
                            std::vector<NewArg> composite_args,
                            ::uint64_t id, ::uint64_t uid, Response* res) {
   LOG_DEBUG("EXECUTE TaskID %18zu - Waiting for an Available Executor", uid);
-  
-  
-
 
   //Timer timer;
   //timer.start();
+  
   sema->wait();  // the semaphore is posted when a task is done
 
   Timer total_worker_exec;
@@ -219,6 +226,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
 
   unique_lock<mutex> lock(poolmutex);
   int target_executor = -1;
+
   // iterate all executors once to check if an executor is idle
   for (int i = 0; i < num_executors; ++i) {
     if (executors[exec_index].ready == false) {
@@ -232,6 +240,15 @@ void ExecutorPool::execute(std::vector<std::string> func,
       exec_index = (exec_index + 1) % num_executors;
       lock.unlock();
 
+//Sending over trace and span information      
+#ifdef PERF_TRACE
+      struct blkin_trace_info info;
+      worker_trace->get_trace_info(&info);
+      fprintf(executors[target_executor].send, "%ld\n", info.parent_span_id);
+      fprintf(executors[target_executor].send, "%ld\n", info.span_id);
+      fprintf(executors[target_executor].send, "%ld\n", info.trace_id);   
+#endif
+      
       // write arguments about splits
       // split argument format
       // number_of_splits\n
@@ -282,7 +299,6 @@ void ExecutorPool::execute(std::vector<std::string> func,
       // repeat_until_number_of_raw_args
       if (raw_args.size() > 0)
 	      LOG_DEBUG("EXECUTE TaskID %18zu - Sending Raw Arguments to Executor.", uid);
-      
       fprintf(executors[target_executor].send, "%zu\n", raw_args.size());
       for (int j = 0; j < raw_args.size(); j++) {
         // if the raw variable is embedded in the protobuf message value field
@@ -311,7 +327,6 @@ void ExecutorPool::execute(std::vector<std::string> func,
       // repeat till the number of splits
       if (composite_args.size() > 0)
      	LOG_DEBUG("EXECUTE TaskID %18zu - Sending Composite Arguments to Executor.", uid);
-       
       fprintf(executors[target_executor].send, "%zu\n", composite_args.size());      
       for (int j = 0; j < composite_args.size(); j++) {
         // the composite array is already created in the worker
@@ -379,6 +394,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
         memset(task_msg, 0x00, sizeof(task_msg));
         // This function blocks as it is waiting for fscanf from executor.
         //LOG_INFO("Waiting for Result from Executor");
+
         int32_t ret = ParseUpdateLine(executors[target_executor].recv, cname, &size,
            &empty, &rdim, &cdim, task_msg);
         if (ret != 5) {

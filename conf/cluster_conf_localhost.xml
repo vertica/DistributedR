@@ -41,6 +41,8 @@ Suite 330, Boston, MA 02111-1307 USA
     <Hostname>127.0.0.1</Hostname>
     <StartPortRange>50000</StartPortRange>
     <EndPortRange>50100</EndPortRange>
+    <isColocatedWithVertica>FALSE</isColocatedWithVertica>
+    <VerticaDSN>NULL</VerticaDSN>
   </ServerInfo>
   <Workers>
     <Worker>

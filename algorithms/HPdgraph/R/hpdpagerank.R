@@ -144,6 +144,7 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
         #In parallel perform rowsums
         while(env$index < nparts){
             foreach(j, 1:min(nWorkers, nparts - env$index), progress=trace, sumarray<-function(dg=splits(dgraph,j+env$index), tp=splits(OutDegree,j)){
+                library(HPdgraph)
                 if(class(dg) == "matrix")
                     tp <- tp + rowSums(dg)
                 else
@@ -158,6 +159,7 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
         while(env$index < nparts){
             foreach(j, 1:min(nWorkers, nparts - env$index), progress=trace, 
                     sumarray<-function(dg=splits(dgraph,j+env$index), tp=splits(OutDegree,j), wi=splits(weights,j+env$index)){
+                library(HPdgraph)
                 if(class(dg) == "matrix")
                     tp <- tp + rowSums(dg * wi)
                 else
@@ -203,40 +205,44 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
     if(is.null(weights) && is.null(personalized)) {
         foreach(i, 1:nparts, progress=trace, function(dg=splits(dgraph,i), PR_newi=splits(PR_new,i), prOld=splits(PR),
                    damping=damping, TPs=splits(OutDegree,1)) {
+            library(HPdgraph)
             if(class(dg) == "matrix") {
-                .Call("pagerank_vm", PR_newi, prOld, dg, TPs, damping, NULL, NULL, PACKAGE="MatrixHelper")
+                .Call("pagerank_vm", PR_newi, prOld, dg, TPs, damping, NULL, NULL, PACKAGE="HPdgraph")
             } else {
-                .Call("pagerank_spvm", PR_newi, prOld, dg, TPs, damping, NULL, NULL, PACKAGE="MatrixHelper")
+                .Call("pagerank_spvm", PR_newi, prOld, dg, TPs, damping, NULL, NULL, PACKAGE="HPdgraph")
             }
             update(PR_newi)
         }, scheduler=1)
     } else if(!is.null(weights) && is.null(personalized)) {
         foreach(i, 1:nparts, progress=trace, function(dg=splits(dgraph,i), PR_newi=splits(PR_new,i), prOld=splits(PR),
                    damping=damping, TPs=splits(OutDegree,1), wi=splits(weights,i)) {
+            library(HPdgraph)
             if(class(dg) == "matrix") {
-                .Call("pagerank_vm", PR_newi, prOld, dg, TPs, damping, NULL, wi, PACKAGE="MatrixHelper")
+                .Call("pagerank_vm", PR_newi, prOld, dg, TPs, damping, NULL, wi, PACKAGE="HPdgraph")
             } else {
-                .Call("pagerank_spvm", PR_newi, prOld, dg, TPs, damping, NULL, wi, PACKAGE="MatrixHelper")
+                .Call("pagerank_spvm", PR_newi, prOld, dg, TPs, damping, NULL, wi, PACKAGE="HPdgraph")
             }
             update(PR_newi)
         }, scheduler=1)
     } else if(is.null(weights) && !is.null(personalized)) {
         foreach(i, 1:nparts, progress=trace, function(dg=splits(dgraph,i), PR_newi=splits(PR_new,i), prOld=splits(PR),
                    damping=damping, TPs=splits(OutDegree,1), peri=splits(personalized,i)) {
+            library(HPdgraph)
             if(class(dg) == "matrix") {
-                .Call("pagerank_vm", PR_newi, prOld, dg, TPs, damping, peri, NULL, PACKAGE="MatrixHelper")
+                .Call("pagerank_vm", PR_newi, prOld, dg, TPs, damping, peri, NULL, PACKAGE="HPdgraph")
             } else {
-                .Call("pagerank_spvm", PR_newi, prOld, dg, TPs, damping, peri, NULL, PACKAGE="MatrixHelper")
+                .Call("pagerank_spvm", PR_newi, prOld, dg, TPs, damping, peri, NULL, PACKAGE="HPdgraph")
             }
             update(PR_newi)
         }, scheduler=1)
     } else {
         foreach(i, 1:nparts, progress=trace, function(dg=splits(dgraph,i), PR_newi=splits(PR_new,i), prOld=splits(PR),
                    damping=damping, TPs=splits(OutDegree,1), wi=splits(weights,i), peri=splits(personalized,i)) {
+            library(HPdgraph)
             if(class(dg) == "matrix") {
-                .Call("pagerank_vm", PR_newi, prOld, dg, TPs, damping, peri, wi, PACKAGE="MatrixHelper")
+                .Call("pagerank_vm", PR_newi, prOld, dg, TPs, damping, peri, wi, PACKAGE="HPdgraph")
             } else {
-                .Call("pagerank_spvm", PR_newi, prOld, dg, TPs, damping, peri, wi, PACKAGE="MatrixHelper")
+                .Call("pagerank_spvm", PR_newi, prOld, dg, TPs, damping, peri, wi, PACKAGE="HPdgraph")
             }
             update(PR_newi)
         }, scheduler=1)

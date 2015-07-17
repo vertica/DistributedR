@@ -1,9 +1,9 @@
 Package: vRODBC
-Version: 1.1.0
+Version: 1.2.0
 Revision: $Rev: 1 $
 Date: 2015-04-17
-Author: Shreya Prasad. RODBC package authored by Brian Ripley, and from 1999 to Oct 2002 Michael Lapsley.
-Maintainer: Shreya Prasad <shreya.prasad@hp.com>
+Author: HP Vertica Analytics Team. RODBC package authored by Brian Ripley, and from 1999 to Oct 2002 Michael Lapsley.
+Maintainer: HP Vertica Analytics Team <distributedRTeam@external.groups.hp.com>
 Title: ODBC Database Access
 Description: An ODBC database interface. Includes modifications for improved access to Vertica database
 SystemRequirements: An ODBC3 driver manager and drivers.

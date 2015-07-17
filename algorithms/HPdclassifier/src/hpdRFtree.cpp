@@ -25,10 +25,9 @@ int calculateBufferSize(hpdRFnode* tree)
 {
   int total = sizeof(double) + 4*sizeof(int);
   total += tree->split_criteria_length*sizeof(double);
-
   if(tree->additional_info)
-    total += 4*sizeof(int)+
-      tree->additional_info->num_obs*(sizeof(double) + sizeof(int));
+      total += 4*sizeof(int)+
+	tree->additional_info->num_obs*(sizeof(double) + sizeof(int));
 
   if(tree->left)
     total += calculateBufferSize(tree->left);
@@ -188,19 +187,25 @@ SEXP printNode(hpdRFnode *tree, int depth, int max_depth, SEXP classes)
 
     if(tree->additional_info)
       {
+
 	tab;
 	printf("leaf_id: %d\n", tree->additional_info->leafID);
+	tab;
+	printf("num_obs: %d\n", tree->additional_info->num_obs);
+
+	
 	tab;
 	printf("indices: ");
 	for(int i = 0; i < tree->additional_info->num_obs; i++)
 	  printf("%d ", tree->additional_info->indices[i]);
 	printf("\n");
+	/*
 	tab;
 	printf("weights: ");
 	for(int i = 0; i < tree->additional_info->num_obs; i++)
 	  printf("%f ", tree->additional_info->weights[i]);
 	printf("\n");
-
+	*/
       }
     
     if(tree->left != NULL)

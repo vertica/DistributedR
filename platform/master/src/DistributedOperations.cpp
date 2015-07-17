@@ -38,6 +38,10 @@
 #include "PrestoMaster.h"
 #include "atomicio.h"
 
+#ifdef PERF_TRACE
+#include <ztracer.hpp>
+#endif
+
 using namespace std;
 using namespace Rcpp;
 using namespace boost;
@@ -46,9 +50,14 @@ using namespace boost;
 #define SERVER_SHUTDOWN_MSG "-1"
 
 namespace presto {
-// keeping original R SIGINT hanlder
+    
+#ifdef PERF_TRACE
+    extern ZTracer::ZTraceEndpointRef ztrace_inst;
+#endif
+    
+// keeping original R SIGINT handler
 extern sighandler_t r_sigint_handler;
-
+  
 // a function that is customized for Presto SIGINT handler
 extern "C" void m_sigint_handler(int sig);
 
@@ -61,7 +70,6 @@ Rcpp::XPtr<DistributedObject> inline get_dobject(SEXP xp) {
   Rcpp::XPtr<DistributedObject> ptr1(env.get(".pointer"));
   return ptr1;
 }
-
 
 /** Get scheduler object with a given R-environment variable
  * @param xp R environment variable
@@ -218,7 +226,26 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
                                        SEXP wait_exp,
 				       SEXP scheduler_policy_exp,
 				       SEXP inputs_sexp,
-                                       SEXP progress_sexp) {
+                                       SEXP progress_sexp,
+                                       SEXP trace_sexp) {
+    
+//Initialize a new trace every time a new task begins execution
+#ifdef PERF_TRACE
+  bool trace = Rcpp::as<bool>(trace_sexp);
+  if(trace){
+    master_trace = ZTracer::create_ZTrace("Executing a new task", ztrace_inst);
+    trace_master = true;
+  } else {
+    trace_master = false;
+    struct blkin_trace_info info;
+    info.trace_id = 1337;
+    info.span_id = 1234;
+    info.parent_span_id = 4321;
+    master_trace = ZTracer::create_ZTrace("dummy", ztrace_inst, &info, false);
+  } 
+  is_master = true;
+#endif
+    
   BEGIN_RCPP;
   // ignore sigint during scheduling time
   signal(SIGINT, SIG_IGN);
@@ -255,7 +282,25 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
   map<string, Rcpp::RawVector>*  server_cache = NULL;
   boost::thread* server_thread = NULL;
   volatile int server_port = 0;
+  
+#ifdef PERF_TRACE
+      vector<string> func_str = vector<string>(func_body.begin(), func_body.end());
+      std::string func_print = "";
+      
+      const int max_lines = 5;
+      
+      for(int i=0; i!=func_str.size();++i){
+          func_print = func_print + " " + func_str[i];
+          if(i >= max_lines) break;
+      }
+      
+      char message[1000];
+      sprintf(message,"starting task with %d calls, function body starting with: %s", calls, func_print.c_str());
+      LOG_INFO(message);
+#endif
+  
   for (int32_t i = 0; i < calls; ++i) {
+      
     size_t raw_msg_size = 0;  // to keep track of cumulated raw message size per each task
     t.start();
     TaskArg &task = *(new TaskArg);
@@ -387,7 +432,7 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
         raw_arg.set_server_port(server_port);
         raw_arg.set_data_size(raw_value.size());
       } else {
-        // send value through protouf message
+        // send value through protobuf message
         raw_arg.set_fetch_need(false);
         for (int32_t j = 0; j < raw_value.size(); ++j) {
           raw_arg.mutable_value()->push_back(raw_value[j]);
@@ -398,6 +443,7 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
     rawargst += t.stop()/1e6;
     
     tasks.push_back(&task);
+    
   }
 
   ForeachStatus &foreach = *(new ForeachStatus);
@@ -445,15 +491,6 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
     }
   }
   signal(SIGINT, r_sigint_handler);  // revert to default
-  
-  bool success = !foreach.is_error;
-  if(!success) {
-   std::string error_msg = foreach.error_stream.str();
-   if(!error_msg.empty()){
-     LOG_ERROR(error_msg);
-     fprintf(stderr, "\n%s%s\n", exception_prefix.c_str(), error_msg.c_str()); 
-   }
-  }
 
   if (server_thread != NULL) {
     ShutdownRawDataTransfer(server_port);
@@ -462,7 +499,19 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
     SetServerThread(presto_master_exp, NULL);
     delete server_thread;
   }
-  return Rcpp::wrap(success);
+  
+  bool success = !foreach.is_error;
+  std::ostringstream error_msg;
+  if(!success) {
+   error_msg << "\n" << exception_prefix << foreach.error_stream.str() << "\n";
+   if(!error_msg.str().empty()){
+     LOG_ERROR(error_msg.str());
+     printf("\n");
+     forward_exception_to_r(PrestoWarningException(error_msg.str()));
+   }
+  }
+
+  return Rcpp::wrap(success);	
   END_RCPP;
 }
 

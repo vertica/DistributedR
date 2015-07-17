@@ -5,9 +5,9 @@
 #uninstall before installation from source
 if [[ `cat /etc/*-release | egrep '(CentOS|Red Hat)' | wc -l` > 0 ]]; then
   echo -e "\n==== Checking for installed rpm ===="
-  if [[ `rpm -qa | grep 'vertica-distributedR' | wc -l` > 0 ]]; then
-     echo "Uninstalling vertica-distributedR RPM"
-     sudo rpm -e vertica-distributedR
+  if [[ `rpm -qa | grep 'hp-distributedR' | wc -l` > 0 ]]; then
+     echo "Uninstalling hp-distributedR RPM"
+     sudo rpm -e hp-distributedR
      if [ $? -ne 0 ]; then
         echo "... error"
         exit 1
@@ -16,10 +16,10 @@ if [[ `cat /etc/*-release | egrep '(CentOS|Red Hat)' | wc -l` > 0 ]]; then
 
 else if [[ `cat /etc/*-release | egrep '(Ubuntu|Debian)' | wc -l` > 0 ]]; then
   echo -e "\n==== Checking for installed deb ===="
-  if [[ `dpkg -l | grep 'vertica-distributedr' | wc -l` > 0 ]]; then
-     echo "Uninstalling vertica-distributedr DEB"
-     sudo dpkg -r vertica-distributedr
-     sudo dpkg --purge vertica-distributedr
+  if [[ `dpkg -l | grep 'hp-distributedr' | wc -l` > 0 ]]; then
+     echo "Uninstalling hp-distributedr DEB"
+     sudo dpkg -r hp-distributedr
+     sudo dpkg --purge hp-distributedr
      if [ $? -ne 0 ]; then
         echo "... error"
         exit 1

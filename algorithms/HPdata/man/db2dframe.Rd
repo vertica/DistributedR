@@ -5,8 +5,8 @@
 db2dframe function is an example for loading a set of unlabeled samples stored in a table/view to a dframe. It is assumed that samples are stored in a single table/view. By default, it uses Vertica Connector for Distributed R to load data from a table in Vertica database to a dframe. When Vertica Connector for Distributed R is not selected, vRODBC or RODBC will be used to connect to the database and extract data from the table. In the latter case, the table must contain a column called 'rowid'. It is also assumed that 'rowid' starts from 0, and there is no missed 'rowid'.
 }
 \usage{
-db2dframe(tableName, dsn, features = list(...), npartitions, 
-          verticaConnector=TRUE, loadPolicy="local")
+db2dframe(tableName, dsn, features = list(...), except=list(...),
+          npartitions, verticaConnector=TRUE, loadPolicy="local")
 }
 
 \arguments{
@@ -17,7 +17,10 @@ db2dframe(tableName, dsn, features = list(...), npartitions,
     the Data Source Name(DSN) as provided in ODBC.INI file to connect to the database.
   }
   \item{features}{
-    this is an optional argument to specfy list of columns names corresponding to the features of a sample. If this argument is not specfied or the argument is empty, the function will load all columns of the table or view.
+    this is an optional argument to specify list of columns names corresponding to the features of a sample. If this argument is not specfied or the argument is empty, the function will load all columns of the table or view.
+  }
+  \item{except}{
+    this is an optional argument to specify the list of column names that should be excluded from features.
   }
   \item{npartitions}{
     this optional argument specifies the desired number of partitions in the distributed array. If not specified, it will be equal to the number of active R instances in the distributed R cluster. It should be noted that the number of splits in the returned result might not be exactly the same as npartitions. Please read the details for more information.

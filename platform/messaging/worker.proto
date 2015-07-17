@@ -85,6 +85,9 @@ message WorkerRequest {
   optional IORequest io = 9;
   optional LogRequest log = 10;
   optional VerticaDLRequest verticaload = 11;
+  optional int64 trace_id = 12;
+  optional int64 span_id = 13;
+  optional int64 parent_span_id = 14;
   // shutdown doesn't have any request
 }
 

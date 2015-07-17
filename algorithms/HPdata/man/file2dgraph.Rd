@@ -5,7 +5,7 @@
 \code{file2dgraph} function is an example for loading an adjacency matrix from an edge-list which is split in a set of files. It is assumed that edge-list is properly split among nfiles. Split files should correspond to column-wise partitioned adjacency matrix; i.e., each file will be used to load one partition of such a matrix. The files should be available from the same path from all the nodes; i.e., they should be located either on NFS or on the same path in different nodes of the cluster. Moreover, \code{isWeighted} input argument should be set properly according to the graph stored in the files.
 }
 \usage{
-file2dgraph(pathPrefix, nVertices, verticesInSplit, isWeighted)
+file2dgraph(pathPrefix, nVertices, verticesInSplit, isWeighted, row_wise = FALSE)
 }
 
 \arguments{
@@ -20,6 +20,9 @@ file2dgraph(pathPrefix, nVertices, verticesInSplit, isWeighted)
   }
   \item{isWeighted}{
     it should be FALSE when the there is no weight information in the input files
+  }
+  \item{row_wise}{
+    it should be TRUE if the files are split based on the first vertices (source) of the edge list; FALSE if they are split based on the second vertices (target).
   }
 }
 

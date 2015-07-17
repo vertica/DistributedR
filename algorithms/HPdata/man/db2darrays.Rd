@@ -7,7 +7,7 @@
     db2darrays function is a simple function to load a labeled dataset (a set of labeled samples) from a table/view in Vertica database to a pair of darrays which correspond to responses and predictors of a predictive model. It is assumed that samples (including responses and predictors) are stored in a single table. By default, Vertica Connector for Distributed R is used to load data from a Vertica database to a pair of darrays. When it is selected not to use Vertica Connector for Distributed R, vRODBC or RODBC will be used to connect to the database and extract data from the table. In the latter case, the table must contain a column called 'rowid'. It is also assumed that 'rowid' starts from 0, and there is no missed 'rowid'.
 }
 \usage{
-db2darrays(tableName, dsn, resp = list(...), pred = list(...),  
+db2darrays(tableName, dsn, resp = list(...), pred = list(...), except=list(...),  
            npartitions, verticaConnector=TRUE, loadPolicy="local")
 }
 \arguments{
@@ -22,6 +22,9 @@ db2darrays(tableName, dsn, resp = list(...), pred = list(...),
   }
   \item{pred}{
     this is an optional argument to specify list of the column names corresponding to predictors. If this argument is not specfied or is empty, the function will load all columns of the table or view excluding the column specified in resp argument.
+  }
+  \item{except}{
+    this is an optional argument to specify the list of column names that should be excluded from pred.
   }
   \item{npartitions}{
     this optional argument specifies the desired number of partitions in the distributed array. If not specified, it will be equal to the number of active R instances in the distributed R cluster. It should be noted that the number of splits in the returned result might not be exactly the same as npartitions. Please read the details for more information.
