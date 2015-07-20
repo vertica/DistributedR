@@ -102,6 +102,11 @@ typedef enum {
   TASK_EXCEPTION
 } TaskStatus;
 
+enum StorageLayer {
+  WORKER = 1,
+  RINSTANCE
+};
+
 /** This enum indicates a bit index of each attribute 
  * when HelloReply message is sent from a worker.
  */
@@ -307,7 +312,7 @@ static bool contains_key(const C &container, const K &key) {
 size_t get_total_memory();
 
 /** get used memory size of the system
- * @return used memory size (this contains cached memory size also)
+ * @return used memory size (this contains chached memory size also)
  */
 size_t get_used_memory();
 
@@ -327,7 +332,7 @@ static size_t get_free_shm_size() {
   struct statvfs* buff = (struct statvfs *)malloc(sizeof(struct statvfs));
   if(buff != NULL) {
     if (statvfs(SHM_FOLDER, buff) == 0) {
-      shm_size = buff->f_bavail * buff->f_bsize;  //get free size for unprivileged users
+      shm_size = buff->f_bavail * buff->f_bsize;  //get free size for unpriviliged users
     }
     free(buff);
   }

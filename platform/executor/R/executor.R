@@ -40,8 +40,7 @@ update <- function(x,empty=FALSE) {
   }
 
   #Find dimension of object  
-  .Call("NewUpdate", get("updates.ptr..."), name, empty, objdim,
-        DUP=FALSE)
+  .Call("NewUpdate", get("updates.ptr..."), name, empty, objdim, DUP=FALSE)
 }
 
 # get dimensions

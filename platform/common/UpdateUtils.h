@@ -52,6 +52,11 @@ static void AppendTaskResult(int32_t task_status, const char* message,
   fflush(out);  // send the result to worker
 }
 
+static void AppendClearLine(bool status, FILE* out) {
+  fprintf(out, "%d\n", status);
+  fflush(out);
+}
+
 
 /** Parse a line from in. If the line corresponds to an update, the
  * arr name, size, offset are filled up. If the line corresponds to a
@@ -71,6 +76,11 @@ static int32_t ParseUpdateLine(FILE* in, char* arr_name,
     // This is a task result. Read the next line to get the message
     int res = fscanf(in, "\n%[^\n]", message);
   }
+  return ret;
+}
+
+static int32_t ParseClearLine(FILE* in, int* status) {
+  int32_t ret = fscanf(in, " %d", status);
   return ret;
 }
 

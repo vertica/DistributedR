@@ -45,11 +45,6 @@
 #include "timer.h"
 #include "DeserializeArray.h"
 
-#ifdef PERF_TRACE
-#include <ztracer.hpp>
-#include <boost/thread/tss.hpp>
-#endif
-
 #define DRAM_AS_ARRAYSTORE NULL
 
 // #undef SCHEDULER_LOGGING
@@ -60,7 +55,7 @@
 #define LOG(n, a...)
 #endif
 
-namespace presto {  
+namespace presto {
 
 class PrestoMaster;
 class ArrayStoreData;
@@ -288,7 +283,7 @@ class Scheduler {
   // create name of a composite from its splits
   static std::string CompositeName(const Arg &arg);
   static std::string CompositeName(vector<string>& array_names);
-  void DeleteSplit(const string& split_name);
+  void DeleteSplit(const string& split_name, bool delete_in_worker = false);
 
   boost::unordered_map<std::string, Worker*>& GetWorkerInfo() {
     return workers;
@@ -349,6 +344,8 @@ class Scheduler {
     foreach_status_ = foreach_status;
   }
 
+  void ForeachComplete(bool status);
+
   // Current implementation is basedon assumption that 
   // atmost 1 foreach() will run at time
   ForeachStatus *foreach_status_;
@@ -359,15 +356,22 @@ class Scheduler {
   uint64_t GetNewTaskID();
 
   // execute an exec task on a worker
-  uint64_t Exec(Worker *worker, TaskArg *task);
+  uint64_t Exec(Worker *worker, TaskArg *task, int64_t parentid=-1);
 
   // createa a composite array from splits on a worker
   uint64_t CreateComposite(Worker *worker,
                            const std::string &name,
-                           const Arg &arg);
+                           const Arg &arg) {}
+
+  uint64_t CreateComposite(Worker *worker,
+                           const std::string &name,
+                           const Arg &arg,
+                           const std::vector<Arg>* task_args,
+                           int64_t parentid=-1);
 
   // execute a fetch task on a worker
-  uint64_t Fetch(Worker *to, Worker *from, Split *split);
+  uint64_t Fetch(Worker *to, Worker *from, Split *split) {}
+  uint64_t Fetch(Worker *to, Worker *from, Split *split, const std::vector<Arg>* task_args, int64_t parentid=-1);
 
   // execute save/load/move to/from array store on a worker
   uint64_t Save(Split *split, ArrayStore *arraystore);
@@ -381,6 +385,7 @@ class Scheduler {
   uint64_t Delete(Split *split, ArrayStore *store,
                   bool metadata_already_erased = false);
   uint64_t Delete(Split *split, Worker *worker,
+                  bool delete_in_worker = false,
                   bool metadata_already_erased = false);
 
   // send a log msg to the worker
@@ -399,7 +404,7 @@ class Scheduler {
   uint64_t IsSplitBeingAcquired(Split *split, Worker *worker);
 
   // completely delete a split (from all workers, arraystores, bookkeeping)
-  void DeleteSplit(Split *split);
+  void DeleteSplit(Split *split, bool delete_in_worker = false);
 
   
   Worker* GetRndAvailableWorker();
@@ -511,6 +516,7 @@ class InMemoryScheduler : public Scheduler {
     Worker *worker;
     bool inited;
     const Arg *arg;
+    const std::vector<Arg> *task_args;
   };
 
   boost::recursive_mutex mutex_;

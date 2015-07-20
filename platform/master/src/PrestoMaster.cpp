@@ -50,9 +50,6 @@ using namespace google::protobuf;
 
 namespace presto {
 
-#ifdef PERF_TRACE   
-  ZTracer::ZTraceEndpointRef ztrace_inst;
-#endif    
 ::uint64_t abs_start_time;
 
 sighandler_t r_sigint_handler;
@@ -91,11 +88,6 @@ PrestoMaster::PrestoMaster(const string& config_file)
   
   // Initialize random number generator
   srand(time(NULL) + getpid());
-  
-#ifdef PERF_TRACE
-int tracer = ZTracer::ztrace_init();
-ztrace_inst = ZTracer::create_ZTraceEndpoint("127.0.0.1", 1, "master"); 
-#endif
 
   // Initialize absolute time
   timeval now;
@@ -110,7 +102,7 @@ ztrace_inst = ZTracer::create_ZTraceEndpoint("127.0.0.1", 1, "master");
 //  LOG_INFO("Distributed Object Map Created.");
   ParseXMLConfig(config_file, &master_, &workers_);
   CheckMasterWorkerAddrSanity();
-  
+
 #ifdef OOC_SCHEDULER
   scheduler_ = new OOCScheduler(master_.name(), this);
 #else
@@ -356,7 +348,7 @@ void PrestoMaster::DeleteDobject(string da_name) {
   for (; sit != si.end(); ++sit) {
     // iterate splits and find matching names
     if (sit->first.find(da_name) != std::string::npos) {
-      scheduler_->DeleteSplit(sit->first);
+      scheduler_->DeleteSplit(sit->first, true);
     }
   }
 }

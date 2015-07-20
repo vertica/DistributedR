@@ -55,10 +55,6 @@
 #include <google/protobuf/message.h>
 #include "RequestLogger.h"
 
-#ifdef PERF_TRACE
-#include <ztracer.hpp>
-#endif
-
 using namespace Rcpp;
 using namespace zmq;
 using namespace google::protobuf;
@@ -86,6 +82,21 @@ enum TASK_TYPE {
   MISC,
   VERTICALOAD,
   TASK_TYPE_NUM
+};
+
+#define GC_DEFAULT_GEN 1
+
+// Partition metadata in worker.
+struct PartitionInfo {
+  boost::unordered_set<int> executors;
+  std::string name;
+  size_t size;
+};
+
+struct NewSplit {
+  std::string name;
+  size_t size;
+  int executor;
 };
 
 #define NUM_THREADPOOLS (TASK_TYPE_NUM - EXECUTE)
@@ -127,10 +138,12 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
 
   void shutdown();
 
-  void fetch(std::string name, ServerInfo location,
-             size_t size, uint64_t id, uint64_t uid, std::string store);
+  void fetchtoR(std::string name, ServerInfo location,
+             uint64_t id, uint64_t uid, std::string store);
+  void fetchtoworker(std::string name, ServerInfo location,
+             uint64_t id, uint64_t uid, std::string store);
   void newtransfer(std::string name, ServerInfo location,
-                   size_t size, std::string store);
+                   std::string store);
   void io(std::string array_name, std::string store_name,
           IORequest::Type type, uint64_t id, uint64_t uid);
   void clear(ClearRequest req);
@@ -139,6 +152,7 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
                 vector<CompositeArg> composite_args,
                 uint64_t id, uint64_t uid, Response* res);
   void createcomposite(CreateCompositeRequest req);
+  void foreachcomplete(ForeachCompleteRequest req);
   void verticaload(VerticaDLRequest req);
 
   WorkerInfo* getClient(const ServerInfo& location);
@@ -168,9 +182,24 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
     return data_loader_;
   }
 
+  void StageUpdatedPartition(const std::string& split_name, size_t size, int executor_id);
+
 protected:
   WorkerRequest* CreateDfCcTask(CreateCompositeRequest& req);
   WorkerRequest* CreateListCcTask(CreateCompositeRequest& req);
+
+  // Returns the executor on which the task should be executed.
+  int64_t AddParentTask(const std::vector<NewArg>& task_args, int64_t parenttaskid);
+  int64_t GetBestExecutor(const std::vector<NewArg>& partitions);
+  int64_t ExecutorToFetchFrom(const std::string& split_name);
+
+  // When executor_id is -1, then persist to worker.
+  bool IsPartitionAvailable(const std::string& split_name, int executor_id=-1);
+  bool IsBeingPersisted(const std::string& split_name);
+  void PersistToWorker(const std::string& split_name);
+
+  void ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id);
+  void ValidateCCPartitions(const std::vector<NewArg>& task_args, int executor_id);
   
  private:
   // keep Worker information given string:port information
@@ -192,7 +221,7 @@ protected:
   boost::unordered_map<std::string, ArrayStore*> array_stores_;
   boost::timed_mutex shmem_arrays_mutex_;
   // to keep all shared memory segments name
-  boost::unordered_set<std::string> shmem_arrays_;
+  //boost::unordered_set<std::string> shmem_arrays_;
 
   struct compressed_array_t {
     boost::mutex *mutex;
@@ -206,7 +235,7 @@ protected:
   boost::thread *data_loader_thread_;
   // a list of mutexes to access request_queue_
   boost::mutex requests_queue_mutex_[NUM_THREADPOOLS];
-  // a list of conditional variable to check if the queue is empty
+  // a list of conditiona variable to check if the queue is empty
   boost::condition_variable requests_queue_empty_[NUM_THREADPOOLS];
   // a queue that contains a list of worker request
   std::list<WorkerRequest*> requests_queue_[NUM_THREADPOOLS];
@@ -238,6 +267,24 @@ protected:
 
   RequestLogger *mRequestLogger;
 
+  // Worker metadata
+  boost::unordered_map<std::string, PartitionInfo*> worker_partitions_;
+  boost::unordered_map<int, size_t> executor_stat_;  //which executor has how much memory
+  boost::unordered_map<uint64_t, int> parent_tasks_; // to keep track of executor on which execution will happen.
+
+  // Metadata for fetch/newtransfer
+  //boost::unordered_set<std::string> fetched_partitions_; //All Partitions fetched into a worker from another worker
+  //boost::unordered_set<std::string> persisted_partitions_; //All Partitions persisted on worker
+  boost::unordered_set<std::string> shmem_arrays_;
+
+  boost::unordered_map<uint64_t, int64_t> transfer_load_; //how many executor has 
+
+  //Stage metadata
+  boost::unordered_set<NewSplit*> updated_partitions_;
+
+  //Process Communication
+  boost::recursive_mutex parent_mutex;
+  boost::recursive_mutex metadata_mutex;
 };
 
 }  // namespace presto

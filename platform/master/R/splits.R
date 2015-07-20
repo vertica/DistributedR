@@ -288,7 +288,7 @@ setMethod("rcall", signature("character", "list", "list", "list", "list"),
   })
 
 # foreach generic definition 
-foreach <- function(index, range, func, progress=TRUE, scheduler=0, inputs=integer(0), perf_trace=FALSE) {
+foreach <- function(index, range, func, progress=TRUE, scheduler=0, inputs=integer(0)) {
   options(error=dump.frames) #for debugging
 
   if (class(range) != "numeric" && class(range) != "integer") {
@@ -468,7 +468,6 @@ else{
         as.integer(scheduler),
         as.integer(inputs),
         progress,
-        perf_trace,
         DUP=FALSE)
   },error = handle_presto_exception)
 

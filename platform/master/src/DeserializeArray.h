@@ -22,6 +22,6 @@
 #include <Rinternals.h>
 
 namespace presto {
-SEXP Deserialize(void *data);
+SEXP Deserialize(void *data, size_t size=-1);
 }
 #endif

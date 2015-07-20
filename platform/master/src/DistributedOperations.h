@@ -26,7 +26,6 @@ using namespace std;
 using namespace Rcpp;
 
 namespace presto {
-    
   RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
                                          SEXP func_body_exp,
                                          SEXP num_calls_exp,
@@ -39,8 +38,7 @@ namespace presto {
                                          SEXP wait_exp,
 					 SEXP scheduler_policy_exp,		
 					 SEXP inputs_sexp,
-                                         SEXP progress_sexp,
-                                         SEXP trace_sexp);
+                                         SEXP progress_sexp);
 
   RcppExport SEXP DistributedObject_Get(SEXP presto_master_exp,
                                        SEXP split);

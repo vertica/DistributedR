@@ -25,6 +25,7 @@
 
 #include <unistd.h>
 
+#include <boost/unordered_map.hpp>
 #include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/mapped_region.hpp>
 #include <boost/interprocess/managed_shared_memory.hpp>
@@ -38,7 +39,6 @@
 #include <vector>
 
 #include "shared.pb.h"
-
 #include "interprocess_sync.h"
 #include "MasterClient.h"
 #include "dLogger.h"
@@ -46,19 +46,27 @@
 
 namespace presto {
 
+class PrestoWorker;
+
 class ExecutorPool {
  public:
-  ExecutorPool(int n_, ServerInfo *my_location_, MasterClient* master_,
+  ExecutorPool(PrestoWorker* pw_, int n_, ServerInfo *my_location_, MasterClient* master_,
                boost::timed_mutex *shmem_arrays_mutex,
-               boost::unordered_set<std::string> *shmem_arrays,
+               boost::unordered_set<std::string> *shmem_arrays, 
                const std::string &spill_dir, int log_level,
                string master_ip, int master_port);
   // Execute task on first available executor (blocks until execution is done!)
   void execute(std::vector<std::string> func,
                std::vector<NewArg> args, std::vector<RawArg> raw_args,
                std::vector<NewArg> composite_args, ::uint64_t id,
-               ::uint64_t uid,
-               Response* res);
+               ::uint64_t uid, Response* res, int executor_id=-1);
+
+  void clear(std::vector<std::string> splits, int executor_id);
+  void fetch(std::string split_name, int32_t serverfd, int port_number, int executor_id);
+  void newtransfer(std::string split_name, std::string server_name, int port_number, int executor_id);
+  void persist_to_worker(std::string split_name, int executor_id);
+  void shutdown(int executor_id=-1);
+
   ~ExecutorPool();
   void InsertCompositeArray(std::string name, Composite* comp);
   MasterClient *master;
@@ -67,23 +75,56 @@ class ExecutorPool {
     return child_proc_ids_;
   }
 
+  void reset_executors() {
+    exec_index = 0; 
+  }
+
+  int GetExecutorInRndRobin();
+
+  /*boost::unordered_map<int, ExecutorData*> GetExecutorInfo() {
+    return executors;
+  }
+
+  boost::unordered_map<std::string, Split*>& GetLocalSplits() {
+    return local_splits;
+  }*/
+
  private:
   struct ExecutorData {
     FILE *send, *recv;
     bool ready;
+    int id;
+    pid_t process_id;
+    boost::unordered_set<int64_t> clear_tasks;
+    boost::unordered_set<int64_t> send_tasks;
+    boost::unordered_set<int64_t> load_tasks;
+    boost::unordered_set<int64_t> exec_tasks;
   };
-  std::map<std::string, Composite*> composites_;
-  boost::mutex comp_mutex;
+
+  /*struct Split {
+    boost::unordered_set<ExecutorData*> executors;
+    std::string name;
+    size_t size;
+  };*/
+
   int num_executors;
   int exec_index;
-  ExecutorData *executors;
-  boost::interprocess::interprocess_semaphore *sema;
   ServerInfo *my_location;
-  boost::mutex poolmutex;
-  boost::timed_mutex *shmem_arrays_mutex_;
-  boost::unordered_set<std::string> *shmem_arrays_;
   std::string spill_dir_;
+
+  boost::unordered_map<int, ExecutorData*> executors;
+  //boost::unordered_map<std::string, Split*> local_splits; 
+  std::map<std::string, Composite*> composites_;
+  boost::unordered_set<std::string> *shmem_arrays_;
   std::vector<pid_t> child_proc_ids_;
+
+  boost::mutex comp_mutex;
+  boost::mutex poolmutex;
+  boost::mutex exec_mutex;
+  boost::timed_mutex *shmem_arrays_mutex_;
+  boost::interprocess::interprocess_semaphore *sema;
+
+  PrestoWorker* worker;
 };
 
 }  // namespace presto
