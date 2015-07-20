@@ -416,13 +416,13 @@ void PrestoWorker::ValidatePartitions(const std::vector<NewArg>& task_args, int 
    
       unique_lock<recursive_mutex> metalock(metadata_mutex);
       if(!IsPartitionAvailable(all_partitions[i], executor_id)) {
-        LOG_INFO("ValidatePartitions: Partition  %s is not on worker or executor. Check if being persisted", all_partitions[i].c_str());
+        LOG_INFO("ValidatePartitions: Partition(%s) not available on executor(%d). Intra-worker persist needed.", all_partitions[i].c_str(), executor_id);
         if (!IsBeingPersisted(all_partitions[i])) {
-           LOG_INFO("ValidatePartitions: Partition  %s is not being persisted. Started persist", all_partitions[i].c_str());
+           LOG_INFO("ValidatePartitions: Partition(%s) is not on worker. Start persist", all_partitions[i].c_str());
            PersistToWorker(all_partitions[i]);
         }
       } else
-        LOG_INFO("ValidatePartitions: Persist not needed for %s", all_partitions[i].c_str());
+        LOG_INFO("ValidatePartitions: Partition(%s) is already on worker.", all_partitions[i].c_str());
       metalock.unlock();
    }
 }
@@ -441,13 +441,13 @@ void PrestoWorker::ValidateCCPartitions(const std::vector<NewArg>& task_args, in
    
       unique_lock<recursive_mutex> metalock(metadata_mutex);
       if(!IsPartitionAvailable(split_name)) {
-        LOG_INFO("ValidateCCPartitions: Partition  %s is not on worker or executor. Check if being persisted", split_name.c_str());
+        LOG_INFO("ValidateCCPartitions: Partition(%s) not available on executor(%d). Intra-worker persist needed.", split_name.c_str(), executor_id);
         if (!IsBeingPersisted(split_name)) {
-           LOG_INFO("ValidateCCPartitions: Partition  %s is not being persisted. Started persist", split_name.c_str());
+           LOG_INFO("ValidateCCPartitions: Partition(%s) is not on worker. Start persist", split_name.c_str());
            PersistToWorker(split_name);
         }    
       } else
-        LOG_INFO("ValidateCCPartitions: Persist not needed for %s", split_name.c_str());
+        LOG_INFO("ValidateCCPartitions: Partition(%s) is already on worker.", split_name.c_str());
       metalock.unlock();
    }
 }
@@ -544,7 +544,6 @@ void PrestoWorker::fetchtoworker(string name, ServerInfo location,
 * @param uid uid of a task
 * @param store a location to keep the split (not memory)
 * @return NULL
-*/
 void PrestoWorker::fetchtoR(string name, ServerInfo location,
                             ::uint64_t id, ::uint64_t uid,
                             string store) {
@@ -596,7 +595,7 @@ void PrestoWorker::fetchtoR(string name, ServerInfo location,
   master_->TaskDone(req);  // send task done message
   LOG_DEBUG("FETCH TaskID %20zu - Sent TASKDONE message to Master", uid);
 
-}
+}*/
 
 /** Handle fetch request from remote workers. This reads splits from shared memory and send them to a requester
  * @param name name of a split that is requested
@@ -743,8 +742,26 @@ void PrestoWorker::clear(ClearRequest req) {
     array_stores_[req.store()]->Delete(req.name());
 #endif
   } else {
-    LOG_DEBUG("CLEAR Task                     - Clearing %s from Shared memory", req.name().c_str());
-    //SharedMemoryObject::remove(req.name().c_str());
+    LOG_INFO("CLEAR Task                     - Clearing %s from Shared memory", req.name().c_str());
+    SharedMemoryObject::remove(req.name().c_str());
+
+    //clear from executors
+    unique_lock<recursive_mutex> metalock(metadata_mutex);
+    if(worker_partitions_.find(req.name()) != worker_partitions_.end()) {
+      PartitionInfo* partition = worker_partitions_[req.name()];
+
+      std::vector<std::string> splits;
+      splits.push_back(req.name());
+
+      for(boost::unordered_set<int>::iterator it = partition->executors.begin(); it != partition->executors.end(); ++it) {
+        executorpool_->clear(splits, *it);
+      }
+
+      //erase from metadata
+      delete worker_partitions_[req.name()];
+      worker_partitions_.erase(req.name());
+    }
+    metalock.unlock();
   }
 
  end:
@@ -756,11 +773,6 @@ void PrestoWorker::clear(ClearRequest req) {
   done.mutable_location()->CopyFrom(my_location_);
   master_->TaskDone(done);
 */ 
-
-  /*LOG_INFO("Calling custom clear");
-  std::vector<std::string> splits;
-  splits.push_back(req.name());
-  executorpool_->clear(splits, 1); */
   LOG_DEBUG("CLEAR Task                     - Sent TASKDONE message to Master.");
 }
 
@@ -1354,19 +1366,19 @@ void PrestoWorker::HandleRequests(int type) {
               store = worker_req.fetch().store();
             }
 
-            if(worker_req.fetch().policy() == FetchRequest::WORKER_CONN)
+            //if(worker_req.fetch().policy() == FetchRequest::WORKER_CONN)
               fetchtoworker(worker_req.fetch().name(),
                     worker_req.fetch().location(),
                     worker_req.fetch().id(),
                     worker_req.fetch().uid(),
                     store);
-            else {
+            /*else {
               fetchtoR(worker_req.fetch().name(),
                     worker_req.fetch().location(),
                     worker_req.fetch().id(),
                     worker_req.fetch().uid(),
                     store);
-            }
+            }*/
           }
           break;
         case WorkerRequest::NEWTRANSFER:
@@ -1383,10 +1395,11 @@ void PrestoWorker::HandleRequests(int type) {
                           worker_req.fetch().location(),
                           store);
             } else if(worker_req.fetch().policy() == FetchRequest::R_CONN) {
-              LOG_INFO("Fetch %s from R_CONN", worker_req.fetch().name().c_str());
+              LOG_ERROR("Fetch from Executor is not supported");
+              /*LOG_INFO("Fetch %s from R_CONN", worker_req.fetch().name().c_str());
               int executor_id = ExecutorToFetchFrom(worker_req.fetch().name());
               LOG_INFO("Fetching %s from executor %d", worker_req.fetch().name().c_str(), executor_id);
-              executorpool_->newtransfer(worker_req.fetch().name(), worker_req.fetch().location().name(), worker_req.fetch().location().presto_port(), executor_id);
+              executorpool_->newtransfer(worker_req.fetch().name(), worker_req.fetch().location().name(), worker_req.fetch().location().presto_port(), executor_id);*/
             }
           }
           break;
@@ -1415,7 +1428,7 @@ void PrestoWorker::HandleRequests(int type) {
             LOG_INFO("Added ParentTask %d. Returned executor is %d", worker_req.createcomposite().parenttaskid(), executor_id);
             ValidateCCPartitions(cc_args, executor_id);
 
-            LOG_INFO("EXECUTE %d : Add partitions validated. Sent to executor %d", worker_req.newexecr().uid(), executor_id);
+            LOG_INFO("CREATECOMPOSITE %d : All partitions validated. Sent to executor %d", worker_req.createcomposite().uid(), executor_id);
 
             createcomposite(worker_req.createcomposite());
           }
@@ -1476,7 +1489,7 @@ void PrestoWorker::HandleRequests(int type) {
           {
             int64_t executor_id = AddParentTask(new_args, worker_req.newexecr().parenttaskid());
             ValidatePartitions(new_args, executor_id);
-            LOG_INFO("EXECUTE %d : Add partitions validated. Sent to executor %d", worker_req.newexecr().uid(), executor_id);
+            LOG_INFO("EXECUTE %d : All partitions validated. Sent to executor %d", worker_req.newexecr().uid(), executor_id);
 
             executorpool_->execute(func, new_args, raw_args, composite_args,
                                    worker_req.newexecr().id(),

@@ -81,8 +81,6 @@ static SEXP RSymbol_x = NULL;
 // contains a list of variables to update (called inside a foreach)
 set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>> *updatesptr;
 Executor* ex;
-//map<string, Partition*> in_memory_partitions;
-//map<string, Partition*> in_memory_partitions;
 
 /** Propagates new value to other workers. 
  * This is generally called from Presto R function update(). 
@@ -133,17 +131,17 @@ Executor* ex;
 
 /**************** Class Function definitions ****************************/
 
-int Executor::GetNextTask() {
-  int nexttasktype;
-  int res = scanf(" %d ", &nexttasktype);
+ExecutorEvent Executor::GetNextEvent() {
+  ExecutorEvent nexteventtype;
+  int res = scanf(" %d ", &nexteventtype);
   
   if (res != 1) {     
-    LOG_ERROR("GetNextTask => Bad file format for Executor. Executor cannot recognize commands from Worker.");     
+    LOG_ERROR("GetNextEvent => Bad file format for Executor. Executor cannot recognize commands from Worker.");     
     throw PrestoWarningException     
-      ("ParseTask::Executor cannot recognize commands from a worker");     
+      ("ParseEvent::Executor cannot recognize commands from Worker");
   }
 
-  return nexttasktype;
+  return nexteventtype;
 }
 
 /** Send task result update to worker at the end of task execution. 
@@ -302,20 +300,18 @@ int Executor::ReadSplitArgs() {  // NOLINT
         sprintf(num,"%d",m);
         strcat(new_name,num);  //eg a5
         
-        //add to v2a a fake name so it's cleaned up later     
-        //int32_t version;
-        //ParseVersionNumber(splitname, &version);
-
-        LOG_INFO("Processing partitions %s", splitname);
-
-        /*if (version == 0) {  // This happens only during a new dobject creation. 
+        /*int32_t version;
+        ParseVersionNumber(splitname, &version);
+        if (version == 0) {  // This happens only during a new dobject creation. 
           LOG_INFO("First partition. Assign varname to Nil");
           RR[varname] = R_NilValue;
           list[m] = RR[varname];
           continue;
         }*/
 
-        // Load split from Executor or Worker
+        LOG_INFO("Processing partitions %s", splitname);
+
+        // add to v2a a fake name so it's cleaned up later. Load split from Executor or Worker
         if(in_memory_partitions.find(splitname) != in_memory_partitions.end()) {
           LOG_INFO("Partition %s is on Executor. Loading..", splitname);
 
@@ -345,17 +341,16 @@ int Executor::ReadSplitArgs() {  // NOLINT
       var_to_list_type[varname] = composite;
     } else {
 
-      //int32_t version;
-      //ParseVersionNumber(splitname, &version);
-
-      LOG_INFO("Processing partitions %s", splitname);
-
-      /*if (version == 0) {  // This happens only during a new dobject creation. 
+      /*int32_t version;
+      ParseVersionNumber(splitname, &version);
+      if (version == 0) {  // This happens only during a new dobject creation. 
         LOG_INFO("First partition. Assign varname to Nil");
         RR[varname] = R_NilValue;
         var_to_Partition[varname] = splitname;
         continue;
       }*/
+
+      LOG_INFO("Processing partitions %s", splitname);
 
       // Check if executor contains the partitions.
       if(in_memory_partitions.find(splitname) != in_memory_partitions.end()) {
@@ -791,132 +786,6 @@ int Executor::Clear() {
   return 0;
 }
 
-int Executor::Fetch() {
-  LOG_INFO("Starting Fetch");
-
-  int port_number, serverfd;
-  char split[100];
-  boost::thread* server_thread=NULL;
-
-  int res = scanf(" %s %d %d ", split, &serverfd, &port_number);
-  if (res != 3) {
-    LOG_ERROR("Fetch => Bad file format for Executor. Executor cannot recognize commands from Worker.");
-    throw PrestoWarningException
-      ("ParseFetch::Executor cannot recognize commands from a worker");
-  }
-
-  partitions_to_fetch.insert(std::string(split));
-  //schedule(fetch_pool, boost::bind(&ReadRemotePartition, split, serverfd, port_number));
-}
-
-void Executor::ReadRemotePartition (std::string splitname, int32_t serverfd, int port_number) {
-  LOG_INFO("Starting ReadRemotePartition thread");
-
-  bool connected = false;
-  int32_t new_fd = -1;
-  struct sockaddr_in their_addr;
-  socklen_t sin_size = sizeof(their_addr);
-  static int32_t ret = 0;
-  ret = listen(serverfd, SOMAXCONN);
-
-  if (ret < 0) {
-    close(serverfd);
-    LOG_ERROR("ReadRemotePartition - listen failure");
-    throw PrestoWarningException("ReadRemotePartition - listen failure");
-  }
-  
-  while(!connected) {
-
-    ret = listen(serverfd, SOMAXCONN);
-
-    if (ret < 0) { 
-      close(serverfd);
-      LOG_ERROR("ReadRemotePartition - listen failure");
-      throw PrestoWarningException("ReadRemotePartition - listen failure");
-    }
-    boost::this_thread::interruption_point();
-    int conn_fd = accept(serverfd, (struct sockaddr *) &their_addr, &sin_size);
-    if (conn_fd < 0) {
-      LOG_ERROR("ReadRemotePartition - accept new_fd less than zero");
-      throw PrestoWarningException("ReadRemotePartition - accept new_fd less than zero");
-    }
-    connected = true;
-    
-    //Start reading the contents
-    size_t data_size;
-    size_t bytes_read = read(conn_fd, &data_size, sizeof(size_t));
-    if(bytes_read == 0) {
-      LOG_ERROR("ReadRemotePartition - data size not received");
-      throw PrestoWarningException("ReadRemotePartition - data size not received");
-    }
-
-    boost::this_thread::interruption_point();
-
-    ARRAYTYPE orig_class;
-    bytes_read = read(conn_fd, &orig_class, sizeof(ARRAYTYPE));
-    if(bytes_read == 0) {
-      LOG_ERROR("ReadRemotePartition - orig_class not received");
-      throw PrestoWarningException("ReadRemotePartition - orig_class not received");
-    }
-
-    boost::this_thread::interruption_point();
-
-    char* dest_ = (char*) malloc(data_size);
-    if (dest_ == NULL) {
-        close(conn_fd);
-        LOG_ERROR("ReadRemotePartition - malloc failed: %zu", data_size);
-        throw PrestoWarningException("ReadRemotePartition - fail to malloc");
-    }
-
-    bytes_read=atomicio(read, conn_fd, dest_, data_size);
-    if (bytes_read != data_size) {
-        LOG_ERROR("atomicio read bytes - %d:%s", bytes_read, strerror(errno));
-        close(conn_fd);
-        throw PrestoWarningException("ReadRemotePartition - fail to receive from a remote worker");
-    }
-    LOG_INFO("Finished readinfg data from remote connection");
-    
-    boost::unique_lock<boost::mutex> lock(R_mutex);
-
-    SEXP arr;
-    PROTECT(arr = Rf_allocVector(RAWSXP, data_size));
-    if (Rf_isNull(arr)) {
-      throw PrestoWarningException("DistList::LoadInR: array is NULL");
-    }
-    /*for (int i=0; i<data_size;++i)
-       arr[i] = dest_[i];*/
-    memcpy(RAW(arr), reinterpret_cast<unsigned char*>(dest_), data_size);
-
-    Rcpp::Language unserialize_call("unserialize", arr);
-    SEXP dobj;
-    PROTECT(dobj = Rf_eval(unserialize_call, R_GlobalEnv));
-    RR[splitname] = dobj;  // assign the varname with corresponding value in R-session
-    UNPROTECT(2);
-    
-    //Get dims and size
-    char cmd[CMD_BUF_SIZE];
-    snprintf(cmd, CMD_BUF_SIZE, "dim(%s)", splitname.c_str());
-    vector<int64_t> dim_vec = Rcpp::as<vector<int64_t>> (RR.parseEval(cmd));
-    std::pair<int64_t, int64_t> dims_ = std::make_pair<int64_t, int64_t>(dim_vec[0], dim_vec[1]);
-
-    snprintf(cmd, CMD_BUF_SIZE, "object.size(%s)", splitname.c_str());
-    size_t size_ = Rcpp::as<size_t> (RR.parseEval(cmd));
-
-    lock.unlock();
-
-    //Create partition
-    ArrayData *np = ParseVariable(RR, splitname, splitname, orig_class, RINSTANCE);
-
-    //Update in-mem partitions
-    boost::unique_lock<boost::recursive_mutex> metadata_lock(metadata_mutex);
-    in_memory_partitions[splitname] = np;
-    partitions_to_fetch.erase(splitname);  // Wait till all to be fetched partitions are fetched.
-    metadata_lock.unlock();
-
-    LOG_INFO("Done Reading data");
-  }
-}
-
 
 int Executor::PersistToWorker() {
   LOG_INFO("Starting PersistToWorker");
@@ -943,84 +812,6 @@ int Executor::PersistToWorker() {
   LOG_INFO("Split %s persisted to worker", split);
 }
 
-int Executor::NewTransfer() {
-  LOG_INFO("Starting NewTransfer");
-
-  int port_number;
-  char split[100], server_name[250];
-  int res = scanf(" %s %s %d", split, server_name, &port_number);
-  if (res != 3) {
-    LOG_ERROR("Newtransfer => Bad file format for Executor. Executor cannot recognize commands from Worker.");
-    throw PrestoWarningException
-      ("ParseNewtransfer::Executor cannot recognize commands from a worker");
-  }
-  LOG_INFO("split name is %s, server_name %s, port_no", split, server_name, port_number);
-
-  //Serialize first
-  char cmd[CMD_BUF_SIZE];
-  if(in_memory_partitions.find(split) == in_memory_partitions.end()) {
-    LOG_ERROR("Newtransfer => Split %s to be transferred is not found", split);
-    throw PrestoWarningException("Newtransfer => Split to be transferred is not found");
-  }
-  /*std::string temp_shm_file = std::string("/dev/shm/")+ std::string(split);
-  snprintf(cmd, CMD_BUF_SIZE, ".tmpfile.serialize <- '%s'; .tmpcon <- file(.tmpfile.serialize, open = 'wb'); serialize(`%s`, .tmpcon);close(.tmpfile.serialize);", 
-           temp_shm_file.c_str(), split);
-  RR.parseEvalQ(cmd);
-  LOG_INFO("Serialized %s to temporary location /dev/shm%s", split, split);
-
-  //Connect and send data.
-  int32_t client_fd = presto::connect(server_name, port_number);
-  if (client_fd < 0) {
-    ostringstream msg;
-    msg << "connect failed for transfer to " << server_name
-      << ":" << port_number;
-    LOG_ERROR(msg.str());//"NEWTRANSFER Task               - Connection to Worker %s:%d failed for Split transfer", location.name().c_str(), location.presto_port());
-    close(client_fd);
-    throw PrestoWarningException(msg.str());
-  }
-
-  SharedMemoryObject shm(boost::interprocess::open_or_create, split, boost::interprocess::read_write);
-  boost::interprocess::mapped_region region(shm, boost::interprocess::read_write);
-  void* addr = region.get_address();
-
-  //Send data_size
-  boost::interprocess::offset_t file_size;
-  if (!shm.get_size(file_size)) {
-    LOG_ERROR("Array GetSize: could not get shmem size");
-    throw PrestoWarningException("Array GetSize: could not get shmem size");
-  }
-
-  int bytes_written=send(client_fd, (char*)file_size, sizeof(boost::interprocess::offset_t), 0);
-  if(bytes_written == 0)
-    LOG_ERROR("Error sending data size");
-
-  //Send orig_class
-  bytes_written=send(client_fd, (char*)in_memory_partitions[split]->GetType(), sizeof(RType), 0);
-  if(bytes_written == 0)
-    LOG_ERROR("Error sending RType");
-
-  //Send actual data
-  bytes_written = atomicio(vwrite, client_fd, addr, file_size);
-  if (bytes_written != file_size)
-    LOG_ERROR("Error sending partition");
-
-  close(client_fd);
-  //SharedMemoryObject::remove(temp_shm_file.name().c_str()); //Cmmented for debugging*/
-
-  // Send data via serialization to socket.
-  snprintf(cmd, CMD_BUF_SIZE, ".tmpsockconnection <- socketConnection(host='%s', port = %d, blocking=TRUE, server=FALSE, open='r+'); print(.tmpsockconnection);", server_name, port_number); 
-  LOG_INFO(cmd);
-  RR.parseEvalQ(cmd);
-  
-  snprintf(cmd, CMD_BUF_SIZE, "writeChar('%d', .tmpsockconnection)", in_memory_partitions[split]->GetSize());
-  RR.parseEval(cmd);
-  LOG_INFO(cmd);  
-  
-  snprintf(cmd, CMD_BUF_SIZE, "serialize(`%s`, .tmpsockconnection); close(.tmpsockconnection);", split);
-  LOG_INFO("Evaluating final command %s", cmd);
-  RR.parseEvalQ(cmd);
-  LOG_INFO("Serialized %s to socket connection", split);
-}
 
 static void SendResult(const char* err_msg) {
   if (err_msg[0] != '\0') {
@@ -1047,12 +838,13 @@ static void SendResult(const char* err_msg) {
  */
 void Executor::ClearTaskData() {
   LOG_INFO("Clearing TaskData");
-  partitions_to_fetch.clear();
+
   std::vector<std::string> v;
   for(map<string,ArrayData*>::iterator i = in_memory_partitions.begin(); 
       i != in_memory_partitions.end(); ++i) {
     v.push_back(i->first);
   }
+
   for(map<string,Composite*>::iterator i = in_memory_composites.begin(); 
       i != in_memory_composites.end(); ++i) {
     v.push_back(i->first);
@@ -1062,7 +854,6 @@ void Executor::ClearTaskData() {
   RR[".tmp.keep"] = v;//keep;
   RR.parseEvalQ("rm(list=setdiff(ls(all.names=TRUE), .tmp.keep));");
     
-  //R.parseEvalQ("rm(list=ls(all.names=TRUE));gc()");
   // cleat splits information in this task                                 
   var_to_Partition.clear();
   // delete composite information in this task
@@ -1166,6 +957,7 @@ int main(int argc, char *argv[]) {
   while (true) {
     Timer total_timer;
     total_timer.start();
+    ExecutorEvent next;
 
     try {
       //ex->ClearTaskData();
@@ -1177,7 +969,7 @@ int main(int argc, char *argv[]) {
       R.parseEvalQ("print('Printing ls'); print(ls())");
 
       int result = -1;
-      int next = ex->GetNextTask();
+      next = ex->GetNextEvent();
 
       if (next == EXECUTOR_SHUTDOWN_CODE) {
         delete ex;
@@ -1185,27 +977,17 @@ int main(int argc, char *argv[]) {
         break;
       }
 
-      LOG_INFO("New Task received of type %d", next);
+      LOG_INFO("====> New Event received of type %d", next);
 
       switch(next) {
-        case 1:
+        case EXECR:
 	  result = ex->Execute(updates);
 	  break;
-        case 2:
+        case CLEAR:
 	  result = ex->Clear();
 	  break;
-        case 3:
-	  result = ex->Fetch();
-	  break;
-        case 4:
-	  result = ex->NewTransfer();
-	  break;
-        case 5:
+        case PERSIST:
           result = ex->PersistToWorker();
-          break;
-        case 6:
-          delete ex;
-          ex=NULL;
           break;
       }
 	  
@@ -1213,12 +995,226 @@ int main(int argc, char *argv[]) {
       strncpy(ex->err_msg, exception.what(), sizeof(ex->err_msg)-1);
     }
     
-    if(ex != NULL) {
+    if(ex != NULL && (next == EXECR || next == PERSIST)) {
        SendResult(ex->err_msg);
-       ex->ClearTaskData();
-    } else
-       SendResult("");
+    }
+
+    ex->ClearTaskData();
   } // end while(true)
   return 0;
 }
 
+
+/*********************************  IN-DEV CODE BASE ********************************************/
+/*
+int Executor::Fetch() {
+  LOG_INFO("Starting Fetch");
+
+  int port_number, serverfd;
+  char split[100];
+  boost::thread* server_thread=NULL;
+
+  int res = scanf(" %s %d %d ", split, &serverfd, &port_number);
+  if (res != 3) {
+    LOG_ERROR("Fetch => Bad file format for Executor. Executor cannot recognize commands from Worker.");
+    throw PrestoWarningException
+      ("ParseFetch::Executor cannot recognize commands from a worker");
+  }
+
+  partitions_to_fetch.insert(std::string(split));
+  //schedule(fetch_pool, boost::bind(&ReadRemotePartition, split, serverfd, port_number));
+}
+
+
+void Executor::ReadRemotePartition (std::string splitname, int32_t serverfd, int port_number) {
+  LOG_INFO("Starting ReadRemotePartition thread");
+
+  bool connected = false;
+  int32_t new_fd = -1;
+  struct sockaddr_in their_addr;
+  socklen_t sin_size = sizeof(their_addr);
+  static int32_t ret = 0;
+  ret = listen(serverfd, SOMAXCONN);
+
+  if (ret < 0) {
+    close(serverfd);
+    LOG_ERROR("ReadRemotePartition - listen failure");
+    throw PrestoWarningException("ReadRemotePartition - listen failure");
+  }
+
+  while(!connected) {
+
+    ret = listen(serverfd, SOMAXCONN);
+
+    if (ret < 0) {
+      close(serverfd);
+      LOG_ERROR("ReadRemotePartition - listen failure");
+      throw PrestoWarningException("ReadRemotePartition - listen failure");
+    }
+    boost::this_thread::interruption_point();
+    int conn_fd = accept(serverfd, (struct sockaddr *) &their_addr, &sin_size);
+    if (conn_fd < 0) {
+      LOG_ERROR("ReadRemotePartition - accept new_fd less than zero");
+      throw PrestoWarningException("ReadRemotePartition - accept new_fd less than zero");
+    }
+    connected = true;
+
+    //Start reading the contents
+    size_t data_size;
+    size_t bytes_read = read(conn_fd, &data_size, sizeof(size_t));
+    if(bytes_read == 0) {
+      LOG_ERROR("ReadRemotePartition - data size not received");
+      throw PrestoWarningException("ReadRemotePartition - data size not received");
+    }
+
+    boost::this_thread::interruption_point();
+
+    ARRAYTYPE orig_class;
+    bytes_read = read(conn_fd, &orig_class, sizeof(ARRAYTYPE));
+    if(bytes_read == 0) {
+      LOG_ERROR("ReadRemotePartition - orig_class not received");
+      throw PrestoWarningException("ReadRemotePartition - orig_class not received");
+    }
+
+    boost::this_thread::interruption_point();
+   
+    char* dest_ = (char*) malloc(data_size);
+    if (dest_ == NULL) {
+        close(conn_fd);
+        LOG_ERROR("ReadRemotePartition - malloc failed: %zu", data_size);
+        throw PrestoWarningException("ReadRemotePartition - fail to malloc");
+    }
+
+    bytes_read=atomicio(read, conn_fd, dest_, data_size);
+    if (bytes_read != data_size) {
+        LOG_ERROR("atomicio read bytes - %d:%s", bytes_read, strerror(errno));
+        close(conn_fd);
+        throw PrestoWarningException("ReadRemotePartition - fail to receive from a remote worker");
+    }
+    LOG_INFO("Finished readinfg data from remote connection");
+
+    boost::unique_lock<boost::mutex> lock(R_mutex);
+
+    SEXP arr;
+    PROTECT(arr = Rf_allocVector(RAWSXP, data_size));
+    if (Rf_isNull(arr)) {
+      throw PrestoWarningException("DistList::LoadInR: array is NULL");
+    }
+    //for (int i=0; i<data_size;++i)
+    //   arr[i] = dest_[i];
+    memcpy(RAW(arr), reinterpret_cast<unsigned char*>(dest_), data_size);
+
+    Rcpp::Language unserialize_call("unserialize", arr);
+    SEXP dobj;
+    PROTECT(dobj = Rf_eval(unserialize_call, R_GlobalEnv));
+    RR[splitname] = dobj;  // assign the varname with corresponding value in R-session
+    UNPROTECT(2);
+    
+    //Get dims and size
+    char cmd[CMD_BUF_SIZE];
+    snprintf(cmd, CMD_BUF_SIZE, "dim(%s)", splitname.c_str());
+    vector<int64_t> dim_vec = Rcpp::as<vector<int64_t>> (RR.parseEval(cmd));
+    std::pair<int64_t, int64_t> dims_ = std::make_pair<int64_t, int64_t>(dim_vec[0], dim_vec[1]);
+
+    snprintf(cmd, CMD_BUF_SIZE, "object.size(%s)", splitname.c_str());
+    size_t size_ = Rcpp::as<size_t> (RR.parseEval(cmd));
+
+    lock.unlock();
+
+    //Create partition
+    ArrayData *np = ParseVariable(RR, splitname, splitname, orig_class, RINSTANCE);
+
+    //Update in-mem partitions
+    boost::unique_lock<boost::recursive_mutex> metadata_lock(metadata_mutex);
+    in_memory_partitions[splitname] = np;
+    partitions_to_fetch.erase(splitname);  // Wait till all to be fetched partitions are fetched.
+    metadata_lock.unlock();
+
+    LOG_INFO("Done Reading data");
+  }
+}
+
+
+
+int Executor::NewTransfer() {
+  LOG_INFO("Starting NewTransfer");
+
+  int port_number;
+  char split[100], server_name[250];
+  int res = scanf(" %s %s %d", split, server_name, &port_number);
+  if (res != 3) {
+    LOG_ERROR("Newtransfer => Bad file format for Executor. Executor cannot recognize commands from Worker.");
+    throw PrestoWarningException
+      ("ParseNewtransfer::Executor cannot recognize commands from a worker");
+  }
+  LOG_INFO("split name is %s, server_name %s, port_no", split, server_name, port_number);
+
+  //Serialize first
+  char cmd[CMD_BUF_SIZE];
+  if(in_memory_partitions.find(split) == in_memory_partitions.end()) {
+    LOG_ERROR("Newtransfer => Split %s to be transferred is not found", split);
+    throw PrestoWarningException("Newtransfer => Split to be transferred is not found");
+  }
+
+  // DESIGN 1: Write to shm (using serialize to file) and send to remote worker.
+  std::string temp_shm_file = std::string("/dev/shm/")+ std::string(split);
+  snprintf(cmd, CMD_BUF_SIZE, ".tmpfile.serialize <- '%s'; .tmpcon <- file(.tmpfile.serialize, open = 'wb'); serialize(`%s`, .tmpcon);close(.tmpfile.serialize);", 
+           temp_shm_file.c_str(), split);
+  RR.parseEvalQ(cmd);
+  LOG_INFO("Serialized %s to temporary location /dev/shm%s", split, split);
+
+  //Connect and send data.
+  int32_t client_fd = presto::connect(server_name, port_number);
+  if (client_fd < 0) {
+    ostringstream msg;
+    msg << "connect failed for transfer to " << server_name
+      << ":" << port_number;
+    LOG_ERROR(msg.str());//"NEWTRANSFER Task               - Connection to Worker %s:%d failed for Split transfer", location.name().c_str(), location.presto_port());
+    close(client_fd);
+    throw PrestoWarningException(msg.str());
+  }
+
+  SharedMemoryObject shm(boost::interprocess::open_or_create, split, boost::interprocess::read_write);
+  boost::interprocess::mapped_region region(shm, boost::interprocess::read_write);
+  void* addr = region.get_address();
+
+  //Send data_size
+  boost::interprocess::offset_t file_size;
+  if (!shm.get_size(file_size)) {
+    LOG_ERROR("Array GetSize: could not get shmem size");
+    throw PrestoWarningException("Array GetSize: could not get shmem size");
+  }
+
+  int bytes_written=send(client_fd, (char*)file_size, sizeof(boost::interprocess::offset_t), 0);
+  if(bytes_written == 0)
+    LOG_ERROR("Error sending data size");
+
+  //Send orig_class
+  bytes_written=send(client_fd, (char*)in_memory_partitions[split]->GetType(), sizeof(RType), 0);
+  if(bytes_written == 0)
+    LOG_ERROR("Error sending RType");
+
+    //Send actual data
+  bytes_written = atomicio(vwrite, client_fd, addr, file_size);
+  if (bytes_written != file_size)
+    LOG_ERROR("Error sending partition");
+
+  close(client_fd);
+  //SharedMemoryObject::remove(temp_shm_file.name().c_str()); //Cmmented for debugging
+
+
+  // DESIGN 2: Send directly to remote worker/R instance by serializing to socket.
+  // Send data via serialization to socket.
+  snprintf(cmd, CMD_BUF_SIZE, ".tmpsockconnection <- socketConnection(host='%s', port = %d, blocking=TRUE, server=FALSE, open='r+'); print(.tmpsockconnection);", server_name, port_number);
+  LOG_INFO(cmd);
+  RR.parseEvalQ(cmd);
+
+  snprintf(cmd, CMD_BUF_SIZE, "writeChar('%d', .tmpsockconnection)", in_memory_partitions[split]->GetSize());
+  RR.parseEval(cmd);
+  LOG_INFO(cmd);
+
+  snprintf(cmd, CMD_BUF_SIZE, "serialize(`%s`, .tmpsockconnection); close(.tmpsockconnection);", split);
+  LOG_INFO("Evaluating final command %s", cmd);
+  RR.parseEvalQ(cmd);
+  LOG_INFO("Serialized %s to socket connection", split);
+}*/

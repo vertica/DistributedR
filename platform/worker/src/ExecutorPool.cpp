@@ -236,6 +236,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
                            ::uint64_t id, ::uint64_t uid, 
                            Response* res, int executor_id ) {
   LOG_DEBUG("EXECUTE TaskID %18zu - Waiting for an Available Executor", uid);
+  LOG_INFO("ExecutorPool: New Request of type EXECR executor(%d)", executor_id);
   
   //Timer timer;
   //timer.start();
@@ -276,9 +277,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
 
   ExecutorData* executor = executors[target_executor_id];
 
-  LOG_INFO("Sending cmd for EXECUTE to the executor");
-
-  fprintf(executor->send, "%d\n", 1);
+  fprintf(executor->send, "%d\n", EXECR);
 
   if (args.size() > 0)
      LOG_DEBUG("EXECUTE TaskID %18zu - Sending dobject Arguments to Executor.", uid);
@@ -485,45 +484,37 @@ void ExecutorPool::execute(std::vector<std::string> func,
 
 void ExecutorPool::clear(std::vector<std::string> splits, int executor_id) {
 
-  LOG_INFO("New Request of type CLEAR to be sent to Executor");
-
+  LOG_INFO("ExecutorPool: New Request of type CLEAR #splits(%d), executor(%d)", splits.size(), executor_id);
   sema->wait();  // the semaphore is posted when a task is done
-
-  Timer total_worker_exec;
-  total_worker_exec.start();
 
   unique_lock<mutex> lock(poolmutex);
   // Wait till the executor is ready
-  do{
-  } while(executors[executor_id]->ready==false);
+  while(executors[executor_id]->ready==false) {};
 
   executors[executor_id]->ready = false;
   lock.unlock();
 
   ExecutorData* executor = executors[executor_id];
 
-  LOG_INFO("Sending cmd for CLEAR to the executor: Size(%zu)", splits.size());
-
-  fprintf(executor->send, "%d\n", 2);
-
+  fprintf(executor->send, "%d\n", CLEAR);
   fprintf(executor->send, "%zu\n", splits.size());
   for (int i = 0; i < splits.size(); i++) {
-     //std::string splitname(splits[i].c_str());
      LOG_INFO("ExecutorPool: Sending partition %s to executor %d", splits[i].c_str(), executor_id);
      fprintf(executor->send, "%s\n", splits[i].c_str());
   }
   fflush(executor->send);
+  LOG_INFO("ExecutorPool: Sent CLEAR executor(%d). Not wait for completion", executor_id);
 
-  char task_msg[EXCEPTION_MSG_SIZE];
+  /*char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
-    /*//char cname[100];  // to keep a resultant split name
-    int success;
-    int32_t ret = ParseClearLine(executor->recv, &success);
-    LOG_INFO("Ret is %d", ret);
-    if(ret != 1) {
-      LOG_ERROR("Error clearning partitions");
-    }
-    break;*/
+    //char cname[100];  // to keep a resultant split name
+    //int success;
+    //int32_t ret = ParseClearLine(executor->recv, &success);
+    //LOG_INFO("Ret is %d", ret);
+    //if(ret != 1) {
+    //  LOG_ERROR("Error clearning partitions");
+    //}
+    //break;
     char cname[100];  // to keep a resultant split name
     size_t size;
     size_t rdim, cdim;
@@ -560,319 +551,62 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor_id) {
        break;
     }   
 
-  }
+  }*/
 
   executors[executor_id]->ready = true;
   sema->post();
-}
-
-
-void ExecutorPool::fetch(std::string split_name, int32_t serverfd, int port_number, int executor_id) {
-
-  LOG_INFO("New Request of type FETCH to be sent to Executor");
-
-  sema->wait();  // the semaphore is posted when a task is done
-
-  Timer total_worker_exec;
-  total_worker_exec.start();
-
-  unique_lock<mutex> lock(poolmutex);
-  // Wait till the executor is ready
-  do{ 
-  } while(executors[executor_id]->ready==false);
-
-  executors[executor_id]->ready = false;
-  lock.unlock();
-
-  ExecutorData* executor = executors[executor_id];
-
-  LOG_INFO("Sending cmd for FETCH to the executor for partition name %s", split_name.c_str());
-
-  fprintf(executor->send, "%d\n", 3); 
-  fprintf(executor->send, "%s %d %d\n", split_name.c_str(), serverfd, port_number);
-  fflush(executor->send);
-
-  LOG_INFO("Sent splitnames");
-  char task_msg[EXCEPTION_MSG_SIZE];
-  while (true) {   // waiting for a result from executors 
-    /*//char cname[100];  // to keep a resultant split name
-    int success;
-    int32_t ret = ParseClearLine(executor->recv, &success);
-    LOG_INFO("Ret is %d", ret);
-    if(ret != 1) {
-      LOG_ERROR("Error clearning partitions");
-    }
-    break;*/
-    char cname[100];  // to keep a resultant split name
-    size_t size;
-    size_t rdim, cdim;
-    int empty;
-    memset(task_msg, 0x00, sizeof(task_msg));
-    // This function blocks as it is waiting for fscanf from executor.
-    int32_t ret = ParseUpdateLine(executor->recv, cname, &size,
-                                  &empty, &rdim, &cdim, task_msg);
-    LOG_INFO("ret is %d", ret);
-    if (ret != 5) {
-        // we are using size field to indicate the task result
-        //req.set_task_result(TASK_EXCEPTION);
-        ostringstream msg;
-        msg << "Error from worker " << server_to_string(*my_location)
-            << check_out_of_memory(child_proc_ids_) << endl << "Failed to parse function execution result from executor";
-        //req.set_task_message(msg.str());
-        LOG_ERROR(msg.str());
-        break;
-    }
-
-    // & means the task is complete
-    // After a task is done, all update() variables are processed first.
-    // After all updates are propagated, the task completes.
-    if (strncmp(cname, "&", 100) == 0) {
-       // we are using size field to indicate the task result
-       LOG_INFO("Clear Task complete.");
-       //req.set_task_result(size);
-       //req.set_task_message(string(task_msg));
-       if (size==TASK_EXCEPTION){
-          ostringstream msg;
-          msg << "TASK_EXCEPTION : Clear task execution failed at Executor " << executor_id << " with message: " << task_msg;
-          LOG_ERROR(msg.str());
-       }
-       break;
-    }
-
-  }
-
-  executors[executor_id]->ready = true;
-  sema->post();
-}
-
-void ExecutorPool::newtransfer(std::string split_name, std::string server_name, int port_number, int executor_id) {
-
-  LOG_INFO("New Request of type NEWTRANSFER to be sent to Executor");
-
-  sema->wait();  // the semaphore is posted when a task is done
-
-  Timer total_worker_exec;
-  total_worker_exec.start();
-
-  unique_lock<mutex> lock(poolmutex);
-  // Wait till the executor is ready
-  do{
-  } while(executors[executor_id]->ready==false);
-
-  executors[executor_id]->ready = false;
-  lock.unlock();
-
-  ExecutorData* executor = executors[executor_id];
-
-  LOG_INFO("Sending cmd for NEWTRANSFER to the executor for partition name %s", split_name.c_str());
-
-  fprintf(executor->send, "%d\n", 4);
-  fprintf(executor->send, "%s %s %d\n", split_name.c_str(), server_name.c_str(), port_number);
-  fflush(executor->send);
-
-  LOG_INFO("Sent splitname");
-  char task_msg[EXCEPTION_MSG_SIZE];
-  while (true) {   // waiting for a result from executors 
-    /*//char cname[100];  // to keep a resultant split name
-    int success;
-    int32_t ret = ParseClearLine(executor->recv, &success);
-    LOG_INFO("Ret is %d", ret);
-    if(ret != 1) {
-      LOG_ERROR("Error clearning partitions");
-    }
-    break;*/
-    char cname[100];  // to keep a resultant split name
-    size_t size;
-    size_t rdim, cdim;
-    int empty;
-    memset(task_msg, 0x00, sizeof(task_msg));
-    // This function blocks as it is waiting for fscanf from executor.
-    int32_t ret = ParseUpdateLine(executor->recv, cname, &size,
-                                  &empty, &rdim, &cdim, task_msg);
-    LOG_INFO("ret is %d", ret);
-    if (ret != 5) {
-        // we are using size field to indicate the task result
-        //req.set_task_result(TASK_EXCEPTION);
-        ostringstream msg;
-        msg << "Error from worker " << server_to_string(*my_location)
-            << check_out_of_memory(child_proc_ids_) << endl << "Failed to parse function execution result from executor";
-        //req.set_task_message(msg.str());
-        LOG_ERROR(msg.str());
-        break;
-    }
-
-    // & means the task is complete
-    // After a task is done, all update() variables are processed first.
-    // After all updates are propagated, the task completes.
-    if (strncmp(cname, "&", 100) == 0) {
-       // we are using size field to indicate the task result
-       LOG_INFO("NewTransfer Task complete.");
-       //req.set_task_result(size);
-       //req.set_task_message(string(task_msg));
-       if (size==TASK_EXCEPTION){
-          ostringstream msg;
-          msg << "TASK_EXCEPTION : NewTransfer task execution failed at Executor " << executor_id << " with message: " << task_msg;
-          LOG_ERROR(msg.str());
-       }
-       break;
-    }
-
-  }
-
-  executors[executor_id]->ready = true;
-  sema->post();
-}
+}                                  
 
 
 void ExecutorPool::persist_to_worker(std::string split_name, int executor_id) {
 
-  LOG_INFO("New Request of type PERSIST_TO_WORKER to be sent to Executor");
-
+  LOG_INFO("ExecutorPool: New Request of type PERSIST split(%s), executor(%d)", split_name.c_str(), executor_id);
   sema->wait();  // the semaphore is posted when a task is done
-
-  Timer total_worker_exec;
-  total_worker_exec.start();
 
   unique_lock<mutex> lock(poolmutex);
   // Wait till the executor is ready
-  do{ 
-  } while(executors[executor_id]->ready==false);
+  while(executors[executor_id]->ready==false) {};
 
   executors[executor_id]->ready = false;
   lock.unlock();
 
   ExecutorData* executor = executors[executor_id];
 
-  LOG_INFO("Sending cmd for PERSIST_TO_WORKER to the executor %d for partition name %s", executor_id, split_name.c_str());
-
-  fprintf(executor->send, "%d\n", 5); 
+  fprintf(executor->send, "%d\n", PERSIST); 
   fprintf(executor->send, "%s\n", split_name.c_str());
   fflush(executor->send);
+  LOG_INFO("ExecutorPool: Sent PERSIST split(%s), executor(%d)", split_name.c_str(), executor_id);
 
   char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
-    /*//char cname[100];  // to keep a resultant split name
-    int success;
-    int32_t ret = ParseClearLine(executor->recv, &success);
-    LOG_INFO("Ret is %d", ret);
-    if(ret != 1) {
-      LOG_ERROR("Error clearning partitions");
-    }
-    break;*/
     char cname[100];  // to keep a resultant split name
-    size_t size;
-    size_t rdim, cdim;
+    size_t size, rdim, cdim;
     int empty;
     memset(task_msg, 0x00, sizeof(task_msg));
+
     // This function blocks as it is waiting for fscanf from executor.
     int32_t ret = ParseUpdateLine(executor->recv, cname, &size,
                                   &empty, &rdim, &cdim, task_msg);
-    LOG_INFO("ret is %d", ret);
     if (ret != 5) {
-        // we are using size field to indicate the task result
-        //req.set_task_result(TASK_EXCEPTION);
         ostringstream msg;
-        msg << "Error from worker " << server_to_string(*my_location)
+        msg << "Error from worker " << server_to_string(*my_location) << ": Message(" << task_msg<< "). Ret("<< ret << ")"
             << check_out_of_memory(child_proc_ids_) << endl << "Failed to parse function execution result from executor";
-        //req.set_task_message(msg.str());
         LOG_ERROR(msg.str());
         break;
     }
 
-    // & means the task is complete
-    // After a task is done, all update() variables are processed first.
-    // After all updates are propagated, the task completes.
     if (strncmp(cname, "&", 100) == 0) {
        // we are using size field to indicate the task result
-       LOG_INFO("Persist_to_disk Task complete.");
-       //req.set_task_result(size);
-       //req.set_task_message(string(task_msg));
+       LOG_INFO("Persist to worker Task complete.");
        if (size==TASK_EXCEPTION){
           ostringstream msg;
-          msg << "TASK_EXCEPTION : Clear task execution failed at Executor " << executor_id << " with message: " << task_msg;
+          msg << "TASK_EXCEPTION : Persist task execution failed at Executor " << executor_id << " with message: " << task_msg;
           LOG_ERROR(msg.str());
        }
        break;
     }
-
   }
 
-  executors[executor_id]->ready = true;
-  sema->post();
-}
-
-
-void ExecutorPool::shutdown(int executor_id) {
-
-  LOG_INFO("New Request of type EXECUTOR to be sent to Executor");
-
-  sema->wait();  // the semaphore is posted when a task is done
-
-  Timer total_worker_exec;
-  total_worker_exec.start();
-
-  unique_lock<mutex> lock(poolmutex);
-  // Wait till the executor is ready
-  do{
-  } while(executors[executor_id]->ready==false);
-
-  executors[executor_id]->ready = false;
-  lock.unlock();
-
-  ExecutorData* executor = executors[executor_id];
-
-  LOG_INFO("Sending cmd for SHUTDOWN to the executor for partition name");
-
-  fprintf(executor->send, "%d\n", 6);
-  fflush(executor->send);
-
-  char task_msg[EXCEPTION_MSG_SIZE];
-  while (true) {   // waiting for a result from executors 
-    /*//char cname[100];  // to keep a resultant split name
-    int success;
-    int32_t ret = ParseClearLine(executor->recv, &success);
-    LOG_INFO("Ret is %d", ret);
-    if(ret != 1) {
-      LOG_ERROR("Error clearning partitions");
-    }
-    break;*/
-    char cname[100];  // to keep a resultant split name
-    size_t size;
-    size_t rdim, cdim;
-    int empty;
-    memset(task_msg, 0x00, sizeof(task_msg));
-    // This function blocks as it is waiting for fscanf from executor.
-    int32_t ret = ParseUpdateLine(executor->recv, cname, &size,
-                                  &empty, &rdim, &cdim, task_msg);
-    LOG_INFO("ret is %d", ret);
-    if (ret != 5) {
-        // we are using size field to indicate the task result
-        //req.set_task_result(TASK_EXCEPTION);
-        ostringstream msg;
-        msg << "Error from worker " << server_to_string(*my_location)
-            << check_out_of_memory(child_proc_ids_) << endl << "Failed to parse function execution result from executor";
-        //req.set_task_message(msg.str());
-        LOG_ERROR(msg.str());
-        break;
-    }
-
-    // & means the task is complete
-    // After a task is done, all update() variables are processed first.
-    // After all updates are propagated, the task completes.
-    if (strncmp(cname, "&", 100) == 0) {
-       // we are using size field to indicate the task result
-       LOG_INFO("Clear Task complete.");
-       //req.set_task_result(size);
-       //req.set_task_message(string(task_msg));
-       if (size==TASK_EXCEPTION){
-          ostringstream msg;
-          msg << "TASK_EXCEPTION : Clear task execution failed at Executor " << executor_id << " with message: " << task_msg;
-          LOG_ERROR(msg.str());
-       }
-       break;
-    }
-
-  }
   executors[executor_id]->ready = true;
   sema->post();
 }
@@ -891,5 +625,60 @@ int ExecutorPool::GetExecutorID(pid_t pid) {
   }
   return 0;
 }
+
+
+/*void ExecutorPool::newtransfer(std::string split_name, std::string server_name, int port_number, int executor_id) {
+
+  LOG_INFO("New Request of type NEWTRANSFER to be sent to Executor");
+  sema->wait();  // the semaphore is posted when a task is done
+
+  unique_lock<mutex> lock(poolmutex);
+  // Wait till the executor is ready
+  while(executors[executor_id]->ready==false) {};
+
+  executors[executor_id]->ready = false;
+  lock.unlock();
+
+  ExecutorData* executor = executors[executor_id];
+
+  LOG_INFO("Sending cmd for NEWTRANSFER to the executor for partition name %s", split_name.c_str());
+  fprintf(executor->send, "%d\n", 4); 
+
+  fprintf(executor->send, "%s %s %d\n", split_name.c_str(), server_name.c_str(), port_number);
+  fflush(executor->send);
+  
+  char task_msg[EXCEPTION_MSG_SIZE];
+  while (true) {   // waiting for a result from executors 
+    char cname[100];  // to keep a resultant split name
+    size_t size;
+    size_t rdim, cdim;
+    int empty;
+    memset(task_msg, 0x00, sizeof(task_msg));
+
+    // This function blocks as it is waiting for fscanf from executor.
+    int32_t ret = ParseUpdateLine(executor->recv, cname, &size,
+                                  &empty, &rdim, &cdim, task_msg);
+    if (ret != 5) {
+        ostringstream msg;
+        msg << "Error from worker " << server_to_string(*my_location) << ": Message(" << task_msg<< "). Ret("<< ret << ")"
+            << check_out_of_memory(child_proc_ids_) << endl << "Failed to parse function execution result from executor";
+        LOG_ERROR(msg.str());
+        break;
+    }
+    
+    if (strncmp(cname, "&", 100) == 0) {
+       LOG_INFO("NewTransfer Task complete for (%S).", split_name.c_str());
+       if (size==TASK_EXCEPTION){
+          ostringstream msg;
+          msg << "TASK_EXCEPTION : NewTransfer task execution failed at Executor " << executor_id << " with message: " << task_msg;
+          LOG_ERROR(msg.str());
+       }
+       break;
+    }
+  }
+
+  executors[executor_id]->ready = true;
+  sema->post();
+}*/
 
 }  // namespace presto

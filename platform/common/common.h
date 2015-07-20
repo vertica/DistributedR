@@ -107,6 +107,12 @@ enum StorageLayer {
   RINSTANCE
 };
 
+enum ExecutorEvent {
+  PERSIST = 1,
+  EXECR,
+  CLEAR
+};
+
 /** This enum indicates a bit index of each attribute 
  * when HelloReply message is sent from a worker.
  */
