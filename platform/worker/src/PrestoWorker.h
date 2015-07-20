@@ -88,6 +88,11 @@ enum TASK_TYPE {
   TASK_TYPE_NUM
 };
 
+struct VerticaColocation{
+    bool iscolocated;
+    long long int distr_memory;
+};
+
 #define NUM_THREADPOOLS (TASK_TYPE_NUM - EXECUTE)
 
 #define EXEC_THREAD_NUM 0  // EXEC tasks. 0 means that use the maximum number of executors
@@ -103,7 +108,7 @@ enum TASK_TYPE {
 // The sequence of this variable has to comply with TASK_TYPE enum
 static int NUM_THREADS[NUM_THREADPOOLS] = {EXEC_THREAD_NUM,
                                     IO_THREAD_NUM,
-                                    SEND_THREAD_NUM,  
+                                    SEND_THREAD_NUM,
                                     RECV_THREAD_NUM,
                                     HELLO_THREAD_NUM,
                                     MISC_THREAD_NUM};
@@ -168,10 +173,12 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
     return data_loader_;
   }
 
+  VerticaColocation verticaColocationDetails;
+
 protected:
   WorkerRequest* CreateDfCcTask(CreateCompositeRequest& req);
   WorkerRequest* CreateListCcTask(CreateCompositeRequest& req);
-  
+
  private:
   // keep Worker information given string:port information
   boost::unordered_map<std::string, boost::shared_ptr<WorkerInfo> > client_map;

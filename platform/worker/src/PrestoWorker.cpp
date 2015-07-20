@@ -67,11 +67,11 @@ using namespace std;
 using namespace boost;
 
 namespace presto {
-    
-#ifdef PERF_TRACE   
+
+#ifdef PERF_TRACE
   ZTracer::ZTraceEndpointRef worker_ztrace_inst;
-#endif  
-  
+#endif
+
 // to enable clean worker shutdown (handling shared memory)
 static PrestoWorker* worker_ptr = NULL;
 static MasterClient* cmd_to_master = NULL;
@@ -307,7 +307,7 @@ void PrestoWorker::fetch(string name, ServerInfo location,
 
     Timer t;
     t.start();
-    
+
     TransferServer tw(start_port_range_, end_port_range_);
     // fetch data from remote worker and write it to shared memory region
     tw.transfer_blob(addr, name, size, getClient(location),
@@ -627,7 +627,7 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
   return wrk_req;
 }
 
-/** create a composite array from a request of a master node. 
+/** create a composite array from a request of a master node.
  * This function allocates a region on shared memory corresponding to the input matrix size
  * @param req create composite array request (Split information that will be embedded into composite array
  * @return NULL
@@ -796,7 +796,7 @@ PrestoWorker::PrestoWorker(
                                              DEFAULT_SPILL_DIR);
   }
   LOG_INFO("Creating Executors in Worker");
-  
+
   executorpool_ = new ExecutorPool(num_executors_,
                                    &my_location_,
                                    master_.get(),
@@ -960,7 +960,7 @@ void PrestoWorker::HandleRequests(int type) {
       Response worker_resp;
       boost::this_thread::interruption_point();
       #ifdef PERF_TRACE
-      
+
       trace_worker.reset(new bool{false});
       if(worker_req.has_parent_span_id() && worker_req.has_span_id() && worker_req.has_trace_id()){
             struct blkin_trace_info info;
@@ -971,10 +971,10 @@ void PrestoWorker::HandleRequests(int type) {
             if(info.trace_id != 1337) {
                 trace_worker.reset(new bool{true});
             }
-            worker_trace.reset(new ZTracer::ZTrace("worker_thread",worker_ztrace_inst,&info,info.trace_id != 1337));     
+            worker_trace.reset(new ZTracer::ZTrace("worker_thread",worker_ztrace_inst,&info,info.trace_id != 1337));
       }
       #endif
-      
+
       switch (worker_req.type()) {
         case WorkerRequest::HELLO:
           {
@@ -1021,8 +1021,8 @@ void PrestoWorker::HandleRequests(int type) {
           }
           break;
         case WorkerRequest::VERTICALOAD:
-          {     
-     
+          {
+
             LOG_INFO("New VERICALOAD Task ID %zu - Received from Master", worker_req.verticaload().uid());
             verticaload(worker_req.verticaload());
           }
@@ -1169,9 +1169,9 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
         type = IO;  // related IO - SAVE/LOAD from/to external storage
         break;
       case WorkerRequest::FETCH:
-        // This worker needs to fetch (or receive) from other workers        
+        // This worker needs to fetch (or receive) from other workers
         // fetch is received only from a master
-        master_last_contacted_.start(); 
+        master_last_contacted_.start();
         type = RECV;
         break;
       case WorkerRequest::NEWTRANSFER:
@@ -1332,10 +1332,15 @@ void PrestoWorker::hello(ServerInfo master_location,
     }
   }
   if (reply_flag & (1 << SYS_MEM_TOTAL)) {
-    helloreply.set_mem_total(get_total_memory());
+      if(verticaColocationDetails.iscolocated && verticaColocationDetails.distr_memory !=-1){
+           helloreply.set_mem_total(verticaColocationDetails.distr_memory);
+      }
+      else {
+           helloreply.set_mem_total(get_total_memory());
+      }
   }
   if (reply_flag & (1 << SYS_MEM_USED)) {
-    helloreply.set_mem_used(get_used_memory());
+      helloreply.set_mem_used(get_used_memory());
   }
   master_->HelloReply(helloreply);  // send reply message
 
@@ -1909,12 +1914,12 @@ int main(int argc, char **argv) {
     worker_addr = string(hostname);
   }
   char workerLogname[1024];
-  
+
 #ifdef PERF_TRACE
   int tracer = ZTracer::ztrace_init();
   worker_ztrace_inst = ZTracer::create_ZTraceEndpoint("127.0.0.1",2,worker_addr);
 #endif
-  
+
   sprintf(workerLogname, "/tmp/R_worker_%s_%s.%d.log", getenv("USER"), master_addr.c_str(), master_port);
   InitializeFileLogger(workerLogname);
   LoggerFilter(log_level);
@@ -1963,6 +1968,9 @@ int main(int argc, char **argv) {
         fclose(f2);
     }
 
+   worker->verticaColocationDetails.iscolocated = iscolocated;
+   worker->verticaColocationDetails.distr_memory = distr_memory;
+
    if(iscolocated){
 
       LOG_INFO("Adding resource limits to distributedR cgroup. \n distr_memory: %lld\n distr_cpu_mask: %s \n distr_cpu_mode: %s", distr_memory, distr_cpu_mask.c_str(), distr_cpu_mode.c_str());
@@ -1973,12 +1981,8 @@ int main(int argc, char **argv) {
       // set resource limits
       setResourceLimit(distr_memory, distr_cpu_mask, distr_cpu_mode);
 
-      // attach current process id
-      presto::attach_process(getpid());
-
       // attach executor process id
-      std::vector<pid_t> pids = worker->GetExecutorPids();
-      presto::attach_processes(pids);
+      presto::attach_processes(worker->GetExecutorPids());
   }
 
     worker->Run(master_addr, master_port, worker_addr);
