@@ -59,7 +59,7 @@ ExecutorPool::ExecutorPool(PrestoWorker* pw_, int n_, ServerInfo *my_location_,
       shmem_arrays_(shmem_arrays), spill_dir_(spill_dir) {
   
   int unique_worker_id = static_cast<int>(getpid());  // determine worker pid
-  exec_index = 0;
+  exec_index = -1;
 
   sema = new boost::interprocess::interprocess_semaphore(num_executors);
   
@@ -92,9 +92,9 @@ ExecutorPool::ExecutorPool(PrestoWorker* pw_, int n_, ServerInfo *my_location_,
       char logname[MAX_LOG_NAME_SIZE];
       int open_flag = O_RDWR | O_CREAT;
 #ifdef UNIQUE_EXECUTOR_LOG_NAMES
-      sprintf(logname, "/tmp/R_executor_%s_%s.%d_%d_%d.log", getenv("USER"), master_ip.c_str(), master_port, i+1, unique_worker_id);
+      sprintf(logname, "/tmp/R_executor_%s_%s.%d_%d_%d.log", getenv("USER"), master_ip.c_str(), master_port, i, unique_worker_id);
 #else
-      sprintf(logname, "/tmp/R_executor_%s_%s.%d_%d.log", getenv("USER"), master_ip.c_str(), master_port, i+1);
+      sprintf(logname, "/tmp/R_executor_%s_%s.%d_%d.log", getenv("USER"), master_ip.c_str(), master_port, i);
       open_flag |= O_TRUNC;
 #endif
       int fd = open(logname, open_flag, S_IRUSR | S_IWUSR);
@@ -139,9 +139,9 @@ ExecutorPool::ExecutorPool(PrestoWorker* pw_, int n_, ServerInfo *my_location_,
       if (executor->send != NULL && executor->recv != NULL) {
         executor->ready = true;
       }
-      executor->id = i+1;
+      executor->id = i;
 
-      executors[i+1] = executor;
+      executors[i] = executor;
       LOG_INFO("Created new Executor with ID %d Process ID %jd", i+1,(::intmax_t)pid);
     }
   }
@@ -214,6 +214,7 @@ ExecutorPool::~ExecutorPool() {
 int ExecutorPool::GetExecutorInRndRobin() {
     unique_lock<mutex> lock(exec_mutex);
     exec_index++;
+    LOG_INFO("GetExecutorInRndRobin: %d", exec_index%num_executors);
     return exec_index%num_executors;
     lock.unlock();
 }

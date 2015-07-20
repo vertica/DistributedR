@@ -303,17 +303,17 @@ int Executor::ReadSplitArgs() {  // NOLINT
         strcat(new_name,num);  //eg a5
         
         //add to v2a a fake name so it's cleaned up later     
-        int32_t version;
-        ParseVersionNumber(splitname, &version);
+        //int32_t version;
+        //ParseVersionNumber(splitname, &version);
 
         LOG_INFO("Processing partitions %s", splitname);
 
-        if (version == 0) {  // This happens only during a new dobject creation. 
+        /*if (version == 0) {  // This happens only during a new dobject creation. 
           LOG_INFO("First partition. Assign varname to Nil");
           RR[varname] = R_NilValue;
           list[m] = RR[varname];
           continue;
-        }
+        }*/
 
         // Load split from Executor or Worker
         if(in_memory_partitions.find(splitname) != in_memory_partitions.end()) {
@@ -345,17 +345,17 @@ int Executor::ReadSplitArgs() {  // NOLINT
       var_to_list_type[varname] = composite;
     } else {
 
-      int32_t version;
-      ParseVersionNumber(splitname, &version);
+      //int32_t version;
+      //ParseVersionNumber(splitname, &version);
 
       LOG_INFO("Processing partitions %s", splitname);
 
-      if (version == 0) {  // This happens only during a new dobject creation. 
+      /*if (version == 0) {  // This happens only during a new dobject creation. 
         LOG_INFO("First partition. Assign varname to Nil");
         RR[varname] = R_NilValue;
         var_to_Partition[varname] = splitname;
         continue;
-      }
+      }*/
 
       // Check if executor contains the partitions.
       if(in_memory_partitions.find(splitname) != in_memory_partitions.end()) {
@@ -1060,7 +1060,7 @@ void Executor::ClearTaskData() {
 
   //Rcpp::CharacterVector keep( v.begin(), v.end() );
   RR[".tmp.keep"] = v;//keep;
-  RR.parseEvalQ("rm(list=setdiff(ls(all.names=TRUE), .tmp.keep)); gc()");
+  RR.parseEvalQ("rm(list=setdiff(ls(all.names=TRUE), .tmp.keep));");
     
   //R.parseEvalQ("rm(list=ls(all.names=TRUE));gc()");
   // cleat splits information in this task                                 

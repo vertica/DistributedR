@@ -127,12 +127,11 @@ void DistList::LoadInR(RInside &R, const std::string &varname){
 }
 
 DistList::~DistList(){
+  LOG_INFO("In DistList destructor");
   if(header_region != NULL) {
     LOG_INFO("Deleting header_region");
     delete header_region;
-  }
-
-  if(header != NULL) {
+  } else if(header != NULL) {
     LOG_INFO("Deleting header");
     delete header;
   }

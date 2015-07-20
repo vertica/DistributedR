@@ -126,12 +126,11 @@ void DistDataFrame::LoadInR(RInside &R, const std::string &varname){
 }
 
 DistDataFrame::~DistDataFrame(){
+  LOG_INFO("In DistDataFrame destructor");
   if(header_region != NULL) {
     LOG_INFO("Deleting header_region");
     delete header_region;
-  }
-
-  if(header != NULL) {
+  } else if(header != NULL) {
     LOG_INFO("Deleting header");
     delete header;
   }

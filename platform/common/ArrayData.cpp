@@ -260,11 +260,11 @@ ArrayData* CreateDobjectData(RInside &R, ARRAYTYPE org_class, const string &varn
     size_t size = Rcpp::as<size_t>(R.parseEval(cmd));
 
     if (org_class == DATA_FRAME) 
-       return new DistDataFrame(newname, store, r_size, R["`"+varname+".serializedtmp...`"], (size - SEXP_HEADER_SIZE));
+       return new DistDataFrame(newname, store, r_size, R[varname+".serializedtmp..."], (size - SEXP_HEADER_SIZE));
     else if (org_class == LIST) {
        SEXP sexp_from = R[varname];     // Extracting length of the list in the split.
        int split_len = LENGTH(sexp_from);
-       return new DistList(newname, store, r_size, R["`"+varname+".serializedtmp...`"], (size - SEXP_HEADER_SIZE), split_len);
+       return new DistList(newname, store, r_size, R[varname+".serializedtmp..."], (size - SEXP_HEADER_SIZE), split_len);
     } else {
        ostringstream msg;
        msg << "Unhandled dobject: "<< org_class ;

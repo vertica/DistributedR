@@ -1133,6 +1133,7 @@ string Scheduler::GetSplitLocation(const string &split_name) {
 SEXP Scheduler::GetSplitToMaster(const string &name) {
   // TODO(erik): handle case when split is in a store
   unique_lock<recursive_mutex> lock(metadata_mutex);
+  LOG_INFO("GetSplitToMaster: Split_name(%s)", name.c_str());
   Split *split = splits[name];
   WorkerInfo *wi = (*split->workers.begin())->workerinfo;
   lock.unlock();

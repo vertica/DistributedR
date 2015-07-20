@@ -137,7 +137,7 @@ setMethod("getpartition", signature("darray", "missing", "missing"),
                                       Dim=as.integer(c(0,0))))
     		}else{ return (array(dim=c(0,0)))}
 	    }
-            foreach(i, 1:1, function(comp = splits(x)) {}, progress=FALSE)
+            foreach(i, 1:1, function(comp = splits(x)) { print(comp); }, progress=FALSE)
             tryCatch({
               pm <- get_pm_object()
               output <- .Call("DistributedObject_Get", pm, splits(x))

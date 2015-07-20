@@ -331,24 +331,26 @@ int64_t PrestoWorker::GetBestExecutor(const std::vector<NewArg>& args) {
     return target_executor;
 }
 
-//Check if partition is on worker(shmem_arrays) or executor(worker_partitions)
+//Check if partition intra-worker persist is needed.
 bool PrestoWorker::IsPartitionAvailable(const std::string& split_name, int executor_id) {
-   unique_lock<recursive_mutex> metalock(metadata_mutex);
-
-   bool onWorker = false;
-   bool onExec = false;
+   //bool onWorker = false;
+   bool onExec = true;
 
    // Is the partition on Worker?
-   if(shmem_arrays_.find(split_name) != shmem_arrays_.end())
-      onWorker = true;
+   //if(shmem_arrays_.find(split_name) != shmem_arrays_.end())
+   //   onWorker = true;
    
    if(executor_id != -1) {// Check for executor as well.
-     if(worker_partitions_[split_name]->executors.find(executor_id) != worker_partitions_[split_name]->executors.end())
-       onExec = true;
-   }
-
-   return (onExec || onWorker);
-   metalock.unlock();
+     unique_lock<recursive_mutex> metalock(metadata_mutex);
+     if(worker_partitions_.find(split_name) != worker_partitions_.end()) {
+       if(worker_partitions_[split_name]->executors.find(executor_id) == worker_partitions_[split_name]->executors.end())
+         onExec = false;
+     }
+     metalock.unlock();
+   } else  // force persist
+     onExec = false;
+     
+   return onExec;
 }
 
 bool PrestoWorker::IsBeingPersisted(const std::string& split_name) {
@@ -408,9 +410,9 @@ void PrestoWorker::ValidatePartitions(const std::vector<NewArg>& task_args, int 
    for(int i=0; i<all_partitions.size(); i++) {
       LOG_INFO("Validating %s", all_partitions[i].c_str());
 
-      int32_t version;
+      /*int32_t version;
       ParseVersionNumber(all_partitions[i], &version); 
-      if(version == 0) continue;
+      if(version == 0) continue;*/
    
       unique_lock<recursive_mutex> metalock(metadata_mutex);
       if(!IsPartitionAvailable(all_partitions[i], executor_id)) {
@@ -419,7 +421,8 @@ void PrestoWorker::ValidatePartitions(const std::vector<NewArg>& task_args, int 
            LOG_INFO("ValidatePartitions: Partition  %s is not being persisted. Started persist", all_partitions[i].c_str());
            PersistToWorker(all_partitions[i]);
         }
-      }
+      } else
+        LOG_INFO("ValidatePartitions: Persist not needed for %s", all_partitions[i].c_str());
       metalock.unlock();
    }
 }
@@ -429,21 +432,22 @@ void PrestoWorker::ValidatePartitions(const std::vector<NewArg>& task_args, int 
 void PrestoWorker::ValidateCCPartitions(const std::vector<NewArg>& task_args, int executor_id) {
    for(int i=0; i<task_args.size(); i++) {
       std::string split_name = task_args[i].arrayname();
-      LOG_INFO("Validating %s", split_name.c_str());
+      LOG_INFO("ValidatingCC %s", split_name.c_str());
 
-      int32_t version;
+      /*int32_t version;
       ParseVersionNumber(split_name, &version); 
       //LOG_INFO("Version is %d", version);
-      if(version == 0) continue;
+      if(version == 0) continue;*/
    
       unique_lock<recursive_mutex> metalock(metadata_mutex);
       if(!IsPartitionAvailable(split_name)) {
-        LOG_INFO("ValidatePartitions: Partition  %s is not on worker or executor. Check if being persisted", split_name.c_str());
+        LOG_INFO("ValidateCCPartitions: Partition  %s is not on worker or executor. Check if being persisted", split_name.c_str());
         if (!IsBeingPersisted(split_name)) {
-           LOG_INFO("ValidatePartitions: Partition  %s is not being persisted. Started persist", split_name.c_str());
+           LOG_INFO("ValidateCCPartitions: Partition  %s is not being persisted. Started persist", split_name.c_str());
            PersistToWorker(split_name);
         }    
-      }    
+      } else
+        LOG_INFO("ValidateCCPartitions: Persist not needed for %s", split_name.c_str());
       metalock.unlock();
    }
 }
