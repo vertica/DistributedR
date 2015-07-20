@@ -51,8 +51,7 @@ trace_build: clean blkin all
 ## === Test targets
 
 test:
-	$(MAKE)
-	$(PRESTO_RUN) $(PRESTO_DEF_WORKER_LIST) $(PRESTO_UNITTEST_SCRIPT)
+	$(MAKE) test_platform
 
 algotest:
 	$(MAKE)
@@ -64,7 +63,7 @@ stresstest:
 
 test_platform:
 	echo "library(distributedR); library(testthat); sink(paste(getwd(),'/test_platform.out',sep=''), type='output'); distributedR_start(); test_package('distributedR'); distributedR_shutdown()" | R --vanilla --slave --no-save
-	@echo -e "\n----- Test Report -----\n"
+	@printf "\n----- Test Report -----\n\n"
 	@cat $(PWD)/test_platform.out
 
 test_clean:

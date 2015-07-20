@@ -1,0 +1,69 @@
+### Generated Binaries and R Packages
+bin/
+# Except .sh files
+!bin/*.sh
+
+# Produced R packages
+install/
+
+### Temporary swap files
+*.swp
+*~
+
+### Generated Protobuf Files
+platform/messaging/gen-cpp/
+
+### Compiled third_party packages
+third_party/boost_1_50_0/
+third_party/install/
+third_party/libuuid-1.0.3/
+third_party/protobuf-2.3.0/
+third_party/zeromq-2.2.0/
+
+### Generated C++ Files
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Fortran module files
+*.mod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+ 
+### Generated R Files
+# History files
+.Rhistory
+.Rapp.history
+
+# Example code in package build process
+*-Ex.R
+
+# RStudio files
+.Rproj.user/
+
+# produced vignettes
+vignettes/*.html
+vignettes/*.pdf
+
+# python pyc files
+*.pyc
