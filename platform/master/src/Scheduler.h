@@ -60,7 +60,7 @@
 #define LOG(n, a...)
 #endif
 
-namespace presto {  
+namespace presto {
 
 class PrestoMaster;
 class ArrayStoreData;
@@ -402,8 +402,8 @@ class Scheduler {
   // completely delete a split (from all workers, arraystores, bookkeeping)
   void DeleteSplit(Split *split);
 
-
-  Worker* GetRndAvailableWorker();
+  // get the next available worker when the foreach has no data partition involved.
+  Worker* GetNextAvailableWorker();
 
   Worker* GetMostMemWorker();
 
@@ -429,6 +429,8 @@ class Scheduler {
   double total_child_scheduler_time_;
 
   // Tracking which worker to execute next task.
+  // This is mainly used when a foreach has no data partition involved and the next
+  // worker is fetched in round-robin fashion.
   int current_Worker;
 
   boost::mutex single_threading_mutex;

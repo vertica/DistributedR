@@ -35,7 +35,7 @@ using namespace std;
 using namespace boost;
 
 namespace presto {
-    
+
 extern bool skip_send;
 
 // helper function so we don't have to deal with
@@ -1199,7 +1199,7 @@ Worker* Scheduler::GetMostMemWorker() {
   return worker;
 }
 
-Worker* Scheduler::GetRndAvailableWorker() {
+Worker* Scheduler::GetNextAvailableWorker() {
   boost::unordered_map<std::string, Worker*>::iterator wit;
   vector<Worker*> worker_vector;
   for(wit=workers.begin(); wit != workers.end(); ++wit) {
@@ -1208,10 +1208,9 @@ Worker* Scheduler::GetRndAvailableWorker() {
     }
   }
   if (worker_vector.size() == 0) {
-    throw PrestoWarningException("GetRndAvailableWorker: no available worker");
+    throw PrestoWarningException("GetNextAvailableWorker: no available worker");
   }
   current_Worker = (current_Worker+1)%worker_vector.size();
-  //srand(time(NULL) + getpid());
   return worker_vector[current_Worker];
 }
 
