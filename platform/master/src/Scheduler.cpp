@@ -100,7 +100,7 @@ static void dispatch_task(WorkerInfo *wi, TaskArg *t,
  */
 static void dispatch_fetch(WorkerInfo *to, const ServerInfo &from,
                            const string &name, size_t size, 
-                           const std::vector<Arg>& task_args,
+                           const std::vector<Arg>* task_args,
                            ::uint64_t id, ::uint64_t uid, ::uint64_t parentid) {
   FetchRequest req;
   req.set_name(name);
@@ -108,22 +108,26 @@ static void dispatch_fetch(WorkerInfo *to, const ServerInfo &from,
   req.set_size(size);
   req.set_id(id);
   req.set_uid(uid);
-  for (int i = 0; i < task_args.size(); i++) {
-    if (task_args[i].arrays_size() == 1 || task_args[i].is_list()) {
-      NewArg arg;
-      arg.set_varname(task_args[i].name());
-      if(task_args[i].is_list()){
-          for(int j = 0; j < task_args[i].arrays_size(); j ++){
-            arg.add_list_arraynames(task_args[i].arrays(j).name());
-          }
-          arg.set_arrayname("list_type...");
-      }else{
-          arg.set_arrayname(task_args[i].arrays(0).name());
+
+  if(task_args != NULL && DATASTORE == RINSTANCE) {
+    for (int i = 0; i < task_args->size(); i++) {
+      if ((*task_args)[i].arrays_size() == 1 || (*task_args)[i].is_list()) {
+        NewArg arg;
+        arg.set_varname((*task_args)[i].name());
+        if((*task_args)[i].is_list()){
+            for(int j = 0; j < (*task_args)[i].arrays_size(); j ++){
+              arg.add_list_arraynames((*task_args)[i].arrays(j).name());
+            }
+            arg.set_arrayname("list_type...");
+        }else{
+            arg.set_arrayname((*task_args)[i].arrays(0).name());
+        }
+        req.add_task_args()->CopyFrom(arg);
       }
-      req.add_task_args()->CopyFrom(arg);
     }
+  } else {
+    LOG_ERROR("Task args is NULL for DATASTORE as RINSTANCE");
   }
-  //req.mutable_task_splits()->CopyFrom(task_splits);
   req.set_parenttaskid(parentid);  
 
   LOG_INFO("Dispatching Fetch %d", req.policy());
@@ -164,7 +168,7 @@ static void dispatch_io(WorkerInfo *wi, const string &array_name,
 static void dispatch_createcomposite(WorkerInfo *wi,
                                      const string &name,
                                      const Arg &carg,
-                                     const std::vector<Arg> &task_args,
+                                     const std::vector<Arg>* task_args,
                                      ::uint64_t id,
                                      ::uint64_t uid,
                                      ::uint64_t parentid) {
@@ -180,24 +184,29 @@ static void dispatch_createcomposite(WorkerInfo *wi,
   }
 
   req.mutable_dims()->CopyFrom(carg.dim());
-  LOG_INFO("Task_arg size in scheduler %zu", task_args.size());
 
-  for (int i = 0; i < task_args.size(); i++) {
-    if (task_args[i].arrays_size() == 1 || task_args[i].is_list()) {
-      NewArg arg;
-      arg.set_varname(task_args[i].name());
-      LOG_INFO("varname %s", task_args[i].name().c_str());
-      if(task_args[i].is_list()){
-          for(int j = 0; j < task_args[i].arrays_size(); j ++){
-            arg.add_list_arraynames(task_args[i].arrays(j).name());
-          }
-          arg.set_arrayname("list_type...");
-      }else{
-          arg.set_arrayname(task_args[i].arrays(0).name());
-          LOG_INFO("argname %s", task_args[i].name().c_str());
+  if(task_args !=NULL && DATASTORE == RINSTANCE) {
+    LOG_INFO("Task_arg size in scheduler %zu", task_args->size());
+
+    for (int i = 0; i < task_args->size(); i++) {
+      if ((*task_args)[i].arrays_size() == 1 || (*task_args)[i].is_list()) {
+        NewArg arg;
+        arg.set_varname((*task_args)[i].name());
+        LOG_INFO("varname %s", (*task_args)[i].name().c_str());
+        if((*task_args)[i].is_list()){
+            for(int j = 0; j < (*task_args)[i].arrays_size(); j ++){
+              arg.add_list_arraynames((*task_args)[i].arrays(j).name());
+            }
+            arg.set_arrayname("list_type...");
+        }else{
+            arg.set_arrayname((*task_args)[i].arrays(0).name());
+            LOG_INFO("argname %s", (*task_args)[i].name().c_str());
+        }
+        req.add_task_args()->CopyFrom(arg);
       }
-      req.add_task_args()->CopyFrom(arg);
     }
+  } else {
+    LOG_ERROR("Task args is NULL for DATASTORE as RINSTANCE");
   }
 
   req.set_id(id);
@@ -739,7 +748,11 @@ void Scheduler::AddSplit(const string &name, size_t size,
 
   if (splits.find(grandparent) != splits.end()) {
     LOG_DEBUG("AddSplit: garbage collecting %s", grandparent.c_str());
-    DeleteSplit(splits[grandparent]);
+    if(DATASTORE == WORKER) {
+      DeleteSplit(splits[grandparent], true);
+    } else {
+      DeleteSplit(splits[grandparent]);
+    }
   }
 
   lock.unlock();
@@ -809,7 +822,7 @@ void Scheduler::DeleteSplit(const string& split_name, bool delete_in_worker) {
   worker->cctasks.insert(cctask);
   lock.unlock();
 
-  dispatch_createcomposite(worker->workerinfo, name, arg, *task_args, 000, id, parentid);
+  dispatch_createcomposite(worker->workerinfo, name, arg, task_args, 000, id, parentid);
 
   return id;
 }
@@ -838,7 +851,7 @@ void Scheduler::DeleteSplit(const string& split_name, bool delete_in_worker) {
   from->sendtasks.insert(fetchtask);
   lock.unlock();
 
-  dispatch_fetch(w, s, split->name, split->size, *task_args, 000, id, parentid);
+  dispatch_fetch(w, s, split->name, split->size, task_args, 000, id, parentid);
   return id;
 }
 

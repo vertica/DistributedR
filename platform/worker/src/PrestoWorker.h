@@ -142,9 +142,9 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
   /*void fetchtoR(std::string name, ServerInfo location,
              uint64_t id, uint64_t uid, std::string store);*/
   void fetch(std::string name, ServerInfo location,
-             uint64_t id, uint64_t uid, std::string store);
+             size_t size, uint64_t id, uint64_t uid, std::string store);
   void newtransfer(std::string name, ServerInfo location,
-                   std::string store);
+                   size_t size, std::string store);
   void io(std::string array_name, std::string store_name,
           IORequest::Type type, uint64_t id, uint64_t uid);
   void clear(ClearRequest req);

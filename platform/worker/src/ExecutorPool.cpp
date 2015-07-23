@@ -61,7 +61,7 @@ ExecutorPool::ExecutorPool(PrestoWorker* worker_, int n_, ServerInfo *my_locatio
   int unique_worker_id = static_cast<int>(getpid());  // determine worker pid
   sema = new boost::interprocess::interprocess_semaphore(num_executors);
   executors = new ExecutorData[num_executors];
-  exec_index = -1;
+  exec_index = 0;
   
   for (int i = 0; i < num_executors; i++) {
     //ExecutorData* executor = new ExecutorData;
@@ -226,9 +226,10 @@ ExecutorPool::~ExecutorPool() {
 
 int ExecutorPool::GetExecutorInRndRobin() {
     unique_lock<mutex> lock(exec_mutex);
+    int idx = exec_index%num_executors;
     exec_index++;
-    LOG_INFO("GetExecutorInRndRobin: %d", exec_index%num_executors);
-    return exec_index%num_executors;
+    LOG_INFO("GetExecutorInRndRobin: %d", idx);
+    return idx;
     lock.unlock();
 }
 
@@ -259,14 +260,13 @@ void ExecutorPool::execute(std::vector<std::string> func,
   lock.unlock();
   
   LOG_DEBUG("EXECUTE TaskID %18zu - Will be executed at Executor Id %d", uid, target_executor);
+  fprintf(executors[target_executor].send, "%d\n", EXECR);
 
   // write arguments about splits
   // split argument format
   // number_of_splits\n
   // split_name_in_presto variable_name_in_R\n
   // repeati_until_number_of_splits!
-
-  fprintf(executors[target_executor].send, "%d\n", EXECR);
 
   if (args.size() > 0)
      LOG_DEBUG("EXECUTE TaskID %18zu - Sending dobject Arguments to Executor.", uid);
@@ -458,7 +458,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
                            std::vector<RawArg> raw_args,
                            std::vector<NewArg> composite_args,
                            ::uint64_t id, ::uint64_t uid, Response* res) {
-  LOG_DEBUG("EXECUTE TaskID %18zu - Waiting for an Available Executor", uid);
+  LOG_INFO("EXECUTE TaskID %18zu - Waiting for an Available Executor", uid);
 
   //Timer timer;
   //timer.start();
@@ -476,7 +476,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
     if (executors[exec_index].ready == false) {
       exec_index = (exec_index + 1) % num_executors;
     } else {
-      LOG_DEBUG("EXECUTE TaskID %18zu - Will be executed at Executor Id %d", uid, exec_index);
+      LOG_INFO("EXECUTE TaskID %18zu - Will be executed at Executor Id %d", uid, exec_index);
       //timer.start();
        // set an executor not ready to prevent further scheduling
       executors[exec_index].ready = false;
@@ -484,6 +484,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
       exec_index = (exec_index + 1) % num_executors;
       lock.unlock();
 
+      fprintf(executors[target_executor].send, "%d\n", EXECR);
       // write arguments about splits
       // split argument format
       // number_of_splits\n

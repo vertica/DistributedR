@@ -786,20 +786,26 @@ DenseArrayData::DenseArrayData(
  */
 DenseArrayData::~DenseArrayData() {
   LOG_INFO("In DenseArrayData destructor");
-  if(header_region != NULL) {
+  if(store = WORKER) {
+    LOG_INFO("Store is Worker. Removing header region");
+    delete header_region;
+  } else {
+    LOG_INFO("Store is Executor. Removing header");
+    delete header;
+  }
+  /*if(header_region != NULL) {
     LOG_INFO("Deleting header_region");
     delete header_region;
   } else if(header != NULL) {
     LOG_INFO("Deleting header");
     delete header;
-  }
+  }*/
 }
 
 /** Get dimension of the dense array data (number of rows/columns)
  * @return a pair of number of rows/columns
  */
 pair<std::int64_t, std::int64_t> DenseArrayData::GetDims() const {
-  LOG_INFO("In DenseArrayData::GetDims(), %d, %d", header->dims[0], header->dims[1]);
   return make_pair(header->dims[0], header->dims[1]);
 }
 
@@ -1208,8 +1214,16 @@ int* SparseArrayData::ConvertJtoPVector(int* j_vector, int nnz, int num_col) {
  *
  */
 SparseArrayData::~SparseArrayData() {
-  if(header_region != NULL) 
+  /*if(header_region != NULL) 
+    delete header_region;*/
+  LOG_INFO("In SparseArrayData destructor");
+  if(store = WORKER) {
+    LOG_INFO("Store is Worker. Removing header region");
     delete header_region;
+  } else {
+    LOG_INFO("Store is Executor. Removing header");
+    delete header;
+  }
 }
 
 /** Get the dimensions of the sparse array
@@ -1495,8 +1509,16 @@ SparseArrayTripletData::SparseArrayTripletData(
 }
 
 SparseArrayTripletData::~SparseArrayTripletData() {
-  if(header_region != NULL)
+  LOG_INFO("In SparseArrayTripletData destructor");
+  if(store = WORKER) {
+    LOG_INFO("Store is Worker. Removing header region");
     delete header_region;
+  } else {
+    LOG_INFO("Store is Executor. Removing header");
+    delete header;
+  }
+  /*if(header_region != NULL)
+    delete header_region;*/
 }
 
 pair<std::int64_t, std::int64_t> SparseArrayTripletData::GetDims() const {

@@ -148,11 +148,18 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
           // Start create composite task
           unique_lock<recursive_mutex> metalock(metadata_mutex);
           LOG_INFO("FETCH dependencies for Create Composite are resolved. Creating Composite Array.");
-          ::uint64_t cc_id = CreateComposite(taskdata.worker,
-                                           taskdata.name,
-                                           *taskdata.arg,
-                                           taskdata.task_args,
-                                           dep_task_id);
+          ::uint64_t cc_id = -1;
+          if (DATASTORE == WORKER) {
+            cc_id = CreateComposite(taskdata.worker,
+                                               taskdata.name,
+                                               *taskdata.arg);
+          } else {
+            cc_id = CreateComposite(taskdata.worker,
+                                               taskdata.name,
+                                               *taskdata.arg,
+                                               taskdata.task_args,
+                                               dep_task_id);
+          }
           // copy over dependencies to new id.
           // We still need to keep a list that is dependent on the task
           dependencies_[cc_id] = dependencies_[dep_task_id];
@@ -454,12 +461,20 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
                 // create a fetch task to prepare a task
                 //LOG_DEBUG("Task number %d - Task argument %d - Split %s is not on Worker %15s. It is will be fetched from Worker %15s", 
                 //          task_cnt, i+1, split, server_to_string(worker->server).c_str(), server_to_string(from->server).c_str());
-                ::uint64_t fetch_task_id = Fetch(
-                    worker,
-                    from,
-                    split,
-                    &t->args,
-                    task_id);
+                ::uint64_t fetch_task_id = -1;
+                if(DATASTORE == WORKER) {
+                  fetch_task_id = Fetch(
+                      worker,
+                      from,
+                      split);
+                } else {
+                  fetch_task_id = Fetch(
+                      worker,
+                      from,
+                      split,
+                      &t->args,
+                      task_id);
+                }
     #ifdef PROFILING
                 fprintf(profiling_output_,
                         "%8.3lf %15s %6zu FETCH STRT %15s %7.2lfMB\n",
@@ -567,12 +582,20 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
                 if (beingfetched == 0) {
                   // if this is not being fetched, fetch it first
                   Worker *from = best_worker_to_fetch_from(split->workers);
-                  ::uint64_t fetch_task_id = Fetch(
-                      worker,
-                      from,
-                      split,
-                      &t->args,
-                      task_id);
+                  ::uint64_t fetch_task_id = -1;
+                  if(DATASTORE == WORKER) {
+                     fetch_task_id = Fetch(
+                         worker,
+                         from,
+                         split);
+                  } else {
+                     fetch_task_id = Fetch(
+                         worker,
+                         from,
+                         split,
+                         &t->args,
+                         task_id);
+                  }
                   //LOG_DEBUG("Split %s of Composite Array creation is not on Worker %15s. It is will be fetched from Worker %15s", split, server_to_string(worker->server).c_str(), server_to_string(from->server).c_str());
 #ifdef PROFILING
                   fprintf(profiling_output_,
@@ -603,12 +626,19 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
               // create composite
 	      LOG_INFO("Composite Array '%s' - FETCH dependencies resolved. Creating Composite Array.", arg.name().c_str());
               unique_lock<recursive_mutex> metalock(metadata_mutex);
-              ::uint64_t cc_id2 = CreateComposite(cc.worker,
-                                                cc.name,
-                                                *cc.arg,
-                                                //*cc.task_args,    
-                                                &t->args,
-                                                task_id);
+              ::uint64_t cc_id2 = -1;
+              if(DATASTORE == WORKER) {
+                cc_id2 = CreateComposite(cc.worker,
+                                                    cc.name,
+                                                    *cc.arg);
+              } else {
+                cc_id2 = CreateComposite(cc.worker,
+                                                    cc.name,
+                                                    *cc.arg,
+                                                    //*cc.task_args,    
+                                                    &t->args,
+                                                    task_id);
+             }
 #ifdef PROFILING
               fprintf(profiling_output_, "%8.3lf %15s %6zu CDEPS DONE %8.3lf\n",
                       timer_.stop()/1e6,

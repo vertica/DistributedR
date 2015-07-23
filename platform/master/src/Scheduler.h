@@ -361,17 +361,12 @@ class Scheduler {
   // createa a composite array from splits on a worker
   uint64_t CreateComposite(Worker *worker,
                            const std::string &name,
-                           const Arg &arg) {}
-
-  uint64_t CreateComposite(Worker *worker,
-                           const std::string &name,
                            const Arg &arg,
-                           const std::vector<Arg>* task_args,
+                           const std::vector<Arg>* task_args = NULL,
                            int64_t parentid=-1);
 
   // execute a fetch task on a worker
-  uint64_t Fetch(Worker *to, Worker *from, Split *split) {}
-  uint64_t Fetch(Worker *to, Worker *from, Split *split, const std::vector<Arg>* task_args, int64_t parentid=-1);
+  uint64_t Fetch(Worker *to, Worker *from, Split *split, const std::vector<Arg>* task_args = NULL, int64_t parentid=-1);
 
   // execute save/load/move to/from array store on a worker
   uint64_t Save(Split *split, ArrayStore *arraystore);

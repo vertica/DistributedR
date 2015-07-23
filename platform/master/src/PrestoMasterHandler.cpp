@@ -247,8 +247,11 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
      bool foreach_error = foreach_result.second;
      
      if (foreach_complete){
-       //Send status to all workers, so that they can update the metadata at their end.
-       scheduler_->ForeachComplete(!foreach_error);
+
+       if(DATASTORE == RINSTANCE) {
+         //Send status to all workers, so that they can update the metadata at their end.
+         scheduler_->ForeachComplete(!foreach_error);
+       }
 
        boost::unordered_map< ::uint64_t, TaskDoneRequest*>::iterator itr = scheduler_->taskdones_.begin();
        int num_tasks = scheduler_->taskdones_.size();   

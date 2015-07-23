@@ -200,8 +200,8 @@ ExecutorEvent Executor::GetNextEvent() {
   LOG_INFO("Previous name is %s, New name is %s", prev_dobj_name.c_str(), new_dobj_name.c_str());
   t.start();
 
-  ArrayData *newpartition = ParseVariable(RR, varname, new_dobj_name, orig_class, store);
-  if (newpartition == NULL) {
+  ArrayData *newsplit = ParseVariable(RR, varname, new_dobj_name, orig_class, store);
+  if (newsplit == NULL) {
     LOG_ERROR("CreateUpdate => Failed to write R value into Shared memory");
     throw PrestoWarningException
       ("Executor:CreateUpdate Fail to write R value into shared memory");
@@ -209,7 +209,7 @@ ExecutorEvent Executor::GetNextEvent() {
   t.start();
 
   // write task result to send it to worker.
-  std::pair<size_t, size_t> dims = newpartition->GetDims();
+  std::pair<size_t, size_t> dims = newsplit->GetDims();
 
   //TODO(R) Hack for obtaining size of dataframe splits, since GetDims() is 0 for dframes and lists
   if(orig_class == DATA_FRAME){
@@ -218,7 +218,7 @@ ExecutorEvent Executor::GetNextEvent() {
 
   if(store == RINSTANCE) {
     // Add the new dobject name + assign varname to shmname
-    in_memory_partitions[new_dobj_name] = newpartition;
+    in_memory_partitions[new_dobj_name] = newsplit;
 
     // Save the new value.
     char cmd[CMD_BUF_SIZE];
@@ -234,7 +234,7 @@ ExecutorEvent Executor::GetNextEvent() {
     RR.parseEvalQ(cmd);
   }
 
-  AppendUpdate(new_dobj_name, newpartition->GetSize(), false, dims.first, dims.second, out);
+  AppendUpdate(new_dobj_name, newsplit->GetSize(), false, dims.first, dims.second, out);
   LOG_INFO("Variable %s (%s in R) updated successfully.", new_dobj_name.c_str(), varname.c_str());
 }
 
@@ -632,7 +632,7 @@ int Executor::Execute(set<tuple<string, bool, vector<pair<int64_t,int64_t>>>> co
 	  }
 	  RR.parseEvalQ(cmd);
 	  string var_name = string("compositetmpvar...");
-	  CreateUpdate(var_name, composite->splitnames[j], -1, -1, RINSTANCE);
+	  CreateUpdate(var_name, composite->splitnames[j], -1, -1, DATASTORE);
 	}
       }  else if (composite->dobjecttype == DARRAY_DENSE || composite->dobjecttype == DARRAY_SPARSE) {
 	//Flag to determine if all split sizes are zero
@@ -673,7 +673,7 @@ int Executor::Execute(set<tuple<string, bool, vector<pair<int64_t,int64_t>>>> co
 	    all_split_size_zero = false;
 	    RR.parseEvalQ(cmd);
 	    string var_name = string("compositetmpvar...");
-	    CreateUpdate(var_name, composite->splitnames[j], -1, -1, RINSTANCE);
+	    CreateUpdate(var_name, composite->splitnames[j], -1, -1, DATASTORE);
 	  }
 	}
 	//(R)If all splits were zero sized, we are possibly using an empty darray
@@ -702,10 +702,10 @@ int Executor::Execute(set<tuple<string, bool, vector<pair<int64_t,int64_t>>>> co
 
 	  snprintf(cmd, CMD_BUF_SIZE,"tmpvar... <- %s[[%d]]", name.c_str(),z+1);
 	  RR.parseEvalQ(cmd);
-	  CreateUpdate(tmp_var, composite->splitnames[z], dimensions.at(z).first, dimensions.at(z).second, RINSTANCE);
+	  CreateUpdate(tmp_var, composite->splitnames[z], dimensions.at(z).first, dimensions.at(z).second, DATASTORE);
 	}
       }else{ // updating a split
-	CreateUpdate(name, var_to_Partition[name], dimensions.at(0).first, dimensions.at(0).second, RINSTANCE);
+	CreateUpdate(name, var_to_Partition[name], dimensions.at(0).first, dimensions.at(0).second, DATASTORE);
       }
     }
   }
@@ -820,28 +820,31 @@ static void SendResult(const char* err_msg) {
  * @return NULL                                                                                                               
  */
 void Executor::ClearTaskData() {
-  LOG_INFO("Clearing TaskData");
+  LOG_INFO("Clearing TaskData: DataStore(%d)", DATASTORE);
 
-  std::vector<std::string> v;
-  for(map<string,ArrayData*>::iterator i = in_memory_partitions.begin(); 
-      i != in_memory_partitions.end(); ++i) {
-    v.push_back(i->first);
+  if(DATASTORE == RINSTANCE) {
+    std::vector<std::string> v;
+    for(map<string,ArrayData*>::iterator i = in_memory_partitions.begin(); 
+       i != in_memory_partitions.end(); ++i) {
+      v.push_back(i->first);
+    }
+
+    for(map<string,Composite*>::iterator i = in_memory_composites.begin(); 
+        i != in_memory_composites.end(); ++i) {
+      v.push_back(i->first);
+    }
+
+    RR[".tmp.keep"] = v;//keep;
+    RR.parseEvalQ("rm(list=setdiff(ls(all.names=TRUE), .tmp.keep));");
+  } else {
+    RR.parseEvalQ("rm(list=ls(all.names=TRUE));gc()");
   }
-
-  for(map<string,Composite*>::iterator i = in_memory_composites.begin(); 
-      i != in_memory_composites.end(); ++i) {
-    v.push_back(i->first);
-  }
-
-  //Rcpp::CharacterVector keep( v.begin(), v.end() );
-  RR[".tmp.keep"] = v;//keep;
-  RR.parseEvalQ("rm(list=setdiff(ls(all.names=TRUE), .tmp.keep));");
     
-  // cleat splits information in this task                                 
+  // clear splits information in this task                                 
   var_to_Partition.clear();
   // delete composite information in this task
   for (map<string, Composite*>::iterator i = var_to_Composite.begin();
-       i != var_to_Composite.end(); i++) {
+     i != var_to_Composite.end(); i++) {
     delete i->second;
   }
   var_to_Composite.clear();

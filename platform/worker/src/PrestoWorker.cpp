@@ -278,7 +278,8 @@ static set<int> check_if_worker_running() {
 * @return NULL
 */
 void PrestoWorker::fetch(string name, ServerInfo location,
-                         ::uint64_t id, ::uint64_t uid, string store) {
+                         size_t size, ::uint64_t id, ::uint64_t uid, 
+                         string store) {
   master_last_contacted_.start();
   TaskDoneRequest req;
   
@@ -404,16 +405,19 @@ void PrestoWorker::fetchtoR(string name, ServerInfo location,
  * @return NULL
  */
 void PrestoWorker::newtransfer(string name, ServerInfo location,
-                               string store) {
-  // open connection to a requester
-  NewArg arg;
-  arg.set_arrayname(name);
-  arg.set_varname(name);
-  std::vector<NewArg> transfer_arg;
-  transfer_arg.push_back(arg);
+                               size_t size, string store) {
 
-  //Persist to worker if not already on worker.
-  scheduler_->ValidatePartitions(transfer_arg, -1);
+  if(DATASTORE == RINSTANCE) {
+    // open connection to a requester
+    NewArg arg;
+    arg.set_arrayname(name);
+    arg.set_varname(name);
+    std::vector<NewArg> transfer_arg;
+    transfer_arg.push_back(arg);
+
+    //Persist to worker if not already on worker.
+    scheduler_->ValidatePartitions(transfer_arg, -1);
+  }
 
   int32_t sockfd = presto::connect(location.name(), location.presto_port());
   if (sockfd < 0) {
@@ -544,7 +548,7 @@ void PrestoWorker::clear(ClearRequest req) {
     LOG_INFO("CLEAR Task                     - Clearing %s from Shared memory", req.name().c_str());
     SharedMemoryObject::remove(req.name().c_str());
 
-    //clear from executors
+    //clear from executors TODO: Put in TaskScheduler
     /*unique_lock<recursive_mutex> metalock(metadata_mutex);
     if(worker_partitions_.find(req.name()) != worker_partitions_.end()) {
       PartitionInfo* partition = worker_partitions_[req.name()];
@@ -893,10 +897,14 @@ PrestoWorker::PrestoWorker(
                                    log_level_,
                                    master_ip, master_port);
 
-  LOG_INFO("Creating scheduler");
-  scheduler_ = new TaskScheduler(executorpool_, &shmem_arrays_,
-                                 &shmem_arrays_mutex_,
-                                 num_executors_);
+  if(DATASTORE == WORKER) {
+    scheduler_ = NULL;
+  } else {
+    LOG_INFO("Creating scheduler");
+    scheduler_ = new TaskScheduler(executorpool_, &shmem_arrays_,
+                                   &shmem_arrays_mutex_,
+                                   num_executors_);
+  }
   
   // Create multiple HandleRequest threads
   for (int i = 0; i < NUM_THREADPOOLS; i++) {
@@ -1066,15 +1074,17 @@ void PrestoWorker::HandleRequests(int type) {
           { 
             LOG_DEBUG("New FETCH TaskID %16zu - Received from Master", worker_req.fetch().uid());
 
-            //Get only splits on this worker? Not possible probably.
-            vector<NewArg> task_args;
-            task_args.clear();
-            get_vector_from_repeated_field
-              <RepeatedPtrField<NewArg>::const_iterator,
-               NewArg>(worker_req.fetch().task_args().begin(),
-                       worker_req.fetch().task_args_size(), &task_args);
+            if(DATASTORE == RINSTANCE) {
+              //Get only splits on this worker? Not possible probably.
+              vector<NewArg> task_args;
+              task_args.clear();
+              get_vector_from_repeated_field
+                <RepeatedPtrField<NewArg>::const_iterator,
+                 NewArg>(worker_req.fetch().task_args().begin(),
+                         worker_req.fetch().task_args_size(), &task_args);
 
-            int64_t executor_id = scheduler_->AddParentTask(task_args, worker_req.fetch().parenttaskid());
+              int64_t executor_id = scheduler_->AddParentTask(task_args, worker_req.fetch().parenttaskid());
+            }
 
             string store;
             if (worker_req.fetch().has_store()) {
@@ -1083,6 +1093,7 @@ void PrestoWorker::HandleRequests(int type) {
 
             fetch(worker_req.fetch().name(),
                   worker_req.fetch().location(),
+                  worker_req.fetch().size(),
                   worker_req.fetch().id(),
                   worker_req.fetch().uid(),
                   store);
@@ -1098,37 +1109,41 @@ void PrestoWorker::HandleRequests(int type) {
             
             newtransfer(worker_req.fetch().name(),
                         worker_req.fetch().location(),
+                        worker_req.fetch().size(),
                         store);
           }
           break;
         case WorkerRequest::CREATECOMPOSITE:
           {
-            vector<NewArg> task_args;
-            task_args.clear();
-            get_vector_from_repeated_field
-              <RepeatedPtrField<NewArg>::const_iterator,
-               NewArg>(worker_req.createcomposite().task_args().begin(),
+            if(DATASTORE == WORKER) {
+              LOG_INFO("New CREATECOMPOSITE TaskID %6zu - Received from Master", worker_req.createcomposite().uid());
+              createcomposite(worker_req.createcomposite());
+            } else {
+              vector<NewArg> task_args;
+              task_args.clear();
+              get_vector_from_repeated_field
+                <RepeatedPtrField<NewArg>::const_iterator,
+                 NewArg>(worker_req.createcomposite().task_args().begin(),
                        worker_req.createcomposite().task_args_size(), &task_args);
 
-            LOG_INFO("Read task_arg %zu", task_args.size());
+              LOG_INFO("Read task_arg %zu", task_args.size());
 
-            vector<NewArg> cc_args;
-            cc_args.clear();
-            get_vector_from_repeated_field
-              <RepeatedPtrField<NewArg>::const_iterator,
-               NewArg>(worker_req.createcomposite().cargs().begin(),
+              vector<NewArg> cc_args;
+              cc_args.clear();
+              get_vector_from_repeated_field
+                <RepeatedPtrField<NewArg>::const_iterator,
+                NewArg>(worker_req.createcomposite().cargs().begin(),
                        worker_req.createcomposite().cargs_size(), &cc_args);
 
-            LOG_INFO("Read composite array size %zu", cc_args.size());
+              LOG_INFO("Read composite array size %zu", cc_args.size());
+              LOG_INFO("New CREATECOMPOSITE TaskID %6zu - Received from Master", worker_req.createcomposite().uid());
+              int64_t executor_id = scheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());
+              LOG_INFO("Added ParentTask %d. Returned executor is %d", worker_req.createcomposite().parenttaskid(), executor_id);
+              scheduler_->ValidateCCPartitions(cc_args, executor_id);
 
-            LOG_INFO("New CREATECOMPOSITE TaskID %6zu - Received from Master", worker_req.createcomposite().uid());
-            int64_t executor_id = scheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());
-            LOG_INFO("Added ParentTask %d. Returned executor is %d", worker_req.createcomposite().parenttaskid(), executor_id);
-            scheduler_->ValidateCCPartitions(cc_args, executor_id);
-
-            LOG_INFO("CREATECOMPOSITE %d : All partitions validated. Sent to executor %d", worker_req.createcomposite().uid(), executor_id);
-
-            createcomposite(worker_req.createcomposite());
+              LOG_INFO("CREATECOMPOSITE %d : All partitions validated. Sent to executor %d", worker_req.createcomposite().uid(), executor_id);
+              createcomposite(worker_req.createcomposite());
+            }
           }
           break;
         case WorkerRequest::FOREACHCOMPLETE:
@@ -1186,14 +1201,22 @@ void PrestoWorker::HandleRequests(int type) {
                 worker_req.newexecr().composite_args_size(), &composite_args);
 
           {
-            int64_t executor_id = scheduler_->AddParentTask(new_args, worker_req.newexecr().parenttaskid());
-            scheduler_->ValidatePartitions(new_args, executor_id);
-            LOG_INFO("EXECUTE %d : All partitions validated. Sent to executor %d", worker_req.newexecr().uid(), executor_id);
-
-            executorpool_->execute(func, new_args, raw_args, composite_args,
+            if(DATASTORE == WORKER) {
+              LOG_INFO("DataStore is worker");
+              executorpool_->execute(func, new_args, raw_args, composite_args,
                                    worker_req.newexecr().id(),
                                    worker_req.newexecr().uid(),
-                                   &worker_resp, executor_id);
+                                   &worker_resp);
+            } else {
+              int64_t executor_id = scheduler_->AddParentTask(new_args, worker_req.newexecr().parenttaskid());
+              scheduler_->ValidatePartitions(new_args, executor_id);
+              LOG_INFO("EXECUTE %d : All partitions validated. Sent to executor %d", worker_req.newexecr().uid(), executor_id);
+
+              executorpool_->execute(func, new_args, raw_args, composite_args,
+                                     worker_req.newexecr().id(),
+                                     worker_req.newexecr().uid(),
+                                     &worker_resp, executor_id);
+            }
           }
           break;
         case WorkerRequest::LOG:
@@ -1584,6 +1607,12 @@ void PrestoWorker::shutdown() {
   set<int> worker_set = check_if_worker_running();
   if (worker_set.size() == 0) {
     std::remove(get_shm_size_check_name().c_str());
+  }
+
+  LOG_INFO("Worker shutdown - Closing scheduler");
+  if(scheduler_ != NULL) {
+    delete scheduler_;
+    scheduler_ = NULL;
   }
 
   // Remove array stores
