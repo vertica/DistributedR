@@ -50,6 +50,8 @@
 #include "shared.pb.h"
 #include "PrestoException.h"
 
+#define GC_DEFAULT_GEN 1
+
 #define MAX_FILENAME_LENGTH 200
 
 #define NUM_SERVER_THREADS 64
@@ -126,6 +128,11 @@ typedef enum {
 } HelloReplyFlag;
 
 static string exception_prefix = "DistributedR Exception";
+extern StorageLayer DATASTORE;
+
+static std::string getStorageLayer() {
+  return ((DATASTORE == WORKER) ? "Worker" : "Executor");
+}
 
 /** Convert integer to string
  * @param i integer to convert to string

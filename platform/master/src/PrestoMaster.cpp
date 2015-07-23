@@ -51,6 +51,7 @@ using namespace google::protobuf;
 namespace presto {
 
 ::uint64_t abs_start_time;
+StorageLayer DATASTORE = WORKER;
 
 sighandler_t r_sigint_handler;
 
@@ -357,11 +358,14 @@ void PrestoMaster::DeleteDobject(string da_name) {
  * It starts resource manager thread
  * @return NULL
  */
-void PrestoMaster::Start(int loglevel) {
+void PrestoMaster::Start(int loglevel, std::string storage) {
   // Initialize zmq server for worker->master communication
   // disable SIGINT to have reliable initialization
   LoggerFilter(loglevel);
   r_sigint_handler = signal(SIGINT, SIG_IGN);
+
+  presto::DATASTORE = (storage == "worker") ? WORKER : RINSTANCE;
+  LOG_INFO("Data storage layer in use: %s", getStorageLayer().c_str());
 
   // This waits until PrestoMasterHandler thread starts (open port and wait for the post message)
   // handler thread will be inited in the PrestoMaster constructor

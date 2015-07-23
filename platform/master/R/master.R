@@ -113,7 +113,8 @@ clean_string <- function(string) {
 
 start_workers <- function(cluster_conf,
                           bin_path="./bin/start_proto_worker.sh",
-                          inst=0, mem=0, rmt_home="", rmt_uid="", log=2) {
+                          inst=0, mem=0, rmt_home="", rmt_uid="", log=2,
+                          storage="executor") {
   if (rmt_home == ""){
     rmt_home <- getwd()
   }
@@ -172,26 +173,26 @@ start_workers <- function(cluster_conf,
 
       if(isTRUE(iscolocated)){
       cmd <- paste("ssh -n", paste(rmt_uid,"@",r$Hostname,sep=""), "'cd",rmt_home,";", bin_path, 
-                   "-m", m, "-e", e, "-p", r$StartPortRange, "-q", r$EndPortRange, "-l", log, "-a", master_addr, "-b", master_port,
+                   "-m", m, "-e", e, "-s", storage, "-p", r$StartPortRange, "-q", r$EndPortRange, "-l", log, "-a", master_addr, "-b", master_port,
 		   "-c", iscolocated, "-o", resourcePool[1,1], "-k", resourcePool[1,2], "-d", resourcePool[1,3],
 		   "-w", r$Hostname, env_variables, "'", sep=" ")
       }else{
       cmd <- paste("ssh -n", paste(rmt_uid,"@",r$Hostname,sep=""), "'cd",rmt_home,";", bin_path, 
-                   "-m", m, "-e", e, "-p", r$StartPortRange, "-q", r$EndPortRange, "-l", log, "-a", master_addr, "-b", master_port,
+                   "-m", m, "-e", e, "-s", storage, "-p", r$StartPortRange, "-q", r$EndPortRange, "-l", log, "-a", master_addr, "-b", master_port,
                    "-w", r$Hostname, env_variables, "'", sep=" ")
       }
       
       options("scipen"=sp_opt)
-      ##print(sprintf("cmd: %s",cmd))
+      print(sprintf("cmd: %s",cmd))
       system(cmd, wait=FALSE, ignore.stdout=TRUE, ignore.stderr=TRUE)
     }
   }, error = handle_presto_exception)
   return(TRUE)
 }
 
-distributedR_start <- function(inst=0, mem=0,
+distributedR_start <- function(inst=5, mem=0,
                          cluster_conf="",
-                         log=2) {
+                         log=2, storage="executor") {
   
   gcinfo(FALSE)
   gc()
@@ -202,6 +203,8 @@ distributedR_start <- function(inst=0, mem=0,
   rmt_home=""
   rmt_uid=""
   yarn=FALSE
+
+  if (tolower(storage) != "executor" && tolower(storage) != "worker") stop("Argument 'storage' can either be worker or executor")
   if(!(is.numeric(inst) && floor(inst)==inst && inst>=0)) stop("Argument 'inst' should be a non-negative integral value")
   if(!(is.numeric(mem) && mem>=0)) stop("Argument 'mem' should be a non-negative number")
 
@@ -231,7 +234,8 @@ distributedR_start <- function(inst=0, mem=0,
   tryCatch({
     if (workers) {
       start_workers(cluster_conf=cluster_conf, bin_path=bin_path, 
-        inst=inst, mem=mem, rmt_home=rmt_home, rmt_uid=rmt_uid, log=log)
+        inst=inst, mem=mem, rmt_home=rmt_home, rmt_uid=rmt_uid, log=log, 
+        storage=storage)
     }
     else if (yarn){
       dr_path <- system.file(package = "distributedR")
@@ -240,7 +244,7 @@ distributedR_start <- function(inst=0, mem=0,
 
     }
 
-    pm$start(log)
+    pm$start(log, storage)
   },error = function(excpt){    
     pm <- get_pm_object()
     distributedR_shutdown(pm)
@@ -249,7 +253,7 @@ distributedR_start <- function(inst=0, mem=0,
     ret<-FALSE
     stop(excpt$message)})
   cat(paste("Master address:port - ", pm$get_master_addr(),":",pm$get_master_port(),"\n",sep=""))
-  ret<-ret && (check_dr_version_compatibility())
+  ret#<-ret && (check_dr_version_compatibility())
 }
 
 conf2df <- function(cluster_conf) {

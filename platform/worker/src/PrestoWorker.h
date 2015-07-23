@@ -50,6 +50,7 @@
 #include "ExecutorPool.h"
 #include "ArrayStore.h"
 #include "DataLoader.h"
+#include "TaskScheduler.h"
 
 #include "Observer.h"
 #include <google/protobuf/message.h>
@@ -140,7 +141,7 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
 
   /*void fetchtoR(std::string name, ServerInfo location,
              uint64_t id, uint64_t uid, std::string store);*/
-  void fetchtoworker(std::string name, ServerInfo location,
+  void fetch(std::string name, ServerInfo location,
              uint64_t id, uint64_t uid, std::string store);
   void newtransfer(std::string name, ServerInfo location,
                    std::string store);
@@ -182,24 +183,13 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
     return data_loader_;
   }
 
-  void StageUpdatedPartition(const std::string& split_name, size_t size, int executor_id);
+  TaskScheduler* GetScheduler() {
+    return scheduler_;
+  }
 
 protected:
   WorkerRequest* CreateDfCcTask(CreateCompositeRequest& req);
   WorkerRequest* CreateListCcTask(CreateCompositeRequest& req);
-
-  // Returns the executor on which the task should be executed.
-  int64_t AddParentTask(const std::vector<NewArg>& task_args, int64_t parenttaskid);
-  int64_t GetBestExecutor(const std::vector<NewArg>& partitions);
-  int64_t ExecutorToFetchFrom(const std::string& split_name);
-
-  // When executor_id is -1, then persist to worker.
-  bool IsPartitionAvailable(const std::string& split_name, int executor_id=-1);
-  bool IsBeingPersisted(const std::string& split_name);
-  void PersistToWorker(const std::string& split_name);
-
-  void ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id);
-  void ValidateCCPartitions(const std::vector<NewArg>& task_args, int executor_id);
   
  private:
   // keep Worker information given string:port information
@@ -221,7 +211,7 @@ protected:
   boost::unordered_map<std::string, ArrayStore*> array_stores_;
   boost::timed_mutex shmem_arrays_mutex_;
   // to keep all shared memory segments name
-  //boost::unordered_set<std::string> shmem_arrays_;
+  boost::unordered_set<std::string> shmem_arrays_;
 
   struct compressed_array_t {
     boost::mutex *mutex;
@@ -264,27 +254,9 @@ protected:
   boost::mutex worker_stat_mutex_;
 
   DataLoader* data_loader_;
+  TaskScheduler* scheduler_;
 
   RequestLogger *mRequestLogger;
-
-  // Worker metadata
-  boost::unordered_map<std::string, PartitionInfo*> worker_partitions_;
-  boost::unordered_map<int, size_t> executor_stat_;  //which executor has how much memory
-  boost::unordered_map<uint64_t, int> parent_tasks_; // to keep track of executor on which execution will happen.
-
-  // Metadata for fetch/newtransfer
-  //boost::unordered_set<std::string> fetched_partitions_; //All Partitions fetched into a worker from another worker
-  //boost::unordered_set<std::string> persisted_partitions_; //All Partitions persisted on worker
-  boost::unordered_set<std::string> shmem_arrays_;
-
-  boost::unordered_map<uint64_t, int64_t> transfer_load_; //how many executor has 
-
-  //Stage metadata
-  boost::unordered_set<NewSplit*> updated_partitions_;
-
-  //Process Communication
-  boost::recursive_mutex parent_mutex;
-  boost::recursive_mutex metadata_mutex;
 };
 
 }  // namespace presto

@@ -50,7 +50,7 @@ class PrestoWorker;
 
 class ExecutorPool {
  public:
-  ExecutorPool(PrestoWorker* pw_, int n_, ServerInfo *my_location_, MasterClient* master_,
+  ExecutorPool(PrestoWorker* worker_, int n_, ServerInfo *my_location_, MasterClient* master_,
                boost::timed_mutex *shmem_arrays_mutex,
                boost::unordered_set<std::string> *shmem_arrays, 
                const std::string &spill_dir, int log_level,
@@ -59,8 +59,11 @@ class ExecutorPool {
   void execute(std::vector<std::string> func,
                std::vector<NewArg> args, std::vector<RawArg> raw_args,
                std::vector<NewArg> composite_args, ::uint64_t id,
-               ::uint64_t uid, Response* res, int executor_id=-1);
-
+               ::uint64_t uid, Response* res);
+  void execute(std::vector<std::string> func,
+               std::vector<NewArg> args, std::vector<RawArg> raw_args,
+               std::vector<NewArg> composite_args, ::uint64_t id, 
+               ::uint64_t uid, Response* res, int executor_id);
   void clear(std::vector<std::string> splits, int executor_id);
   void persist_to_worker(std::string split_name, int executor_id);
   //void newtransfer(std::string split_name, std::string server_name, int port_number, int executor_id);
@@ -81,37 +84,22 @@ class ExecutorPool {
 
   /*boost::unordered_map<int, ExecutorData*> GetExecutorInfo() {
     return executors;
-  }
-
-  boost::unordered_map<std::string, Split*>& GetLocalSplits() {
-    return local_splits;
   }*/
 
  private:
   struct ExecutorData {
     FILE *send, *recv;
     bool ready;
-    int id;
-    pid_t process_id;
-    boost::unordered_set<int64_t> clear_tasks;
-    boost::unordered_set<int64_t> send_tasks;
-    boost::unordered_set<int64_t> load_tasks;
-    boost::unordered_set<int64_t> exec_tasks;
+    pid_t pid;
   };
-
-  /*struct Split {
-    boost::unordered_set<ExecutorData*> executors;
-    std::string name;
-    size_t size;
-  };*/
 
   int num_executors;
   int exec_index;
   ServerInfo *my_location;
   std::string spill_dir_;
 
-  boost::unordered_map<int, ExecutorData*> executors;
-  //boost::unordered_map<std::string, Split*> local_splits; 
+  //boost::unordered_map<int, ExecutorData*> executors;
+  ExecutorData *executors;
   std::map<std::string, Composite*> composites_;
   boost::unordered_set<std::string> *shmem_arrays_;
   std::vector<pid_t> child_proc_ids_;

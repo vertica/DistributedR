@@ -65,6 +65,7 @@ using namespace presto;
 namespace presto {
     
 uint64_t abs_start_time;
+StorageLayer DATASTORE = WORKER;
 
 static SEXP RSymbol_dim = NULL;
 static SEXP RSymbol_Dim = NULL;
@@ -299,15 +300,6 @@ int Executor::ReadSplitArgs() {  // NOLINT
         char num[10];
         sprintf(num,"%d",m);
         strcat(new_name,num);  //eg a5
-        
-        /*int32_t version;
-        ParseVersionNumber(splitname, &version);
-        if (version == 0) {  // This happens only during a new dobject creation. 
-          LOG_INFO("First partition. Assign varname to Nil");
-          RR[varname] = R_NilValue;
-          list[m] = RR[varname];
-          continue;
-        }*/
 
         LOG_INFO("Processing partitions %s", splitname);
 
@@ -340,15 +332,6 @@ int Executor::ReadSplitArgs() {  // NOLINT
       
       var_to_list_type[varname] = composite;
     } else {
-
-      /*int32_t version;
-      ParseVersionNumber(splitname, &version);
-      if (version == 0) {  // This happens only during a new dobject creation. 
-        LOG_INFO("First partition. Assign varname to Nil");
-        RR[varname] = R_NilValue;
-        var_to_Partition[varname] = splitname;
-        continue;
-      }*/
 
       LOG_INFO("Processing partitions %s", splitname);
 
@@ -913,6 +896,8 @@ int main(int argc, char *argv[]) {
     }
   }
 
+  DATASTORE = (atoi(argv[5]) == 1) ? WORKER: RINSTANCE;
+  LOG_INFO("Data storage layer in used : %s", getStorageLayer().c_str());
 
   // a pipe to send/receive task and result between worker and executor
   out = fdopen(atoi(argv[1]), "w");
@@ -940,18 +925,6 @@ int main(int argc, char *argv[]) {
   // update pointer in R-session
   Rcpp::XPtr<set<tuple<string, bool,std::vector<std::pair<int64_t,int64_t>>> > > updates_ptr(&updates, false);
   LOG_DEBUG("New Update pointer to maintain list of updated split/composite variables in Function execution created.");
-
-  /*if(fetched_partition_map == NULL) 
-    fetched_partition_map = new std::map<std::string, Rcpp::Vector>;*/
-
-  /*//Temporary Data structures. Will be cleaned up after each iterations.
-  map<string, string> var_to_Partition;
-  map<string, Composite*> var_to_Composite;
-  map<string, Composite*> var_to_list_type;
-
-  //Permanent Data structures. Will be cleaned up at shutdown.
-  map<string, Partition*> in_memory_partitions;// = new map<string, Partition*>;
-  map<string, Composite*> in_memory_composites;// = new map<string, Composite*>;*/
 
   // a buffer to keep the task result from RInside
   while (true) {
