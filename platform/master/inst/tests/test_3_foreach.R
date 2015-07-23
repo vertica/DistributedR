@@ -129,31 +129,31 @@ test_that("Dense darrays: works", {
   assign("da1", darray(c(4,4), c(2,4), data=1), envir=.GlobalEnv)
   assign("dl1", dlist(5), envir=.GlobalEnv)
 
-  foreach(i, 1:npartitions(da1), function(a=splits(da1, i)){
+  expect_error(foreach(i, 1:npartitions(da1), function(a=splits(da1, i)){
   a <- list()
-  update(a)},progress=FALSE)
+  update(a)},progress=FALSE))
 
   expect_that(distributedR_status(), is_a('data.frame'))
 
-  foreach(i, 1:npartitions(da1), function(a=splits(da1, i)){
+  expect_error(foreach(i, 1:npartitions(da1), function(a=splits(da1, i)){
   a <- matri(5, 2, 4)
-  update(a)},progress=FALSE)
+  update(a)},progress=FALSE))
 
   expect_that(distributedR_status(), is_a('data.frame'))
 
   # Array size mismatch
-  foreach(i, 1:npartitions(da1), function(a=splits(da1, i)){
+  expect_error(foreach(i, 1:npartitions(da1), function(a=splits(da1, i)){
   a <- matrix(5, 10, 20)
-  update(a)},progress=FALSE)
+  update(a)},progress=FALSE))
 
   expect_that(distributedR_status(), is_a('data.frame'))
 
   #Multiple updates
-  foreach(i, 1:npartitions(da1), function(a=splits(da1,i), b=splits(dl1,i)) {
+  expect_error(foreach(i, 1:npartitions(da1), function(a=splits(da1,i), b=splits(dl1,i)) {
   a <- matrix(6,5,5)
   update(a)
   b <- list("a")
-  update(b)})
+  update(b)}))
 
   expect_that(distributedR_status(), is_a('data.frame'))
 

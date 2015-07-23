@@ -52,6 +52,7 @@
 #include <vector>
 #include <math.h>
 #include <RInside.h>
+#include <Rinterface.h>
 #include "atomicio.h"
 #include "common.h"
 #include "dLogger.h"
@@ -60,6 +61,10 @@
 
 #include "ArrayData.h"
 #include "UpdateUtils.h"
+
+#ifdef PERF_TRACE
+#include <ztracer.hpp>
+#endif
 
 #define CMD_BUF_SIZE 512  // R command buffer size
 #define MAX_LOGNAME_LENGTH 200  // executor log file name length
@@ -70,7 +75,6 @@ using namespace presto;
 
 namespace presto {
 
-    
 uint64_t abs_start_time;
 
 FILE *logfile;
@@ -155,6 +159,8 @@ static inline void CreateUpdate(const string &varname, const string &splitname,
                                 RInside &R,
                                 bool empty,
 				int64_t obj_nrow, int64_t obj_ncol) {
+    
+    
   Timer t;
   t.start();
   string prev_arr_name = splitname;  // darray name
@@ -212,6 +218,7 @@ static inline void CreateUpdate(const string &varname, const string &splitname,
   AppendUpdate(new_arr_name, ad->GetSize(), empty, dims.first, dims.second, out);
   delete ad;
   LOG_INFO("Variable %s (%s in R) updated successfully.", prev_arr_name.c_str(), varname.c_str());
+  
 }
 }  // namespace presto
 
@@ -553,7 +560,7 @@ int ReadRawArgs(RInside& R) {  // NOLINT
 int ReadCompositeArgs(RInside& R,  // NOLINT
       map<string, Composite*>& v2c, map<string, ArrayData*>& v2a) {
   LOG_DEBUG("Reading Composite Arguments of Function from Worker and load its Shared memory segment in R-session");
-  int composite_vars;  // number of compoiste array input
+  int composite_vars;  // number of composite array input
   Timer timer;
   timer.start();
 
@@ -612,13 +619,13 @@ int ReadCompositeArgs(RInside& R,  // NOLINT
 }
 
 int main(int argc, char *argv[]) {
-
+    
   // let this executor to be killed when a parent process (worker) terminates.
   prctl(PR_SET_PDEATHSIG, SIGKILL);
   Timer timer;
 
   presto::presto_malloc_init_hook();
-
+  
   string scoping_prefix = ".DistributedR_exec_func <- function() {";
   string scoping_postfix = "} ; .DistributedR_exec_func()";
 // In order to automatically add tryCatch block to prevent the executor
@@ -643,6 +650,7 @@ int main(int argc, char *argv[]) {
   InitializeConsoleLogger();
   LOG_INFO("Executor started.");
   LoggerFilter(atoi(argv[4]));
+  
 
   //sleep for N secs if that file exists
   FILE* f = fopen("/tmp/r_executor_startup_sleep_secs", "r");
@@ -698,6 +706,17 @@ int main(int argc, char *argv[]) {
   // a buffer to keep the task result from RInside
   char err_msg[EXCEPTION_MSG_SIZE];
   memset(err_msg, 0x00, sizeof(err_msg));
+  
+#ifdef PERF_TRACE
+  int exec_id;
+  scanf(" %d ",&exec_id);
+  int tracer = ZTracer::ztrace_init();
+
+  char hostname[1024];
+  hostname[1023] = '\0';
+  gethostname(hostname, 1023);
+  ZTracer::ZTraceEndpointRef executor_ztrace_inst = ZTracer::create_ZTraceEndpoint("127.0.0.1",3,string(hostname) + "_" + std::to_string(exec_id));
+#endif
   while (true) {
     if (err_msg[0] != '\0') {
       ostringstream msg;
@@ -718,7 +737,23 @@ int main(int argc, char *argv[]) {
       var_to_ArrayData.clear();
       var_to_list_type.clear();
       var_to_Composite.clear();
+      
 
+//Getting trace information from worker
+#ifdef PERF_TRACE
+      struct blkin_trace_info info;
+      scanf(" %ld " , &info.parent_span_id);
+      scanf(" %ld " , &info.span_id);
+      scanf(" %ld ",  &info.trace_id);
+      
+      //don't trace
+      if(info.trace_id == 1337) {
+          trace_executor = false;
+      } else {
+          trace_executor = true;
+      }
+      executor_trace = ZTracer::create_ZTrace("Executor", executor_ztrace_inst, &info, true);
+#endif
       updates.clear();  // clear update vector
       LOG_INFO("*** No Task under execution. Waiting from Task from Worker **");
       res = ReadSplitArgs(R, var_to_ArrayData,var_to_list_type);  // Read split arguments
@@ -726,12 +761,13 @@ int main(int argc, char *argv[]) {
         LOG_INFO("SHUTDOWN message received from Worker. Shutting down Executor");
         break;
       }
-
+      
       LOG_INFO("New Task received from Worker. Reading Function Arguments and Body");
-      
+
       ReadRawArgs(R);
+
       ReadCompositeArgs(R, var_to_Composite, var_to_ArrayData);
-      
+
       timer.start();
 
       // read fun
@@ -773,7 +809,7 @@ int main(int argc, char *argv[]) {
       //Rcpp::Evaluator::run(exec_call, R_GlobalEnv);  // Run the given fucntion with Rcpp < 0.11
       Rcpp::Rcpp_eval(exec_call, R_GlobalEnv);
       LOG_INFO("Function execution Complete.");
-
+      
       // Send back updates to worker
       timer.start();
       // updates contains a list of variable in R-session.
@@ -917,6 +953,8 @@ int main(int argc, char *argv[]) {
     timer.start();
     timer.start();
 
+
+    
     timer.start();
     ClearTaskData(R, var_to_ArrayData, var_to_Composite, var_to_list_type);
     LOG_DEBUG("Flushing Task Data from Executor memory");

@@ -35,7 +35,7 @@ using namespace std;
 using namespace boost;
 
 namespace presto {
-
+    
 extern bool skip_send;
 
 // helper function so we don't have to deal with
@@ -323,7 +323,7 @@ bool Scheduler::Done(TaskDoneRequest* req) {
     task = reinterpret_cast<void*>(exectask);
     type = EXEC;
   } else if (fetchtasks.find(taskid) != fetchtasks.end()) {
-    // This is a fecth task done message
+    // This is a fetch task done message
     LOG_DEBUG("FETCH TaskID %16d - Received TASKDONE from Worker", static_cast<int>(taskid));
     FetchTask *fetchtask = fetchtasks[taskid];
     if (fetchtask == NULL) {
@@ -508,7 +508,7 @@ bool Scheduler::Done(TaskDoneRequest* req) {
     type = NONE;
   }
 
-  // check if memory of worker becoms PRESTO_GC_THRESHOLD full.
+  // check if memory of worker becomes PRESTO_GC_THRESHOLD full.
   // If it is, perform GarbageCollection
   if (type == EXEC || type == FETCH || type == LOAD || type == MOVETODRAM ||
       type == CREATECOMPOSITE) {
@@ -752,7 +752,7 @@ void Scheduler::DeleteSplit(const string& split_name) {
   ServerInfo s = from->server;
   ::uint64_t id = GetNewTaskID();
 
-  LOG_DEBUG("FETCH TaskID %16d - Will Fetch Split %s from Worker %s to Worker %s",
+  LOG_INFO("FETCH TaskID %16d - Will Fetch Split %s from Worker %s to Worker %s",
       static_cast<int>(id), split->name.c_str(),
       server_to_string(from->server).c_str(),
       server_to_string(to->server).c_str());

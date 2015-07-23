@@ -19,12 +19,13 @@
  
 ## A simple function for reading a darray from a table
 # tableName: name of the table
-# features: a list containing the name of columns corresponding to attributes of the darray (features of samples)
 # dsn: ODBC DSN name
+# features: a list containing the name of columns corresponding to attributes of the darray (features of samples)
+# except: the list of column names that should be excluded (optional)
 # npartitions: number of partitions in the darray (it is an optional argument)
 # verticaConnector: when it is TRUE (default), Vertica Connector for Distributed R will be used
 # loadPolicy: it determines the policy of the Vertica Connector for Distributed R
-db2darray <- function(tableName, dsn, features = list(...), npartitions, verticaConnector=TRUE, loadPolicy="local") {
+db2darray <- function(tableName, dsn, features = list(...), except=list(...), npartitions, verticaConnector=TRUE, loadPolicy="local") {
 
     if(!is.character(tableName))
         stop("The name of the table should be specified")
@@ -43,12 +44,14 @@ db2darray <- function(tableName, dsn, features = list(...), npartitions, vertica
     db_connect <- odbcConnect(dsn)
     loadPolicy <- tolower(loadPolicy)
 
+    #Close the connection on exit
+    on.exit(odbcClose(db_connect))
+
     #Validate table name
     table <- ""
     schema <- ""
     table_info <- unlist(strsplit(tableName, split=".", fixed=TRUE))
     if(length(table_info) > 2) {
-       odbcClose(db_connect)
        stop("Invalid table name. Table name should be in format <schema_name>.<table_name>. If the table is in 'public' schema, Schema name can be ignored while specifying table name")
     } else if(length(table_info) == 2){
        schema <- table_info[1]
@@ -62,10 +65,10 @@ db2darray <- function(tableName, dsn, features = list(...), npartitions, vertica
     feature_columns <- ""
     norelation <- FALSE
     relation_type <- ""
+
     if(missing(features) || length(features)==0 || features=="") {
       table_columns <- sqlQuery(db_connect, paste("select column_name from columns where table_schema ILIKE '", schema ,"' and table_name ILIKE '", table,"'", sep=""))
       if(!is.data.frame(table_columns)) {
-        odbcClose(db_connect)
         stop(table_columns)
       }
 
@@ -73,7 +76,6 @@ db2darray <- function(tableName, dsn, features = list(...), npartitions, vertica
          ## check if its a view
          view_columns <- sqlQuery(db_connect, paste("select column_name from view_columns where table_schema ILIKE '", schema ,"' and table_name ILIKE '", table,"'", sep=""))
          if(!is.data.frame(view_columns)) {
-           odbcClose(db_connect)
            stop(view_columns)
          } 
 
@@ -87,7 +89,6 @@ db2darray <- function(tableName, dsn, features = list(...), npartitions, vertica
         # get type of table - external or regular
         table_type <- sqlQuery(db_connect, paste("select table_definition from tables where table_schema ILIKE '", schema, "' and table_name ILIKE '", table, "'", sep=""))
         if(!is.data.frame(table_type)) {
-           odbcClose(db_connect)
            stop(table_columns)
         }
         relation_type <- ifelse((is.null(table_type[[1]][[1]]) || is.na(table_type[[1]][[1]])), "table", "external_table")
@@ -105,7 +106,6 @@ db2darray <- function(tableName, dsn, features = list(...), npartitions, vertica
         # get type of table - external or regular
         table_type <- sqlQuery(db_connect, paste("select table_definition from tables where table_schema ILIKE '", schema, "' and table_name ILIKE '", table, "'", sep=""))
         if(!is.data.frame(table_type)) {
-           odbcClose(db_connect)
            stop(table_columns)
         }
         relation_type <- ifelse((is.null(table_type[[1]][[1]]) || is.na(table_type[[1]][[1]])), "table", "external_table")
@@ -115,9 +115,12 @@ db2darray <- function(tableName, dsn, features = list(...), npartitions, vertica
     }
 
     if(norelation) {
-      odbcClose(db_connect)
       stop(paste("Table/View ", tableName, " does not exist", sep=""))
     }
+
+    # excluding the elements in the except list
+    if(!missing(except) && length(except)!=0 && except!="")
+        feature_columns <- feature_columns[sapply(feature_columns, function(x) !(x %in% except))]
 
     # we have columns, construct column string
     nFeatures <- length(feature_columns)  # number of features
@@ -141,7 +144,6 @@ db2darray <- function(tableName, dsn, features = list(...), npartitions, vertica
         npartitions <- round(npartitions)
         if(npartitions <= 0) {
             stop("npartitions should be a positive integer number.")
-            odbcClose(db_connect)
         }
     }
 
@@ -150,11 +152,9 @@ db2darray <- function(tableName, dsn, features = list(...), npartitions, vertica
     oneLine <- sqlQuery(db_connect, qryString)
     # check valid response from the database
     if (! is.data.frame(oneLine) ) {
-        odbcClose(db_connect)
         stop(oneLine)
     }
     if (! all(sapply(oneLine, function(x ) is.numeric(x) || is.logical(x))) ) {
-        odbcClose(db_connect)
         stop("Only numeric and logical types are supported for darray")
     }
 
@@ -163,11 +163,9 @@ db2darray <- function(tableName, dsn, features = list(...), npartitions, vertica
     nobs <- sqlQuery(db_connect, qryString)
     # check valid response from the database
     if (! is.data.frame(nobs) ) {
-        odbcClose(db_connect)
         stop(nobs)
     }
     if(nobs == 0) {
-        odbcClose(db_connect)
         stop("The table is empty!")
     }
     X <- FALSE
@@ -262,7 +260,6 @@ db2darray <- function(tableName, dsn, features = list(...), npartitions, vertica
              .vertica.connector(e)
           } , finally = {
              stopDataLoader()
-             try({ odbcClose(db_connect)}, silent=TRUE)
           }) 
 
     # end of verticaConnector
@@ -271,7 +268,6 @@ db2darray <- function(tableName, dsn, features = list(...), npartitions, vertica
         qryString <- paste("select count(distinct rowid) from", tableName, "where rowid >=0 and rowid <", nobs)
         distinct_nobs <- sqlQuery(db_connect, qryString)
         if( nobs != distinct_nobs ) {
-            odbcClose(db_connect)
             stop("There is something wrong with rowid. Check the assumptions about rowid column in the manual.")
         }
     
@@ -324,7 +320,6 @@ db2darray <- function(tableName, dsn, features = list(...), npartitions, vertica
 
             update(x)
         })
-        odbcClose(db_connect)
 
     } # if-else (verticaConnector)
 

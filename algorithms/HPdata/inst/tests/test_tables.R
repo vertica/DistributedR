@@ -52,6 +52,7 @@ test_that("Test db2dgraph() arguments", {
     ## Syntactic errors
     expect_error(A <- db2dgraph(list("table_graph"), "distr_regression", "u", "v"))
     expect_error(A <- db2dgraph("table_graph", "distr_regression", "u"))
+    expect_error(A <- db2dgraph("table_graph", "distr_regression", "u", "v", row_wise='OK'))
 
     ## Functional errors
     expect_error(A <- db2dgraph("wrong_table_name", "distr_regression", "u", "v"))
@@ -131,6 +132,10 @@ test_that("db2darray() loads correctly", {
     #Check data type
     part <- getpartition(A, 1)
     expect_that(part[,1], is_a("integer"))
+
+    ## 5: except argument
+    A <- db2darray("table_10K_numeric", "distr_regression", except=list("rowid","col1"))
+    expect_equal(colnames(A), c("col2", "col3", "col4", "col5", "col6", "col7"))
 })
 
 
@@ -221,6 +226,10 @@ test_that("db2dframe() loads correctly", {
     part <- getpartition(A, 1)
     expect_that(part[,1], is_a("integer"))
     expect_that(part[,2], is_a("numeric"))
+
+    ## 5: except argument
+    A <- db2dframe("table_10K", "distr_regression", except=list("rowid", "col1", "col8", "col9", "col10"))
+    expect_equal(colnames(A), c("col2", "col3", "col4", "col5", "col6", "col7"))
 })
 
 
@@ -351,6 +360,10 @@ test_that("db2darrays() loads correctly", {
     expect_that(part[,1], is_a("numeric"))
     expect_that(part[,2], is_a("numeric"))
 
+    ## 5: except argument
+    A <- db2darrays("table_10K_numeric", "distr_regression", resp=list("rowid"), except=list("col1"), loadPolicy="uniform")
+    expect_equal(colnames(A$X), c("col2", "col3", "col4", "col5", "col6", "col7"))
+
 })
 
 context("db2dgraph Table: Check data loading")
@@ -362,6 +375,16 @@ test_that("db2dgraph() loads correctly", {
     expect_equal(sum(dg$W), 17.3)
     expect_equal(dim(dg$X), c(8, 8))
     expect_equal(dim(dg$W), c(8, 8))
+    expect_equal(partitionsize(dg$X)[1, 1], 8)
+    expect_equal(partitionsize(dg$W)[1, 1], 8)
+
+    dg <- db2dgraph("table_graph", "distr_regression", "u", "v", "weight", row_wise=TRUE)
+    expect_equal(sum(dg$X), 10)
+    expect_equal(sum(dg$W), 17.3)
+    expect_equal(dim(dg$X), c(8, 8))
+    expect_equal(dim(dg$W), c(8, 8))
+    expect_equal(partitionsize(dg$X)[1, 2], 8)
+    expect_equal(partitionsize(dg$W)[1, 2], 8)
 
 })
 odbcClose(connect)

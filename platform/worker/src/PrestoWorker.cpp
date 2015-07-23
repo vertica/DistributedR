@@ -38,7 +38,7 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include <boost/algorithm/string.hpp>
-
+#include <boost/variant.hpp>
 
 #include <Rinterface.h>
 
@@ -53,16 +53,26 @@
 #include "TransferServer.h"
 #include "SharedMemory.h"
 #include "ArrayData.h"
+#include "Cgroups.h"
 
 #include "timer.h"
 
 #include "RequestLogger.h"
 
+#ifdef PERF_TRACE
+#include <ztracer.hpp>
+#endif
+
 using namespace std;
 using namespace boost;
 
 namespace presto {
-// to enable clean worker shutdown (handliing shared memory)
+    
+#ifdef PERF_TRACE   
+  ZTracer::ZTraceEndpointRef worker_ztrace_inst;
+#endif  
+  
+// to enable clean worker shutdown (handling shared memory)
 static PrestoWorker* worker_ptr = NULL;
 static MasterClient* cmd_to_master = NULL;
 // to guarantee the kill command is performed once
@@ -93,7 +103,7 @@ static void SendAbortMsg(const char* msg) {
   }
 }
 
-/** SIGINT handler. It send a ABORT message to the master for clean shutdown. 
+/** SIGINT handler. It send a ABORT message to the master for clean shutdown.
  * @param sig the signal numberthat we got
  * @return NULL
  */
@@ -146,12 +156,12 @@ static void WorkerSigchldHandler(int sig) {
 
   bool is_dataloader_running = false;
   DataLoader* dataloaderptr = worker_ptr->GetDataLoaderPtr();
-  if (dataloaderptr != NULL) 
+  if (dataloaderptr != NULL)
     is_dataloader_running = !(dataloaderptr->IsTransferComplete());
 
   if(!is_dataloader_running)
     LOG_INFO("SIGCHLD signal called from ExecutorID %d (child process:%d) with status %d", executor_id, pid, status);
-  else 
+  else
     LOG_INFO("SIGCHLD signal called during Vertica Connector execution.");
 
   /*fprintf(stderr,
@@ -159,7 +169,7 @@ static void WorkerSigchldHandler(int sig) {
           abs_time()/1e6, pid, status);*/
   // this is the only case where sigchld is called
   // and child process is running. refer to man(wait)!!
-  if (WIFCONTINUED(status) == true) {  
+  if (WIFCONTINUED(status) == true) {
     LOG_INFO("Child process has resumed. Ignore SIGCHLD signal");
     printf("a child process is resumed. ignore it\n");
     return;
@@ -179,7 +189,7 @@ static void WorkerSigchldHandler(int sig) {
     shutdown_called = true;
     kill_lock.unlock();
   } catch(...) {return;}
-  
+
   ostringstream msg;
   if (!is_dataloader_running) {
     msg << hostname << " is exiting as an executor ID (" << executor_id << ") gets killed"
@@ -208,7 +218,7 @@ static set<int> check_if_worker_running() {
   struct dirent* ent;
   char* endptr;
   char buf[512];
-  pid_t cpid = getpid();  
+  pid_t cpid = getpid();
   set<int> distributedR_ids;
   if (!(dir = opendir("/proc"))) {
     return distributedR_ids;
@@ -260,7 +270,7 @@ static set<int> check_if_worker_running() {
       fclose(fp);
     }
   }
-  closedir(dir);  
+  closedir(dir);
   return distributedR_ids;
 }
 
@@ -278,7 +288,7 @@ void PrestoWorker::fetch(string name, ServerInfo location,
                          size_t size, ::uint64_t id,
                          ::uint64_t uid,
                          string store) {
-  master_last_contacted_.start();    
+  master_last_contacted_.start();
   TaskDoneRequest req;
   try {
     req.set_task_result(TASK_SUCCEED);
@@ -297,7 +307,7 @@ void PrestoWorker::fetch(string name, ServerInfo location,
 
     Timer t;
     t.start();
-
+    
     TransferServer tw(start_port_range_, end_port_range_);
     // fetch data from remote worker and write it to shared memory region
     tw.transfer_blob(addr, name, size, getClient(location),
@@ -307,7 +317,7 @@ void PrestoWorker::fetch(string name, ServerInfo location,
     delete ad;
 
     t.stop();
-    LOG_DEBUG("FETCH TaskID %20zu - Split %10s (size %zu) fetched to Worker %15s.", 
+    LOG_DEBUG("FETCH TaskID %20zu - Split %10s (size %zu) fetched to Worker %15s.",
                     uid, name.c_str(), size, server_to_string(location).c_str());
 
     total_bytes_fetched_ += size;
@@ -319,7 +329,7 @@ void PrestoWorker::fetch(string name, ServerInfo location,
   } catch(std::exception& ex) {
     req.set_task_result(TASK_EXCEPTION);
     ostringstream msg;
-    msg << "Fetch error from " << server_to_string(my_location_) 
+    msg << "Fetch error from " << server_to_string(my_location_)
       << check_out_of_memory(executorpool_->GetExecutorPids()) << endl << FILE_DESCRIPTOR_ERR_MSG;
     LOG_ERROR("FETCH TaskID %20zu error : %s", uid, msg.str().c_str());
     req.set_task_message(msg.str());
@@ -329,12 +339,12 @@ void PrestoWorker::fetch(string name, ServerInfo location,
   req.mutable_location()->CopyFrom(my_location_);
   master_->TaskDone(req);  // send task done message
   LOG_DEBUG("FETCH TaskID %20zu - Sent TASKDONE message to Master", uid);
-  
+
 }
 
 /** Handle fetch request from remote workers. This reads splits from shared memory and send them to a requester
  * @param name name of a split that is requested
- * @param location the reuqester information (hostname and port)
+ * @param location the requester information (hostname and port)
  * @param size size of the requested split
  * @param store the location of store (external storage except memory)
  * @return NULL
@@ -352,7 +362,6 @@ void PrestoWorker::newtransfer(string name, ServerInfo location,
     throw PrestoWarningException(msg.str());
     return;
   }
-
   Timer t;
   t.start();
   if (store.empty()) {
@@ -374,7 +383,7 @@ void PrestoWorker::newtransfer(string name, ServerInfo location,
     while (bytes_written != size &&
            new_transfer_retry < MAX_NEW_TRANSFER_RETRY) {
       new_transfer_retry++;
-      LOG_ERROR("NEWTRANSFER Task - Atomicio failed for %s size %ld bytes_written %ld. Retry %d", 
+      LOG_ERROR("NEWTRANSFER Task - Atomicio failed for %s size %ld bytes_written %ld. Retry %d",
                 strerror(errno), size, bytes_written, new_transfer_retry);
       int32_t sockfd = presto::connect(location.name(),
                                        location.presto_port());
@@ -395,7 +404,7 @@ void PrestoWorker::newtransfer(string name, ServerInfo location,
 
   t.stop();
   // update stats at worker
-  LOG_DEBUG("NEWTRANSFER Task               - Split %10s(size %zu) transferred to Worker %s", 
+  LOG_DEBUG("NEWTRANSFER Task               - Split %10s(size %zu) transferred to Worker %s",
                   name.c_str(), size, server_to_string(location).c_str());
   total_bytes_sent_ += size;
   total_send_time_ += t.read();
@@ -461,17 +470,17 @@ void PrestoWorker::clear(ClearRequest req) {
 
  end:
   // Send task done message
-/*  
+/*
   TaskDoneRequest done;
   done.set_id(req.id());
   done.set_uid(req.uid());
   done.mutable_location()->CopyFrom(my_location_);
   master_->TaskDone(done);
-*/  
+*/
   LOG_DEBUG("CLEAR Task                     - Sent TASKDONE message to Master.");
 }
 
-/* Create and send Execute Task to Worker to create 
+/* Create and send Execute Task to Worker to create
  * Composite list by concatenating all splits of the dlist
  */
 WorkerRequest* PrestoWorker::CreateListCcTask(CreateCompositeRequest& req){
@@ -485,7 +494,7 @@ WorkerRequest* PrestoWorker::CreateListCcTask(CreateCompositeRequest& req){
   exec_req.set_uid(req.uid());
 
   function_str << "composite_list <- c(";
-  
+
   for(int i = 0; i<req.arraynames_size(); i++) {
     if(i == req.arraynames_size()-1)
       function_str << "split_"<< i;
@@ -517,7 +526,7 @@ WorkerRequest* PrestoWorker::CreateListCcTask(CreateCompositeRequest& req){
 /** As composite array creation of DataFrame is more complex than that of dense/sparse array,
  * We create a Exec Task to build a DataFrame composite array.
  * Currently, we use R's internal function (serialize/unserialize/cbind/rbind) to build it
- * @param req Create composite array request 
+ * @param req Create composite array request
  * @return using the input request, we build a EXEC task as a WorkerRequest, and it can be queued in exec_tasks_
  */
 WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
@@ -529,7 +538,7 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
   }
 
   WorkerRequest* wrk_req = new WorkerRequest;
-  wrk_req->Clear();  
+  wrk_req->Clear();
 
   wrk_req->set_type(WorkerRequest::NEWEXECR);
   NewExecuteRRequest exec_req;
@@ -539,11 +548,11 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
   std::pair<int, int> block_dim (0,0);
 
   int num_r_split = offsets.size()>0 ? 1:0; //At least one split is present.
-  int num_c_split = num_r_split; 
+  int num_c_split = num_r_split;
   int last_rval=0, last_cval=0;
 
   //Calculate the number of blocks on the row side and column side
-  //TODO (iR): Currently assumes that the blocks comform by sizes (i.e., can be stiched together without errors). 
+  //TODO (iR): Currently assumes that the blocks comform by sizes (i.e., can be stiched together without errors).
   //E.g. each row of block should have columns of the same sizes.
   for(int i=0;i<offsets.size();++i){
     if(offsets[i].first != last_rval){
@@ -576,7 +585,7 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
     function_str << ")\n";
     function_str << "update(out_data_frame)";
     // 2-D partitioned!! Most complex one
-  } 
+  }
   else if (num_c_split>1 && num_r_split <=1) {
     function_str << "out_data_frame <- cbind(";
     for (int i = 0; i < num_c_split; ++i) {
@@ -607,7 +616,7 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
     arg.set_arrayname(req.arraynames(i));
     exec_req.add_args()->CopyFrom(arg);
   }
-  
+
   NewArg out_arg;
   out_arg.set_varname("out_data_frame");
   out_arg.set_arrayname(req.name());
@@ -619,16 +628,16 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
 }
 
 /** create a composite array from a request of a master node. 
- * This funtion allocates a region on shared memory corresponding to the input matrix size
+ * This function allocates a region on shared memory corresponding to the input matrix size
  * @param req create composite array request (Split information that will be embedded into composite array
  * @return NULL
  */
 void PrestoWorker::createcomposite(CreateCompositeRequest req) {
   Timer t;
   t.start();
-  Composite *composite = NULL;  
-  TaskDoneRequest done;  
-  ARRAYTYPE arr_type = EMPTY;  
+  Composite *composite = NULL;
+  TaskDoneRequest done;
+  ARRAYTYPE arr_type = EMPTY;
   size_t size = 0;
   try {
     // in case of task failure, the code is overwritten in the try/catch block
@@ -642,14 +651,14 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
         << endl << FILE_DESCRIPTOR_ERR_MSG;
     LOG_ERROR("CREATECOMPOSITE TaskID %10zu - %s", req.id(), msg.str().c_str());
     done.set_task_result(TASK_EXCEPTION);
-    done.set_task_message(msg.str());    
+    done.set_task_message(msg.str());
     done.set_id(req.id());
     done.set_uid(req.uid());
     done.add_update_sizes(size);
     done.mutable_location()->CopyFrom(my_location_);
     master_->TaskDone(done);
     t.stop();
-    total_cc_time_ += t.read();    
+    total_cc_time_ += t.read();
     return;
   }
   // if the input is data_frame create a Exec task and use Executors
@@ -664,10 +673,17 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
        composite->dims.push_back(ad->GetDims());
        composite->splitnames.push_back(req.arraynames(i));
        delete ad;
-    }    
+    }
     composite->dobjecttype = DFRAME;
- 
+
     WorkerRequest* wrk_req = CreateDfCcTask(req);
+   #ifdef PERF_TRACE
+      struct blkin_trace_info info;
+      worker_trace->get_trace_info(&info);
+      wrk_req->set_parent_span_id(info.parent_span_id);
+      wrk_req->set_span_id(info.span_id);
+      wrk_req->set_trace_id(info.trace_id);
+#endif
     unique_lock<mutex> lock(requests_queue_mutex_[EXECUTE]);
     bool notify = requests_queue_[EXECUTE].empty();
     // keep a request at the appropriate queue
@@ -692,6 +708,13 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
     composite->dobjecttype = DLIST;
 
     WorkerRequest* wrk_req = CreateListCcTask(req);
+#ifdef PERF_TRACE
+      struct blkin_trace_info info;
+      worker_trace->get_trace_info(&info);
+      wrk_req->set_parent_span_id(info.parent_span_id);
+      wrk_req->set_span_id(info.span_id);
+      wrk_req->set_trace_id(info.trace_id);
+#endif
     unique_lock<mutex> lock(requests_queue_mutex_[EXECUTE]);
     bool notify = requests_queue_[EXECUTE].empty();
     requests_queue_[EXECUTE].push_back(wrk_req);
@@ -729,13 +752,13 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
           << endl << FILE_DESCRIPTOR_ERR_MSG;
       LOG_ERROR("CREATECOMPOSITE TaskID %10zu - %s", req.id(), msg.str().c_str());
       done.set_task_result(TASK_EXCEPTION);
-      done.set_task_message(msg.str());    
+      done.set_task_message(msg.str());
     }
     done.set_id(req.id());
     done.set_uid(req.uid());
     done.add_update_sizes(size);
     done.mutable_location()->CopyFrom(my_location_);
-    master_->TaskDone(done);   
+    master_->TaskDone(done);
     LOG_INFO("CREATECOMPOSITE TaskID %10zu - Sent TASKDONE message to Master", req.uid());
   }
   t.stop();
@@ -773,6 +796,7 @@ PrestoWorker::PrestoWorker(
                                              DEFAULT_SPILL_DIR);
   }
   LOG_INFO("Creating Executors in Worker");
+  
   executorpool_ = new ExecutorPool(num_executors_,
                                    &my_location_,
                                    master_.get(),
@@ -839,7 +863,7 @@ PrestoWorker::~PrestoWorker() {
   if (worker_set.size() == 0) {
     std::remove(get_shm_size_check_name().c_str());
   }
-  
+
   // Remove array stores
   for (boost::unordered_map<string, ArrayStore*>::iterator i =
            array_stores_.begin();
@@ -880,9 +904,9 @@ void PrestoWorker::HandleRequests(int type) {
   vector<string> func;  // string expression of function
   vector<Arg> args;  // a class that wraps all arguments (split/raw/composite)
   vector<RawArg> raw_args;  // arguments not related to splits
-  vector< ::int64_t> offset_dims;  // offset dimentsions
+  vector< ::int64_t> offset_dims;  // offset dimensions
 
-  vector<NewArg> new_args;  // argument related to shplits
+  vector<NewArg> new_args;  // argument related to splits
   vector<NewArg> composite_args;  // argument about composite array
 
   mutex &requests_queue_mutex_ = this->requests_queue_mutex_[type];
@@ -920,11 +944,11 @@ void PrestoWorker::HandleRequests(int type) {
 
       int ib = iobusy;
       int qs = requests_queue_.size();
-      lock.unlock();      
+      lock.unlock();
       boost::this_thread::interruption_point();
       if(master_ == NULL && worker_req.type() != WorkerRequest::HELLO) {
         LOG_WARN("Worker has not established a connection to Master yet. Only HELLO Handshaking requests are accepted. All other requests are ignored.");
-	delete &worker_req;
+        delete &worker_req;
         continue;
       }
       // process
@@ -933,12 +957,29 @@ void PrestoWorker::HandleRequests(int type) {
       if (worker_req.type() == WorkerRequest::IO)
         LOG_INFO("New IO Task received : %s processing (%d busy, %d queue)", worker_req.io().array_name().c_str(), ib, qs);
 
-      Response worker_resp;      
+      Response worker_resp;
       boost::this_thread::interruption_point();
+      #ifdef PERF_TRACE
+      
+      trace_worker.reset(new bool{false});
+      if(worker_req.has_parent_span_id() && worker_req.has_span_id() && worker_req.has_trace_id()){
+            struct blkin_trace_info info;
+            info.parent_span_id = worker_req.parent_span_id();
+            info.span_id = worker_req.span_id();
+            info.trace_id = worker_req.trace_id();
+             // don't trace
+            if(info.trace_id != 1337) {
+                trace_worker.reset(new bool{true});
+            }
+            worker_trace.reset(new ZTracer::ZTrace("worker_thread",worker_ztrace_inst,&info,info.trace_id != 1337));     
+      }
+      #endif
+      
       switch (worker_req.type()) {
         case WorkerRequest::HELLO:
           {
             LOG_DEBUG("New HELLO Request received from Worker");
+
             hello(worker_req.hello().master_location(),
                   worker_req.hello().worker_location(),
                   worker_req.hello().is_heartbeat(),
@@ -980,7 +1021,8 @@ void PrestoWorker::HandleRequests(int type) {
           }
           break;
         case WorkerRequest::VERTICALOAD:
-          {
+          {     
+     
             LOG_INFO("New VERICALOAD Task ID %zu - Received from Master", worker_req.verticaload().uid());
             verticaload(worker_req.verticaload());
           }
@@ -1016,7 +1058,7 @@ void PrestoWorker::HandleRequests(int type) {
               <RepeatedPtrField<NewArg>::const_iterator,
                NewArg>(worker_req.newexecr().args().begin(),
                        worker_req.newexecr().args_size(), &new_args);
-          
+
           get_vector_from_repeated_field
               <RepeatedPtrField<RawArg>::const_iterator,
                RawArg>(worker_req.newexecr().raw_args().begin(),
@@ -1046,7 +1088,7 @@ void PrestoWorker::HandleRequests(int type) {
         iobusy--;
         int ib = iobusy;
         int qs = requests_queue_.size();
-        lock.unlock(); 
+        lock.unlock();
         LOG_INFO("IO Task - %s proc done (%d busy, %d queue)", worker_req.io().array_name().c_str(), ib, qs);
       }
       delete &worker_req;
@@ -1066,16 +1108,16 @@ void PrestoWorker::HandleRequests(int type) {
 void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) {
   int port_num = -1;
   srand(time(NULL) + getpid());
-  
+
   socket_t* sock;
-  try { 
+  try {
     sock = CreateBindedSocket(start_port_range_, end_port_range_, zmq_ctx_, &port_num);
   } catch (...) {
     LOG_ERROR("PrestoWorker Socket bind error. Check port number: %d\n", port_num);
     delete this;
     exit(0);
   }
-  
+
   if (master_addr.size() != 0 && master_port > 0) {
     LOG_INFO("Creating a connection for handshake with master %s:%d", master_addr.c_str(), master_port);
     ServerInfo ms, ws;
@@ -1111,12 +1153,12 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
     int type = MISC;
     //LOG_INFO("PrestoWorker::Run getting a message type: %s", WorkerRequest::Type_Name(worker_req.type()).c_str());
     switch (worker_req->type()) {
-      case WorkerRequest::NEWEXECR:        
-        master_last_contacted_.start();                      
+      case WorkerRequest::NEWEXECR:
+        master_last_contacted_.start();
         type = EXECUTE;  // function execution
         break;
-      case WorkerRequest::IO:        
-        master_last_contacted_.start();                      
+      case WorkerRequest::IO:
+        master_last_contacted_.start();
         int iob, qs;
         {
           unique_lock<mutex> l(requests_queue_mutex_[IO]);
@@ -1128,7 +1170,7 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
         break;
       case WorkerRequest::FETCH:
         // This worker needs to fetch (or receive) from other workers        
-        // fetch is recevied only from a master
+        // fetch is received only from a master
         master_last_contacted_.start(); 
         type = RECV;
         break;
@@ -1137,14 +1179,14 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
         type = SEND;  // This worker has to send to other workers
         break;
 
-      case WorkerRequest::HELLO:        
-        master_last_contacted_.start();                      
+      case WorkerRequest::HELLO:
+        master_last_contacted_.start();
         type = HELLO;
         break;
       case WorkerRequest::CREATECOMPOSITE:
       case WorkerRequest::CLEAR:
-      case WorkerRequest::LOG:        
-        master_last_contacted_.start();                      
+      case WorkerRequest::LOG:
+        master_last_contacted_.start();
         type = MISC;
         break;
       case WorkerRequest::VERTICALOAD:
@@ -1248,17 +1290,17 @@ void PrestoWorker::hello(ServerInfo master_location,
 
 
     LOG_INFO("Worker opened connection to Master at %s:%d", master_location.name().c_str(), master_location.presto_port());
-    // enable to send message to master dirctly from executor pool
+    // enable to send message to master directly from executor pool
     executorpool_->master = master_.get();
     cmd_to_master = master_.get();
-    // set its own infromation
+    // set its own information
     my_location_.CopyFrom(worker_location);
     master_location_.CopyFrom(master_location);
     // When a master is registered, start a master monitor
     // to check if a master is alive
     thread thr(boost::bind(&PrestoWorker::MonitorMaster, this));
     thr.detach();
-    master_last_contacted_.start();    
+    master_last_contacted_.start();
   }
   // prepare for a reply
   if (master_ == NULL) {
@@ -1312,9 +1354,9 @@ void PrestoWorker::shutdown() {
   fprintf(stderr, "%8.3lf : stop\n", abs_time()/1e6);
   running_ = false;
   // print stats
-  
-  LOG_DEBUG("Total MB fetched: %7.2lf MB\nTotal fetch time: %7.2lf s\nTotal MB   sent: %7.2lf MB\nTotal send time: %7.2lf s\nTotal cc time: %7.2lf s", 
-             total_bytes_fetched_/static_cast<double>(1<<20), total_fetch_time_/1e6, total_bytes_sent_/static_cast<double>(1<<20), total_send_time_/1e6, 
+
+  LOG_DEBUG("Total MB fetched: %7.2lf MB\nTotal fetch time: %7.2lf s\nTotal MB   sent: %7.2lf MB\nTotal send time: %7.2lf s\nTotal cc time: %7.2lf s",
+             total_bytes_fetched_/static_cast<double>(1<<20), total_fetch_time_/1e6, total_bytes_sent_/static_cast<double>(1<<20), total_send_time_/1e6,
              total_cc_time_/1e6);
 
   /*fprintf(stderr, "total MB fetched: %7.2lf MB\n",
@@ -1332,7 +1374,7 @@ void PrestoWorker::shutdown() {
        i != worker_stats_.end(); i++) {
 
     LOG_DEBUG("Worker %s:\n    MB fetched: %7.2lfMB\n    fetch time: %7.2lf\n    MB   sent: %7.2lfMB\n    send time: %7.2lf",
-              i->first.c_str(), i->second.bytes_fetched/static_cast<double>(1<<20), i->second.fetch_time/1e6, 
+              i->first.c_str(), i->second.bytes_fetched/static_cast<double>(1<<20), i->second.fetch_time/1e6,
               i->second.bytes_sent/static_cast<double>(1<<20), i->second.send_time/1e6);
     /*fprintf(stderr, "worker %s:\n", i->first.c_str());
     fprintf(stderr, "    MB fetched: %7.2lfMB\n",
@@ -1346,7 +1388,7 @@ void PrestoWorker::shutdown() {
   }
   worker_stat_mutex_.unlock();
   //fprintf(stderr, "%8.3lf : PrestoWorker shutdown - joining threads\n", abs_time()/1e6);
-  
+
   if(data_loader_thread_ != NULL) {
     data_loader_thread_->interrupt();
     //data_loader_thread_->try_join_for(boost::chrono::seconds(5));
@@ -1360,7 +1402,7 @@ void PrestoWorker::shutdown() {
     data_loader_ = NULL;
     LOG_INFO("Killed Data Loader");
   }
-    
+
   LOG_DEBUG("PrestoWorker shutdown - joining threads");
   for (int i = 0; i < NUM_THREADPOOLS; i++) {
     if (request_threads_[i] == NULL) continue;
@@ -1370,7 +1412,7 @@ void PrestoWorker::shutdown() {
         if (request_threads_[i][j]->joinable() == false) continue;
         request_threads_[i][j]->interrupt();
         LOG_DEBUG("PrestoWorker shutdown - joining threads for %d:%d", i, j);
-        // to avoid deadlock 
+        // to avoid deadlock
         if(request_threads_[i][j]->get_id() == boost::this_thread::get_id()) continue;
         request_threads_[i][j]->try_join_for(boost::chrono::seconds(5));
         delete request_threads_[i][j];
@@ -1417,14 +1459,14 @@ void PrestoWorker::shutdown() {
   if (worker_set.size() == 0) {
     std::remove(get_shm_size_check_name().c_str());
   }
-  
+
   // Remove array stores
   for (boost::unordered_map<string, ArrayStore*>::iterator i = array_stores_.begin();
       i != array_stores_.end(); i++) {
     delete i->second;
   }
   array_stores_.clear();
-  // NOTE: We also need to close sockets in all other worker threads 
+  // NOTE: We also need to close sockets in all other worker threads
   LOG_INFO("Worker shutdown - Closing connection to other workers");
   try {
     bool ret = client_map_mutex_.timed_lock(boost::get_system_time()+boost::posix_time::milliseconds(2000));
@@ -1479,12 +1521,12 @@ void PrestoWorker::verticaload(VerticaDLRequest verticaload) {
   if(verticaload.type() == VerticaDLRequest::START) {
     CreateLoaderThread(verticaload.split_size(),
                        verticaload.split_name(),
-                       verticaload.uid(), 
+                       verticaload.uid(),
                        verticaload.id());
   }
   else if (verticaload.type() == VerticaDLRequest::FETCH) {
     std::vector<std::string> qry_res;
-    qry_res.clear();  
+    qry_res.clear();
     get_vector_from_repeated_field
               <RepeatedPtrField<string>::const_iterator,
                string>(verticaload.query_result().begin(),
@@ -1505,10 +1547,10 @@ void PrestoWorker::verticaload(VerticaDLRequest verticaload) {
 
   } else if (verticaload.type() == VerticaDLRequest::STOP) {
 
-    if(data_loader_thread_!=NULL){ 
+    if(data_loader_thread_!=NULL){
       data_loader_thread_->interrupt();
       data_loader_thread_ = NULL;
-      delete data_loader_thread_; 
+      delete data_loader_thread_;
       LOG_INFO("<DataLoader> Deleted Data loader thread");
     }
 
@@ -1520,7 +1562,7 @@ void PrestoWorker::verticaload(VerticaDLRequest verticaload) {
   }
 }
 
-void PrestoWorker::CreateLoaderThread(::uint64_t split_size, string split_prefix, 
+void PrestoWorker::CreateLoaderThread(::uint64_t split_size, string split_prefix,
                                       ::uint64_t uid, ::uint64_t id) {
   int port_number = -1;
   int32_t clientfd;
@@ -1534,11 +1576,11 @@ void PrestoWorker::CreateLoaderThread(::uint64_t split_size, string split_prefix
 
   std::pair<int32_t, int32_t> bind_info = std::make_pair(clientfd, port_number);
   data_loader_ = new DataLoader(this, port_number, clientfd, split_size, split_prefix);
-  data_loader_thread_ = new thread(bind(&DataLoader::Run, data_loader_));  
+  data_loader_thread_ = new thread(bind(&DataLoader::Run, data_loader_));
 
   if(port_number == -1)
     LOG_ERROR("<DataLoader> Could not open a port for loading data from Vertica.");
-  else   
+  else
     LOG_INFO("<DataLoader> Worker started Data Loader. Listening socket at port#:%d for connection from Vertica", port_number);
 
   TaskDoneRequest reply;
@@ -1592,7 +1634,7 @@ static void ParseXMLConfig(const string &config,
     presto::strip_string(worker_sharedmemory);
     conf_mem =
         atol(worker_sharedmemory.c_str()) *
-        (1LL<<20);    
+        (1LL<<20);
     shared_memory = conf_mem > 0 ? conf_mem : shared_memory;
   } catch (property_tree::ptree_bad_path &) {
   }
@@ -1623,7 +1665,7 @@ static void ParseXMLConfig(const string &config,
 }  // namespace presto
 
 /** Determine optimal # of executors automatically.
- * It get the number of cores and the number of executors will be num_cores 
+ * It get the number of cores and the number of executors will be num_cores
  * @return optimal number of executors
  */
 static int auto_executors() {
@@ -1649,7 +1691,7 @@ static unsigned long long auto_shared_memory() {
   if (f != NULL) {
     if (fscanf(f, "%llu", &shmall) != 1) {
         shmall = 0;
-    }    
+    }
     fclose(f);
   }
   shmall *= getpagesize();
@@ -1706,6 +1748,52 @@ static void clean_garbage_presto_shm(set<int> distributedR_ids) {
   }
 }
 
+/*
+  Function to convert cpu mask representated as a hex to a comma separated string
+  representing the cpu index.
+  for e.g. ff >> 0,1,2,3,4,5,6,7
+*/
+string convertMaskToCPUset(string distr_cpu_mask){
+    std::stringstream str;
+    str << distr_cpu_mask;
+    unsigned long long mask;
+    str >> std::hex >> mask;
+
+    std::stringstream output;
+    int cpu = 0;
+    while(mask!=0){
+        if(mask & 1){
+            output << cpu << ",";
+        }
+        cpu++;
+        mask = mask >>1;
+    }
+    return output.str().substr(0,output.str().size()-1);
+}
+
+void setResourceLimit(long long int distr_memory,
+                      string distr_cpu_mask,
+                      string distr_cpu_mode){
+
+    boost::variant<long long int, std::string, bool> cgValues;
+
+    // set memory limit to distributedr cgroup
+    cgValues = distr_memory;
+    presto::set_cgroup_value(presto::MEMORY, cgValues);
+
+    // set cpu mode for distributedr cgroup
+    bool cpuMode = boost::iequals(distr_cpu_mode,"exclusive") ? true : false;
+    cgValues = cpuMode;
+    presto::set_cgroup_value(presto::CPUMODE, cgValues);
+
+    // set cpu_affinity_set for distributedr cgroup
+    std::string cpuset = convertMaskToCPUset(distr_cpu_mask);
+    cgValues = cpuset;
+    presto::set_cgroup_value(presto::CPUSET, cgValues);
+    return;
+}
+
+
 using namespace presto;
 using namespace std;
 
@@ -1726,6 +1814,10 @@ int main(int argc, char **argv) {
   std::string master_addr, worker_addr;
   int master_port= -1;
   boost::unordered_map<string, presto::ArrayStore*> array_stores;
+  bool iscolocated = false;
+  long long int distr_memory =-1;
+  std::string distr_cpu_mask = "";
+  std::string distr_cpu_mode = "";
 
 /*
   // Read the configuration file if it exists
@@ -1738,6 +1830,7 @@ int main(int argc, char **argv) {
     }
   }
 */
+
   // handling CTRL-C message
   signal(SIGINT, presto::WorkerSigintHandler);
   // handling child process signal
@@ -1750,9 +1843,13 @@ int main(int argc, char **argv) {
   // l: log level (0:error, 1: warning, 2: info, 3: debug)
   // a: address of master node. If this value is given, a worker initiates connection to a master.
   // b: the port of master node
-  // w: worker address identifed from user input
+  // w: worker address identified from user input
   //     Otherwise, a master initiates connection to a worker.
-  while ((c = getopt (argc, argv, "p:e:m:l:a:b:w:q:v:")) != -1)
+  // c: flag indicating where system needs to start with resource limitations or not
+  // o: memory limit for the distributedR process.
+  // k: cpu mask set by the distributedR resource pool.
+  // d: cpu mode specified by the distributedR pool.
+  while ((c = getopt (argc, argv, "p:e:m:l:a:b:w:q:v:c:o:k:d:")) != -1)
     switch (c) {
       case 'p':
         start_port = atoi(optarg);
@@ -1765,12 +1862,12 @@ int main(int argc, char **argv) {
         break;
       case 'm':
         {
-	  unsigned long long optarg_memory= atol(optarg) * (1LL<<20);
-	  if(optarg_memory >0){
-	    unsigned long long total_memory= get_total_memory();	    
-	    shared_memory = optarg_memory > total_memory ? total_memory : optarg_memory;
-	  }
-	}
+          unsigned long long optarg_memory= atol(optarg) * (1LL<<20);
+          if(optarg_memory >0){
+            unsigned long long total_memory= get_total_memory();
+            shared_memory = optarg_memory > total_memory ? total_memory : optarg_memory;
+          }
+        }
         break;
       case 'l':
         log_level = atoi(optarg) > 3 ? log_level : atoi(optarg);
@@ -1784,10 +1881,27 @@ int main(int argc, char **argv) {
       case 'w':
         worker_addr = std::string(optarg);
         break;
+      case 'c':
+        if(boost::iequals(optarg,"true"))
+           iscolocated = true;
+        break;
+      case 'o':
+        // multiplying the value with 1000 as it is stored in kb in Vertica.
+        // the cgroup unit would by in bytes.
+        if(optarg != NULL && optarg != '\0'){
+            distr_memory = std::strtoll(optarg,NULL,10) * 1000;
+        }
+        break;
+      case 'k':
+        distr_cpu_mask = std::string(optarg);
+        break;
+      case 'd':
+        distr_cpu_mode = std::string(optarg);
+        break;
       default:
         continue;
     }
-  
+
   char hostname[1024];
   hostname[1023] = '\0';
   gethostname(hostname, 1023);
@@ -1795,15 +1909,21 @@ int main(int argc, char **argv) {
     worker_addr = string(hostname);
   }
   char workerLogname[1024];
+  
+#ifdef PERF_TRACE
+  int tracer = ZTracer::ztrace_init();
+  worker_ztrace_inst = ZTracer::create_ZTraceEndpoint("127.0.0.1",2,worker_addr);
+#endif
+  
   sprintf(workerLogname, "/tmp/R_worker_%s_%s.%d.log", getenv("USER"), master_addr.c_str(), master_port);
-  InitializeFileLogger(workerLogname);  
+  InitializeFileLogger(workerLogname);
   LoggerFilter(log_level);
   if (master_addr.size() <= 0 || master_port <= 0) {
     LOG_ERROR("Invalid master address and port number - %s:%d", master_addr.c_str(), master_port);
     return 0;
-  }  
-  LOG_INFO("Starting worker.");
+  }
 
+  LOG_INFO("Starting worker.");
   //sleep for N secs if that file exists
   FILE* f = fopen("/tmp/r_worker_startup_sleep_secs", "r");
   if(f) {
@@ -1830,7 +1950,7 @@ int main(int argc, char **argv) {
                                  master_addr, master_port,
                                  start_port, end_port);
 
-    LOG_INFO("Worker %s:(%d~%d) with %d executors and %llu Shared Memory. Master - %s:%d", 
+    LOG_INFO("Worker %s:(%d~%d) with %d executors and %llu Shared Memory. Master - %s:%d",
       hostname, start_port, end_port, executors, shared_memory, master_addr.c_str(), master_port);
     presto::worker_ptr = worker;  // to enable clean worker shutdown
 
@@ -1842,6 +1962,24 @@ int main(int argc, char **argv) {
         worker->Subscribe(&requestLogger);
         fclose(f2);
     }
+
+   if(iscolocated){
+
+      LOG_INFO("Adding resource limits to distributedR cgroup. \n distr_memory: %lld\n distr_cpu_mask: %s \n distr_cpu_mode: %s", distr_memory, distr_cpu_mask.c_str(), distr_cpu_mode.c_str());
+
+      // initialize cgroups
+      presto::initialize_cgroup();
+
+      // set resource limits
+      setResourceLimit(distr_memory, distr_cpu_mask, distr_cpu_mode);
+
+      // attach current process id
+      presto::attach_process(getpid());
+
+      // attach executor process id
+      std::vector<pid_t> pids = worker->GetExecutorPids();
+      presto::attach_processes(pids);
+  }
 
     worker->Run(master_addr, master_port, worker_addr);
     delete worker;

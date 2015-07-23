@@ -55,6 +55,10 @@
 #include <google/protobuf/message.h>
 #include "RequestLogger.h"
 
+#ifdef PERF_TRACE
+#include <ztracer.hpp>
+#endif
+
 using namespace Rcpp;
 using namespace zmq;
 using namespace google::protobuf;
@@ -202,7 +206,7 @@ protected:
   boost::thread *data_loader_thread_;
   // a list of mutexes to access request_queue_
   boost::mutex requests_queue_mutex_[NUM_THREADPOOLS];
-  // a list of conditiona variable to check if the queue is empty
+  // a list of conditional variable to check if the queue is empty
   boost::condition_variable requests_queue_empty_[NUM_THREADPOOLS];
   // a queue that contains a list of worker request
   std::list<WorkerRequest*> requests_queue_[NUM_THREADPOOLS];

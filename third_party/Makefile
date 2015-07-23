@@ -2,7 +2,14 @@
 ZMQ_VERSION=2.2.0
 PROTOBUF_VERSION=2.3.0
 
-all: boost protobuf zmq  uuid
+all: boost protobuf zmq  uuid cgroup
+
+blkin: $(PWD)/third_party/install/lib/libzipkin-cpp.so
+
+$(PWD)/third_party/install/lib/libzipkin-cpp.so:
+	tar -zxf blkin.tar.gz
+	cd blkin/; autoreconf -fi; ./configure --prefix=$(PWD)/third_party/install  --without-babeltrace; make -j8 && make install; 
+	
 boost: $(PWD)/third_party/install/lib/libboost_thread.so
 
 $(PWD)/third_party/boost_1_50_0/bootstrap.sh:
@@ -31,9 +38,16 @@ $(PWD)/third_party/install/lib/libuuid.a:
 	tar -zxf libuuid-1.0.3.tar.gz
 	cd libuuid-1.0.3; CFLAGS=-fPIC CXXFLAGS=-fPIC LDFLAGS=-fPIC ./configure  --enable-static --enable-shared=no --prefix=$(PWD)/third_party/install && make -j8 && make install
 
+cgroup: $(PWD)/third_party/install/lib/libcgroup.a
+$(PWD)/third_party/install/lib/libcgroup.a:
+	tar -zxf libcgroup-0.41.tar.gz
+	cd libcgroup-0.41; CFLAGS=-fPIC CXXFLAGS=-fPIC LDFLAGS=-fPIC ./configure --enable-pam=no --enable-static --enable-shared=no --prefix=$(PWD)/third_party/install && make -j8 && make install
+
 clean: 
 	rm -rf $(PWD)/third_party/install/
 	rm -rf $(PWD)/third_party/boost_1_50_0/
 	rm -rf $(PWD)/third_party/protobuf-2.5.0/
 	rm -rf $(PWD)/third_party/zeromq-4.0.4
 	rm -rf $(PWD)/third_party/libxml2-2.9.1
+	rm -rf $(PWD)/third_party/libcgroup-0.41/
+	rm -rf $(PWD)/third_party/blkin/

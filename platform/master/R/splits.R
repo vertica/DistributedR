@@ -178,8 +178,8 @@ setMethod("getpartition", signature("dframe", "numeric", "missing"),
   function(x, y, ...) {
     y <- as.integer(y)
     # workaround to make sure split is in memory
-    if(is.na(y) || y<=0 || y>x@dobject_ptr$num_splits()) {
-	stop("getpartition index should be integer that is larger than 0 and smaller than #splits")
+    if(is.na(y) || y<=0 || y>x@dobject_ptr$num_splits() || length(y)>1) {
+	stop("getpartition index should be a single integer that is larger than 0 and smaller than #splits")
      }
 #    foreach(i, 1, load <- function(sp = splits(x,y)) {}, progress=FALSE)
     tryCatch({
@@ -212,8 +212,8 @@ setMethod("getpartition", signature("dlist", "numeric", "missing"),
   function(x, y, ...) {
     y <- as.integer(y)
     # workaround to make sure split is in memory
-    if(is.na(y) || y<=0 || y>x@dobject_ptr$num_splits()) {
-        stop("getpartition index should be integer that is larger than 0 and smaller than #splits")
+    if(is.na(y) || y<=0 || y>x@dobject_ptr$num_splits() || length(y)>1) {
+        stop("getpartition index should be a single integer that is larger than 0 and smaller than #splits")
      }
 #    foreach(i, 1, load <- function(sp = splits(x,y)) {}, progress=FALSE)
     tryCatch({
@@ -226,8 +226,8 @@ setMethod("getpartition", signature("darray", "numeric", "missing"),
   function(x, y, ...) {
     y <- as.integer(y)
     # workaround to make sure split is in memory
-    if(is.na(y) || y<=0 || y>x@dobject_ptr$num_splits()) {
-	stop("getpartition index should be integer that is larger than 0 and smaller than #splits")
+    if(is.na(y) || y<=0 || y>x@dobject_ptr$num_splits() || length(y)>1) {
+	stop("getpartition index should be a single integer that is larger than 0 and smaller than #splits")
      }
 #    foreach(i, 1, load <- function(sp = splits(x,y)) {}, progress=FALSE)
     tryCatch({
@@ -288,7 +288,7 @@ setMethod("rcall", signature("character", "list", "list", "list", "list"),
   })
 
 # foreach generic definition 
-foreach <- function(index, range, func, progress=TRUE, scheduler=0, inputs=integer(0)) {
+foreach <- function(index, range, func, progress=TRUE, scheduler=0, inputs=integer(0), perf_trace=FALSE) {
   options(error=dump.frames) #for debugging
 
   if (class(range) != "numeric" && class(range) != "integer") {
@@ -468,6 +468,7 @@ else{
         as.integer(scheduler),
         as.integer(inputs),
         progress,
+        perf_trace,
         DUP=FALSE)
   },error = handle_presto_exception)
 

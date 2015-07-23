@@ -35,7 +35,6 @@
 #include "common.h"
 #include "TransferServer.h"
 
-
 namespace presto {
 
 /** Fetch a split from remote worker and keep it in the shared memory region
@@ -60,7 +59,7 @@ int32_t TransferServer::transfer_blob(void *dest, const string &name,
   // when it is ready
   sem_init(&server_ready, 0, 0);
 
-  // Setup a receicing thread.
+  // Setup a receiving thread.
   // Later, we will send a Fetch request,
   // and the data will arrive to this thread
   pthread_t server_thread;
@@ -104,7 +103,7 @@ int32_t TransferServer::transfer_blob(void *dest, const string &name,
 // } else {
 //     // Cancel the server thread if transfer failed.
 //     // TODO(shivaram): Check if this behaves correctly or use signals.
-//     fprintf(stderr, "Transfer failed, cancelling server\n");
+//     fprintf(stderr, "Transfer failed, canceling server\n");
 //     sem_destroy(&server_ready);
 //     pthread_cancel(server_thread);
 //     shutdown(serverfd, SHUT_RDWR);
@@ -113,7 +112,7 @@ int32_t TransferServer::transfer_blob(void *dest, const string &name,
 //   }
 }
 
-/** A thread that actually recevices data from remote worker.
+/** A thread that actually receives data from remote worker.
  * @return If the action succeed, it will return 0. Otherwise, socket descriptor.
  */
 void* TransferServer::transfer_server_thread(void) {

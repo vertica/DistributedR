@@ -10,7 +10,7 @@
  \tabular{ll}{
   Package: \tab HPdregression\cr
   Type: \tab Package\cr
-  Version: \tab 1.1.0\cr
+  Version: \tab 1.2.0\cr
   Date: \tab 2015-01-16\cr
  }
  Main Functions:

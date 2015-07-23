@@ -163,7 +163,6 @@ test_that("testing output for categorical trees", {
 
 data = generateData(100,2,TRUE,TRUE)
 model = hpdRF_parallelTree(X1 ~ .,data = data, completeModel = TRUE)
-expect_equal(model$ntree,500)
 expect_equal(model$mtry, 1)
 expect_false(is.null(model$classes))
 expect_equal(model$type, "classification")
@@ -176,7 +175,6 @@ expect_true(is.null(model$rsq))
 test_that("testing output for regression trees", {
 data = generateData(100,2,TRUE,FALSE)
 model = hpdRF_parallelTree(X1 ~ .,data = data, completeModel =TRUE)
-expect_equal(model$ntree,500)
 expect_equal(model$mtry, 1)
 expect_true(is.null(model$classes))
 expect_equal(model$type, "regression")

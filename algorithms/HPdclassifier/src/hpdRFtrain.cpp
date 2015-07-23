@@ -18,7 +18,7 @@ extern "C"
   SEXP computeSplits(SEXP R_histograms, SEXP R_active_nodes, 
 		     SEXP R_features_cardinality, 
 		     SEXP R_response_cardinality, 
-		     SEXP R_bin_num, SEXP old_splits_info);
+		     SEXP R_bin_num, SEXP old_splits_info, SEXP R_cp);
   SEXP applySplits(SEXP R_forest, SEXP R_splits_info, SEXP R_active_nodes);
   SEXP updateNodes(SEXP R_observations, SEXP R_responses, 
 		   SEXP R_forest, SEXP R_active_nodes, SEXP R_splits_info);
@@ -31,16 +31,17 @@ extern "C"
 		   SEXP features_num, SEXP node_size, SEXP weights,
 		   SEXP observation_indices, SEXP features_min, SEXP features_max,
 		   SEXP max_nodes, SEXP tree_ids, SEXP max_nodes_per_iteration,
-		   SEXP trace, SEXP scale)
+		   SEXP trace, SEXP scale, SEXP max_time, SEXP R_cp)
   {
     SEXP R_forest;
     printf("initializing forest\n");
     PROTECT(R_forest=initializeForest(observations, responses, ntree, bin_max,
 				      features_min, features_max, 
-				      features_cardinality, response_cardinality,
-				      features_num, weights, observation_indices,
+				      features_cardinality, 
+				      response_cardinality,
+				      features_num, weights, 
+				      observation_indices,
 				      scale, max_nodes, tree_ids));
-    
     hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
     SEXP hist = R_NilValue;
     SEXP splits_info = R_NilValue;
@@ -54,6 +55,10 @@ extern "C"
 	max_nodes_reached = false;
 
     int i = 0;
+    time_t starttime;
+    time(&starttime);
+    time_t currtime;
+
     while(!max_nodes_reached && length(active_nodes))
       {
 	i++;
@@ -97,12 +102,11 @@ extern "C"
 					    VECTOR_ELT(forestparam,0),
 					    VECTOR_ELT(forestparam,1),
 					    VECTOR_ELT(forestparam,5),
-					    splits_info));
+						 splits_info, R_cp));
 	UNPROTECT_PTR(forestparam);
 	if(splits_info != R_NilValue)
 	  UNPROTECT_PTR(splits_info);
 	splits_info = temp_splits_info;
-	
 	SEXP temp_active_nodes;
 	printf("applying splits\n");
 	PROTECT(temp_active_nodes = applySplits(R_forest,splits_info,active_nodes));
@@ -127,7 +131,23 @@ extern "C"
 	  if(forest->max_nodes[i] > 0)
 	    max_nodes_reached = false;
 
+	time(&currtime);
+	printf("time spent:%d/%d\n",(int)(currtime-starttime),INTEGER(max_time)[0] );
+	
+	if(INTEGER(max_time)[0] > -1 && 
+	   currtime-starttime >= INTEGER(max_time)[0])
+	  {
+	    if(hist != R_NilValue)
+	      UNPROTECT_PTR(hist);
+	    if(splits_info != R_NilValue)
+	      UNPROTECT_PTR(splits_info);
+	    UNPROTECT_PTR(active_nodes);
+	    UNPROTECT_PTR(R_forest);
+	    return R_forest;
+
+	  }
       }
+    
     printf("cleaning forest\n");
     cleanForest(R_forest,responses);
     if(hist != R_NilValue)

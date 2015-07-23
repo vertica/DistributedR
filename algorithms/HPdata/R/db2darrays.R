@@ -22,10 +22,11 @@
 ## dsn: ODBC DSN name
 ## resp: a list containing the name of columns corresponding to responses 
 ## pred: a list containing the name of columns corresponding to predictors (optional)
+# except: the list of column names that should be excluded from pred (optional)
 ## npartitions: number of partitions in darrays (it is an optional argument)
 # verticaConnector: when it is TRUE (default), Vertica Connector for Distributed R will be used
 # loadPolicy: it determines the data loading policy of the Vertica Connector for Distributed R
-db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npartitions, verticaConnector=TRUE, loadPolicy="local") {
+db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), except=list(...), npartitions, verticaConnector=TRUE, loadPolicy="local") {
 
     if(!is.character(tableName))
         stop("The name of the table should be specified")
@@ -46,12 +47,14 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
     db_connect <- odbcConnect(dsn)
     loadPolicy <- tolower(loadPolicy)
 
+    #Close the connection on exit
+    on.exit(odbcClose(db_connect))
+
     #get projection_name
     table <- ""
     schema <- ""
     table_info <- unlist(strsplit(tableName, split=".", fixed=TRUE))
     if(length(table_info) > 2) {
-       odbcClose(db_connect)
        stop("Invalid table name. Table name should be in format <schema_name>.<table_name>. If the table is in 'public' schema, Schema name can be ignored while specifying table name")
     } else if(length(table_info) == 2){ 
        schema <- table_info[1]
@@ -70,7 +73,6 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
     if(missing(pred) || length(pred)==0 || pred=="") {
       table_columns <- sqlQuery(db_connect, paste("select column_name from columns where table_schema ILIKE '", schema ,"' and table_name ILIKE '", table,"'", sep=""))
       if(!is.data.frame(table_columns)) {
-        odbcClose(db_connect)
         stop(table_columns)
       }
 
@@ -78,7 +80,6 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
          ## check if its a view
          view_columns <- sqlQuery(db_connect, paste("select column_name from view_columns where table_schema ILIKE '", schema ,"' and table_name ILIKE '", table,"'", sep=""))
          if(!is.data.frame(view_columns)) {
-           odbcClose(db_connect)
            stop(view_columns)
          }
 
@@ -97,7 +98,6 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
         # get type of table - external or regular
         table_type <- sqlQuery(db_connect, paste("select table_definition from tables where table_schema ILIKE '", schema, "' and table_name ILIKE '", table, "'", sep=""))
         if(!is.data.frame(table_type)) {
-           odbcClose(db_connect)
            stop(table_columns)
         }
         relation_type <- ifelse((is.null(table_type[[1]][[1]]) || is.na(table_type[[1]][[1]])), "table", "external_table")
@@ -119,7 +119,6 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
          # get type of table - external or regular
         table_type <- sqlQuery(db_connect, paste("select table_definition from tables where table_schema ILIKE '", schema, "' and table_name ILIKE '", table, "'", sep=""))
         if(!is.data.frame(table_type)) {
-           odbcClose(db_connect)
            stop(table_columns)
         }
         relation_type <- ifelse((is.null(table_type[[1]][[1]]) || is.na(table_type[[1]][[1]])), "table", "external_table")
@@ -129,20 +128,21 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
     }
 
     if(norelation) {
-      odbcClose(db_connect)
       stop(paste("Table/View ", tableName, " does not exist", sep=""))
     }
+
+    # excluding the elements in the except list
+    if(!missing(except) && length(except)!=0 && except!="")
+        pred_columns <- pred_columns[sapply(pred_columns, function(x) !(x %in% except))]
 
     # we have columns, construct column string
     nResponses <- length(resp)   # number of responses (1 for 'binomial logistic' and 'multiple linear' regression)
     nPredictors <- length(pred_columns)  # number of predictors
 
     if(nResponses == 0) {
-      odbcClose(db_connect)
       stop("No response columns to fetch from table/view")
     }
     if(nPredictors == 0) {
-       odbcClose(db_connect)
        stop("No predictor columns to fetch from table/view")
     }
 
@@ -168,7 +168,6 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
     } else {
         npartitions <- round(npartitions)
         if(npartitions <= 0) {
-            odbcClose(db_connect)
             stop("npartitions should be a positive integer number.")
         }
     }
@@ -178,11 +177,9 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
     oneLine <- sqlQuery(db_connect, qryString)
     # check valid response from the database
     if (! is.data.frame(oneLine) ) {
-        odbcClose(db_connect)
         stop(oneLine)
     }
     if (! all(sapply(oneLine, function(x ) is.numeric(x) || is.logical(x))) ) {
-        odbcClose(db_connect)
         stop("Only numeric and logical types are supported for darray")
     }
 
@@ -191,11 +188,9 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
     nobs <- sqlQuery(db_connect, qryString)
     # check valid response from the database
     if (! is.data.frame(nobs) ) {
-        odbcClose(db_connect)
         stop(nobs)
     }
     if(nobs == 0) {
-        odbcClose(db_connect)
         stop("The table is empty!")
     }
     dResult <- FALSE
@@ -291,7 +286,6 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
              .vertica.connector(e)
           } , finally = { 
              stopDataLoader()
-             try({ odbcClose(db_connect)}, silent=TRUE)
           })
 
     # end of verticaConnector
@@ -300,7 +294,6 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
         qryString <- paste("select count(distinct rowid) from", tableName, "where rowid >=0 and rowid <", nobs)
         distinct_nobs <- sqlQuery(db_connect, qryString)
         if( nobs != distinct_nobs ) {
-            odbcClose(db_connect)
             stop("There is something wrong with rowid. Check the assumptions about rowid column in the manual.")
         }
         
@@ -368,7 +361,6 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), npart
         })
         
         dResult <- list(Y=Y, X=X)
-        odbcClose(db_connect)
 
     } # if-else (verticaConnector)
 

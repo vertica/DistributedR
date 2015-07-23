@@ -43,11 +43,12 @@ using namespace std;
 using namespace boost;
 
 namespace presto {
+    
 
 /** A task is done, and the InMemoryScheduler needs to perform further processing
  * @param taskid ID of a task that is completed
  * @param task a pointer of task information
- * @param type a tpye of a task to process
+ * @param type a type of a task to process
  */
 void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) {
   unique_lock<recursive_mutex> lock(mutex_);
@@ -202,7 +203,7 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
       tasks_[dep_task_id].num_dependencies--;
       TaskData taskdata = tasks_[dep_task_id];
 
-      // A dependent Execution task has all necessrary splits to Execute.
+      // A dependent Execution task has all necessary splits to Execute.
       if (taskdata.inited &&
           taskdata.num_dependencies == 0) {
         // launch task
@@ -290,6 +291,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
   int task_cnt = 0;
   current_tasks_ += tasks.size();
   map<Worker*, int> schedule_status;
+  
   for (int i = 0; i < tasks.size(); i++) {
     task_cnt=i+1;
     // t contains all necessary information to execute a task
@@ -560,6 +562,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
                 if (beingfetched == 0) {
                   // if this is not being fetched, fetch it first
                   Worker *from = best_worker_to_fetch_from(split->workers);
+                  
                   ::uint64_t fetch_task_id = Fetch(
                       worker,
                       from,
@@ -580,7 +583,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
                   lock.unlock();
                 } else {
                   // if the split is being fetched,
-                  // add cc_id to get notificatoon
+                  // add cc_id to get notification
                   dependencies_[beingfetched].insert(cc_id);
                   lock.unlock();
                 }

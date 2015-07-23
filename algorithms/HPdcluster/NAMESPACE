@@ -1,2 +1,3 @@
+useDynLib(HPdcluster)
 exportPattern("^[[:alpha:]]+")
 import(distributedR)

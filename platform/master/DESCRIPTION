@@ -1,7 +1,7 @@
 Package: distributedR
 Type: Package
 Title: Distributed computation using R
-Version: 1.1.0
+Version: 1.2.0
 Date: 2015-01-16
 Author: HP Vertica Analytics Team
 Maintainer: HP Vertica Analytics Team <distributedRTeam@external.groups.hp.com>

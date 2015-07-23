@@ -96,7 +96,7 @@ void PrestoMasterHandler::Run(context_t* ctx, int port_start, int port_end) {
           }
           break;
         case MasterRequest::TASKDONE:
-          {
+          {      
             TaskDoneRequest tdr = master_req.taskdone();
             if (scheduler_->IsValidWorker(server_to_string(*tdr.mutable_location())) == false) {
               break;
@@ -233,6 +233,7 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
 
   if (scheduler_->IsExecTask(task_done->uid())) {
      LOG_INFO("EXECUTE TaskID %14d - Execution complete in Worker", task_done->uid());
+     
      bool validated = ValidateUpdates(task_done);
 
      // TaskResult is updated for each EXECUTE Task Done. In case of error, Foreach error flag is enabled.
@@ -250,7 +251,7 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
        boost::unordered_map< ::uint64_t, TaskDoneRequest*>::iterator itr = scheduler_->taskdones_.begin();
        int num_tasks = scheduler_->taskdones_.size();   
        int cur_task=1;
-
+       
        for(; itr != scheduler_->taskdones_.end(); ++itr, ++cur_task) {
           TaskDoneRequest* i_done = itr->second;
           if(foreach_error) {
@@ -273,7 +274,6 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
                req.set_col_dim(i_done->col_dim(j));
                req.mutable_location()->CopyFrom(i_done->location());
                if (NewUpdate(req) == false) {break; return false;}
-
                scheduler_->AddSplit(i_done->update_names(j), i_done->update_sizes(j),
                                  i_done->update_stores(j), server_to_string(i_done->location()),
                                  i_done->update_empties(j));
@@ -293,12 +293,11 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
        }
     }
   } else {
-    //For non-exec tasks we check if there was an error and propogate it up. Note that if there is an error
+    //For non-exec tasks we check if there was an error and propagate it up. Note that if there is an error
     //session shutdown will be enforced. Shutdown is not required if there is an error in foreach 
     //(above case of calling scheduler->done
     success = scheduler_->Done(task_done);
   }
-
   return success;
 }
 

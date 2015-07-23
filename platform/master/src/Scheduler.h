@@ -45,6 +45,11 @@
 #include "timer.h"
 #include "DeserializeArray.h"
 
+#ifdef PERF_TRACE
+#include <ztracer.hpp>
+#include <boost/thread/tss.hpp>
+#endif
+
 #define DRAM_AS_ARRAYSTORE NULL
 
 // #undef SCHEDULER_LOGGING
@@ -55,7 +60,7 @@
 #define LOG(n, a...)
 #endif
 
-namespace presto {
+namespace presto {  
 
 class PrestoMaster;
 class ArrayStoreData;

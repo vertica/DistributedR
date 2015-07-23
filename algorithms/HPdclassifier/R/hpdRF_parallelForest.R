@@ -628,13 +628,19 @@
 deploy.hpdRF_parallelForest <- function(inputModel) {
     if(is.null(inputModel$forest))
         stop("The model does not contain a forest and cannot be used for prediction")
+    # clearing environment
+    environment(inputModel$terms) <- globalenv()
+    # removing unnecessary elements
     inputModel$y <- NULL
     inputModel$oob.times <- NULL
     inputModel$votes <- NULL
     inputModel$predicted <- NULL
+    inputModel$importanceSD <- NULL
+    inputModel$localImportance <- NULL
+    inputModel$proximity <- NULL
     inputModel$test <- NULL
     inputModel$proximity <- NULL
-
+    
     inputModel
 }
 

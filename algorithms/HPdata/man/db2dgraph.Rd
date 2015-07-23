@@ -5,7 +5,7 @@
 db2dgraph function is an example for loading an adjacency matrix from a table of edge-list stored in a database. It is assumed that edge-list is stored in a single table. It is also assumed that the ID of vertices in the table starts from zero. As the returned darray will be column-wise partitioned, it would be more efficient when there is projection (index) on the 'to' column of the table.
 }
 \usage{
-db2dgraph(tableName, dsn, from, to, weight, npartitions)
+db2dgraph(tableName, dsn, from, to, weight, npartitions, row_wise = FALSE)
 }
 
 \arguments{
@@ -26,6 +26,9 @@ db2dgraph(tableName, dsn, from, to, weight, npartitions)
   }
   \item{npartitions}{
     this optional argument specifies the desired number of splits (partitions) in the distributed array. When it is not specified, it will become equal to the number of active instances in the distributed R environment. It should be noted that the number of splits in the returned result might not be exactly the same as npartitions. Please read the details for more information.
+  }
+  \item{row_wise}{
+    if TRUE the returned darray will be row_wise partitioned.
   }
 }
 
