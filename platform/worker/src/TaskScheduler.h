@@ -49,6 +49,7 @@
 namespace presto {
 
 class ExecutorPool;
+class PrestoWorker;
 
 struct ExecSplit {
   boost::unordered_set<int> executors;
@@ -70,16 +71,14 @@ struct ExecStat {
 
 class TaskScheduler {
  public:
-  TaskScheduler(ExecutorPool* ep_, boost::unordered_set<std::string> *shmem_arrays_,
+  TaskScheduler(PrestoWorker* pw_,ExecutorPool* ep_, boost::unordered_set<std::string> *shmem_arrays_,
                 boost::timed_mutex *shmem_arrays_mutex_, int nExecutors):
-                executorpool(ep_), shmem_arrays(shmem_arrays_),
+                worker(pw_),executorpool(ep_), shmem_arrays(shmem_arrays_),
                 shmem_arrays_mutex(shmem_arrays_mutex_) {
     for(int i=0; i < nExecutors; i++) {
         AddExecutor(i);
     }
   }
-
-  //TaskScheduler(PrestoWorker* worker);
 
   ~TaskScheduler() {}
 
@@ -98,6 +97,8 @@ class TaskScheduler {
 
   void ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id);
   void ValidateCCPartitions(const std::vector<NewArg>& task_args, int executor_id);
+
+  int GetDeterministicExecutor(int32_t split_id);
   
  private:
   void AddExecutor(int id);
@@ -118,8 +119,8 @@ class TaskScheduler {
   boost::recursive_mutex metadata_mutex;
   boost::timed_mutex *shmem_arrays_mutex;
 
-private:
   ExecutorPool* executorpool;
+  PrestoWorker* worker;
 };
 
 }  // namespace presto

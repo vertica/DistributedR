@@ -251,11 +251,11 @@ void ExecutorPool::execute(std::vector<std::string> func,
                            Response* res, int executor_id ) {
   LOG_INFO("ExecutorPool: New Request of type EXECR executor(%d)", executor_id);
 
-  unique_lock<mutex> lock(poolmutex);
   int target_executor = executor_id;
 
+  unique_lock<mutex> lock(executors[target_executor].executor_mutex);
   LOG_INFO("ExecutorPool: Waiting for the executor to be available(%d)", target_executor);
-  while(executors[target_executor].ready==false) {}
+  while(executors[target_executor].ready==false) { executors[target_executor].sync.wait(lock);} //LOG_INFO("ExecutorPool: In loop(%d)", target_executor);}
   executors[target_executor].ready = false;
   lock.unlock();
   
@@ -434,7 +434,13 @@ void ExecutorPool::execute(std::vector<std::string> func,
      }
   }
 
+  
+  //unique_lock<mutex> lock(executors[target_executor].executor_mutex);
+  lock.lock();
   executors[target_executor].ready = true;
+  executors[target_executor].sync.notify_one();
+  lock.unlock();
+
   req.set_id(id);
   req.set_uid(uid);
   req.mutable_location()->CopyFrom(*my_location);
@@ -696,22 +702,26 @@ void ExecutorPool::execute(std::vector<std::string> func,
 
 void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
 
-  LOG_INFO("ExecutorPool: New Request of type CLEAR #splits(%d), executor(%d)", splits.size(), executor);
+  LOG_INFO("ExecutorPool CLEAR: New Request of type CLEAR #splits(%d), executor(%d)", splits.size(), executor);
 
-  unique_lock<mutex> lock(poolmutex);
+  /*unique_lock<mutex> lock(poolmutex);
   // Wait till the executor is ready
   while(executors[executor].ready==false) {};
+  lock.unlock();*/
+  unique_lock<mutex> lock(executors[executor].executor_mutex);
+  LOG_INFO("ExecutorPool CLEAR: Waiting for the executor to be available(%d)", executor);
+  while(executors[executor].ready==false) { executors[executor].sync.wait(lock); } //LOG_INFO("ExecutorPool: In loop(%d)", target_executor);}
   executors[executor].ready = false;
   lock.unlock();
 
   fprintf(executors[executor].send, "%d\n", CLEAR);
   fprintf(executors[executor].send, "%zu\n", splits.size());
   for (int i = 0; i < splits.size(); i++) {
-     LOG_INFO("ExecutorPool: Sending partition %s to executor %d", splits[i].c_str(), executor);
+     LOG_INFO("ExecutorPool CLEAR: Sending partition %s to executor %d", splits[i].c_str(), executor);
      fprintf(executors[executor].send, "%s\n", splits[i].c_str());
   }
   fflush(executors[executor].send);
-  LOG_INFO("ExecutorPool: Sent CLEAR executor(%d). Not wait for completion", executor);
+  LOG_INFO("ExecutorPool CLEAR: Sent CLEAR executor(%d). Not wait for completion", executor);
 
   /*char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
@@ -761,24 +771,27 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
 
   }*/
 
+  lock.lock();
   executors[executor].ready = true;
+  executors[executor].sync.notify_one();
+  lock.unlock();
 }                                  
 
 
 void ExecutorPool::persist_to_worker(std::string split_name, int executor) {
 
-  LOG_INFO("ExecutorPool: New Request of type PERSIST split(%s), executor(%d)", split_name.c_str(), executor);
+  LOG_INFO("ExecutorPool PERSIST: New Request of type PERSIST split(%s), executor(%d)", split_name.c_str(), executor);
 
-  unique_lock<mutex> lock(poolmutex);
-  // Wait till the executor is ready
-  while(executors[executor].ready==false) {};
+  unique_lock<mutex> lock(executors[executor].executor_mutex);
+  LOG_INFO("ExecutorPool PRESIST: Waiting for the executor to be available(%d)", executor);
+  while(executors[executor].ready==false) { executors[executor].sync.wait(lock); } //LOG_INFO("ExecutorPool: In loop(%d)", target_executor);}
   executors[executor].ready = false;
   lock.unlock();
 
   fprintf(executors[executor].send, "%d\n", PERSIST); 
   fprintf(executors[executor].send, "%s\n", split_name.c_str());
   fflush(executors[executor].send);
-  LOG_INFO("ExecutorPool: Sent PERSIST split(%s), executor(%d)", split_name.c_str(), executor);
+  LOG_INFO("ExecutorPool PERSIST: Sent split(%s), executor(%d)", split_name.c_str(), executor);
 
   char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
@@ -800,7 +813,7 @@ void ExecutorPool::persist_to_worker(std::string split_name, int executor) {
 
     if (strncmp(cname, "&", 100) == 0) {
        // we are using size field to indicate the task result
-       LOG_INFO("Persist to worker Task complete.");
+       LOG_INFO("ExecutorPool PERSIST: Task complete.");
        if (size==TASK_EXCEPTION){
           ostringstream msg;
           msg << "TASK_EXCEPTION : Persist task execution failed at Executor " << executor << " with message: " << task_msg;
@@ -810,8 +823,10 @@ void ExecutorPool::persist_to_worker(std::string split_name, int executor) {
     }
   }
 
+  lock.lock();
   executors[executor].ready = true;
-  sema->post();
+  executors[executor].sync.notify_one();
+  lock.unlock();
 }
 
 void ExecutorPool::InsertCompositeArray(std::string name, Composite* comp) {

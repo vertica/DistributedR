@@ -26,10 +26,11 @@
 #include <set>
 #include <string>
 #include <vector>
+//#include <Math.h>
 
 #include "TaskScheduler.h"
 #include "ExecutorPool.h"
-//#include "PrestoWorker.h"
+#include "PrestoWorker.h"
 
 using namespace boost;
 
@@ -44,6 +45,18 @@ void TaskScheduler::AddExecutor(int id) {
   executor_stat[id] = stat;
 }
 
+int TaskScheduler::GetDeterministicExecutor(int32_t split_id) {
+  std::pair<int, int> cluster_info = worker->GetClusterInfo(); 
+  if(cluster_info.first == 0) {
+    LOG_ERROR("GetDeterministicExecutor:Number of workers is 0!");
+    return 0;
+  }
+  LOG_INFO("GetDeterministicExecutor: #Worker(%d), split_id(%d), num_exec(%d)", cluster_info.first, split_id, cluster_info.second);
+  int local_split_id = floor(split_id/cluster_info.first);
+  int exec_idx = local_split_id%cluster_info.second;
+  //LOG_INFO("Chosen executor %d", exec_idx);
+  return exec_idx;
+}
 
 bool TaskScheduler::IsSplitAvailable(const std::string& split_name, int executor_id) {
    //bool onWorker = false;
@@ -129,6 +142,21 @@ int64_t TaskScheduler::AddParentTask(const std::vector<NewArg>& task_args, int64
 // Possibility to add policy
 int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& args) {
     int target_executor = -1;
+
+    //Check if its 1st dobject initialization
+    if(args.size() == 1) {
+      int32_t split_id;
+      string split_name;
+      int32_t version;
+      ParseVersionNumber(args[0].arrayname(), &version);
+      ParseSplitName(args[0].arrayname(), &split_name, &split_id);
+
+      if(version == 0) { // Dobject initialization foreach
+        target_executor = GetDeterministicExecutor(split_id);
+        LOG_INFO("GetBestExecutor: Dobject initialization foreach: split_id(%d), executor(%d)", split_id, target_executor);
+        return target_executor;
+      }
+    }
     // Get the executors of all splits.
     map<int, size_t> available;  //needs locks?
     //LOG_INFO("Arg size is %zu", args.size());

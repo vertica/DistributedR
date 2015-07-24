@@ -134,8 +134,9 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
   void Run(string master_ip, int master_port, string worker_addr);
 
   void hello(ServerInfo master_location,
-              ServerInfo worker_location,
-              bool is_heartbeat, int attr_flag);
+             ServerInfo worker_location,
+             bool is_heartbeat, int attr_flag,
+             int num_workers);
 
   void shutdown();
 
@@ -187,6 +188,10 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
     return scheduler_;
   }
 
+  std::pair<int, int> GetClusterInfo() {
+    return std::make_pair<int, int>(num_workers_, num_executors_);
+  }
+
 protected:
   WorkerRequest* CreateDfCcTask(CreateCompositeRequest& req);
   WorkerRequest* CreateListCcTask(CreateCompositeRequest& req);
@@ -205,6 +210,7 @@ protected:
   boost::timed_mutex exec_pool_del_mutex_;
 
   int num_executors_;  // total number of executors
+  int num_workers_;
   size_t shm_total_;   // total available shared memory size
   ExecutorPool *executorpool_;
 

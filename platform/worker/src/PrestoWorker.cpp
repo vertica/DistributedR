@@ -880,7 +880,8 @@ PrestoWorker::PrestoWorker(
       array_stores_(array_stores),
       start_port_range_(start_port),
       end_port_range_(end_port),
-      running_(true) {
+      running_(true),
+      num_workers_(0) {
   my_location_.Clear();
   int log_level_=log_level;
   if (array_stores_.empty()) {
@@ -901,7 +902,7 @@ PrestoWorker::PrestoWorker(
     scheduler_ = NULL;
   } else {
     LOG_INFO("Creating scheduler");
-    scheduler_ = new TaskScheduler(executorpool_, &shmem_arrays_,
+    scheduler_ = new TaskScheduler(this, executorpool_, &shmem_arrays_,
                                    &shmem_arrays_mutex_,
                                    num_executors_);
   }
@@ -1067,7 +1068,8 @@ void PrestoWorker::HandleRequests(int type) {
             hello(worker_req.hello().master_location(),
                   worker_req.hello().worker_location(),
                   worker_req.hello().is_heartbeat(),
-                  worker_req.hello().reply_attr_flag());
+                  worker_req.hello().reply_attr_flag(),
+                  worker_req.hello().num_workers());
           }
           break;
         case WorkerRequest::FETCH:
@@ -1268,7 +1270,7 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
     ms.set_presto_port(master_port);
     ws.set_name(worker_addr);
     ws.set_presto_port(port_num);
-    hello(ms, ws, false, 0xffffffff);
+    hello(ms, ws, false, 0xffffffff, 0);
   } else {
     LOG_INFO("Master IP:port info is not given. Wait for a master to initiate the handshake");
   }
@@ -1411,8 +1413,9 @@ WorkerInfo* PrestoWorker::getClient(const ServerInfo& location) {
  * @return NULL
  */
 void PrestoWorker::hello(ServerInfo master_location,
-                       ServerInfo worker_location,
-                         bool is_heartbeat, int reply_flag) {
+                         ServerInfo worker_location,
+                         bool is_heartbeat, int reply_flag,
+                         int num_workers) {
   // To check if this is the first hello message for initial setup
   if (is_heartbeat == false) {
     if (master_ != NULL) {
@@ -1445,7 +1448,11 @@ void PrestoWorker::hello(ServerInfo master_location,
     thread thr(boost::bind(&PrestoWorker::MonitorMaster, this));
     thr.detach();
     master_last_contacted_.start();
+  } else {
+    LOG_INFO("===> Heartbeat hello %d", num_workers);
+    num_workers_ = num_workers;
   }
+
   // prepare for a reply
   if (master_ == NULL) {
     LOG_WARN("No Master is registered with the Worker. HELLO message will be ignored.");

@@ -28,6 +28,7 @@ message HelloRequest {
   optional int64 abs_time = 3;
   optional int32 reply_attr_flag = 4 [default = 0];
   optional bool is_heartbeat = 5 [default = false];
+  required int32 num_workers = 6;
 }
 
 message CreateRequest {

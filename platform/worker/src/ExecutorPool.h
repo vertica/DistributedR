@@ -91,6 +91,8 @@ class ExecutorPool {
     FILE *send, *recv;
     bool ready;
     pid_t pid;
+    boost::mutex executor_mutex;
+    boost::condition_variable sync;
   };
 
   int num_executors;

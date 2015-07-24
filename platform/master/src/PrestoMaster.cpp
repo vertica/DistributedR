@@ -509,6 +509,11 @@ void PrestoMaster::ConnectWorkers(const vector<ServerInfo>& workers) {
       fprintf(stderr, "Check log files (/tmp/R_worker_...) in each node.\n");
     }
   }
+  
+  boost::unordered_map<std::string, Worker*>::iterator wit;
+  for (wit = reg_workers.begin(); wit != reg_workers.end(); ++wit) {
+    res_manager_->SendHello(wit->second->workerinfo);
+  }
   fflush(stderr);
 }
 
