@@ -19,6 +19,5 @@
 BOOST_DIR = $(PWD)/../../../third_party/install/include
 BOOST_LIB_DIR = $(PWD)/../../../third_party/install/lib
 
-PKG_CPPFLAGS = -I ${BOOST_DIR}
+PKG_CPPFLAGS = `$(R_HOME)/bin/Rscript -e "Rcpp:::CxxFlags()"`
 PKG_LIBS = `$(R_HOME)/bin/Rscript -e "Rcpp:::LdFlags()"`
-PKG_LIBS += -L$(BOOST_LIB_DIR) -Wl,-rpath,${BOOST_LIB_DIR} -lboost_log -lboost_log_setup -lboost_thread -lboost_system -lboost_filesystem -lboost_chrono -lboost_date_time
