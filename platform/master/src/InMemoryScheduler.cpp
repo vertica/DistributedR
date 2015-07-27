@@ -14,7 +14,7 @@
  *copy of the GNU General Public License along with this program; if
  *not, write to the Free Software Foundation, Inc., 59 Temple Place,
  *Suite 330, Boston, MA 02111-1307 USA
- ********************************************************************/ 
+ ********************************************************************/
 
 #include <map>
 #include <sstream>
@@ -43,7 +43,7 @@ using namespace std;
 using namespace boost;
 
 namespace presto {
-    
+
 
 /** A task is done, and the InMemoryScheduler needs to perform further processing
  * @param taskid ID of a task that is completed
@@ -254,26 +254,26 @@ static Worker* best_worker_to_fetch_from(
 
 
 /** Assign a ExecTask to a worker
- * @param tasks 
+ * @param tasks
  * @param inputs
  * @return NULL
  */
 void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
-				const int scheduler_policy,
+                                const int scheduler_policy,
                                 const std::vector<int> *inputs) {
 
   std::ostringstream funcstr;
-  funcstr << "*** A new Foreach function received. " << 
+  funcstr << "*** A new Foreach function received. " <<
   tasks.size() << " parallel EXECUTE tasks will be created and sent to Worker : \n" <<
   "function() ";
 
   for (int i = 0; i < tasks[0]->func_str.size(); i++) {
       if (i==tasks[0]->func_str.size()-1)
          funcstr << tasks[0]->func_str[i].c_str();
-      else 
+      else
          funcstr << tasks[0]->func_str[i].c_str() << "\n";
   }
-  
+
   LOG_INFO(funcstr.str());
 #ifdef PROFILING
   fprintf(profiling_output_, "new foreach with %zu tasks\n", tasks.size());
@@ -291,7 +291,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
   int task_cnt = 0;
   current_tasks_ += tasks.size();
   map<Worker*, int> schedule_status;
-  
+
   for (int i = 0; i < tasks.size(); i++) {
     task_cnt=i+1;
     // t contains all necessary information to execute a task
@@ -332,7 +332,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
       // the given split is a composite array and the task contains split
       // there are multiple tasks, do not consider the composite array location
       // it might be better to distribute task while creating a composite array
-     
+
       //temporarily commented out because we want scheduling decision to take into account composite "list" type operations
      // if (arg.arrays_size() > 1 && num_splits > 0 && tasks.size() > 1) {
       //  continue;
@@ -385,12 +385,12 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
     } else {
       if (num_composite > 0 || num_splits > 0) {  // to check if a task contains splits
         // if the best host does not have enough memory
-        // choose one with the most remaining.        
+        // choose one with the most remaining.
         worker = GetMostMemWorker();
       } else {
         // if this function does not use any splits, we do not have to
         // consider available shared memory size
-        worker = GetRndAvailableWorker();
+        worker = GetNextAvailableWorker();
       }
     }
     }
@@ -434,7 +434,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
     taskdata.worker = worker;
 
     // move rest of pieces to best host
-    Response ret; 
+    Response ret;
     for (int32_t i = 0; i < t->args.size(); i++) {
       const Arg &arg = t->args[i];
       //if it's a list, for now treat it as a regular split arg
@@ -452,7 +452,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
               if (beingfetched == 0) {  // it is not being fetched
                 Worker *from = best_worker_to_fetch_from(split->workers);
                 // create a fetch task to prepare a task
-                //LOG_DEBUG("Task number %d - Task argument %d - Split %s is not on Worker %15s. It is will be fetched from Worker %15s", 
+                //LOG_DEBUG("Task number %d - Task argument %d - Split %s is not on Worker %15s. It is will be fetched from Worker %15s",
                 //          task_cnt, i+1, split, server_to_string(worker->server).c_str(), server_to_string(from->server).c_str());
                 ::uint64_t fetch_task_id = Fetch(
                     worker,
@@ -492,7 +492,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
       } else {  // composite
         string name = CompositeName(arg);
 
-        if (task_cnt==1) 
+        if (task_cnt==1)
             LOG_INFO("Foreach argument '%s' (Internal name: %s) is a Composite array. Composite Array will be created before execution.", arg.name().c_str(), name.c_str());
 
         lock.lock();
@@ -562,7 +562,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
                 if (beingfetched == 0) {
                   // if this is not being fetched, fetch it first
                   Worker *from = best_worker_to_fetch_from(split->workers);
-                  
+
                   ::uint64_t fetch_task_id = Fetch(
                       worker,
                       from,
@@ -595,7 +595,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
 
             if (cc.num_dependencies == 0) {  // all fetches done
               // create composite
-	      LOG_INFO("Composite Array '%s' - FETCH dependencies resolved. Creating Composite Array.", arg.name().c_str());
+              LOG_INFO("Composite Array '%s' - FETCH dependencies resolved. Creating Composite Array.", arg.name().c_str());
               unique_lock<recursive_mutex> metalock(metadata_mutex);
               ::uint64_t cc_id2 = CreateComposite(cc.worker,
                                                 cc.name,
@@ -635,7 +635,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
     // All necessary split is prepared
     if (taskdata.num_dependencies == 0 && taskdata.launched == false) {
       if (task_cnt==1)
-	 LOG_INFO("Foreach arguments has no dependencies. Sending task to Worker for execution");
+         LOG_INFO("Foreach arguments has no dependencies. Sending task to Worker for execution");
       ::uint64_t id = Exec(worker, t);
 #ifdef PROFILING
       fprintf(profiling_output_, "%8.3lf %15s %6zu EDEPS DONE %8.3lf\n",

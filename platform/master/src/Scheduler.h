@@ -60,7 +60,7 @@
 #define LOG(n, a...)
 #endif
 
-namespace presto {  
+namespace presto {
 
 class PrestoMaster;
 class ArrayStoreData;
@@ -98,7 +98,7 @@ enum TaskType {
   * Arguments to express split information
   * @var TaskArg::raw_args
   * Arguements that are not related to splits
-  * @var TaskArg::sema 
+  * @var TaskArg::sema
   * a semaphore to notify the completion of this task. Upon completion, this is posted
   * @var TaskArg::t
   * a timer to keep track of execution time of this task
@@ -241,6 +241,7 @@ class Scheduler {
 
         total_scheduler_time_ = 0;
         total_child_scheduler_time_ = 0;
+        current_Worker = -1;
   }
 
   virtual ~Scheduler();
@@ -250,7 +251,7 @@ class Scheduler {
   // register new tasks
   void AddTask(TaskArg *t);
   virtual void AddTask(const std::vector<TaskArg*> &tasks,
-		       const int scheduler_policy,
+                       const int scheduler_policy,
                        const std::vector<int> *inputs = NULL) = 0;
 
   // handle a task done notification (task and type describe the task
@@ -309,7 +310,7 @@ class Scheduler {
   }
 
   // -- data loader --
-  
+
   void InitiateDataLoader(WorkerInfo* wi, uint64_t split_size, string split_prefix);
   void FetchLoaderStatus(WorkerInfo* wi, std::vector<std::string>vnodes);
   void StopDataLoader(WorkerInfo* wi);
@@ -322,13 +323,13 @@ class Scheduler {
   void SetForeachError(bool value);
 
   void TaskErrorMsg(const char* error_msg, std::string node = "") {
-    foreach_status_->error_stream.str(std::string()); 
+    foreach_status_->error_stream.str(std::string());
     if(node.empty())
-      foreach_status_->error_stream << " in Master: " << error_msg 
-      <<"\nCheck your code."; 
+      foreach_status_->error_stream << " in Master: " << error_msg
+      <<"\nCheck your code.";
     else
       foreach_status_->error_stream << " in Worker " << node << ": " << error_msg
-      <<"\nCheck your code.";  
+      <<"\nCheck your code.";
   }
 
   void ResetForeach() {
@@ -349,7 +350,7 @@ class Scheduler {
     foreach_status_ = foreach_status;
   }
 
-  // Current implementation is basedon assumption that 
+  // Current implementation is basedon assumption that
   // atmost 1 foreach() will run at time
   ForeachStatus *foreach_status_;
   boost::unordered_map<uint64_t, TaskDoneRequest*> taskdones_;
@@ -401,8 +402,8 @@ class Scheduler {
   // completely delete a split (from all workers, arraystores, bookkeeping)
   void DeleteSplit(Split *split);
 
-  
-  Worker* GetRndAvailableWorker();
+  // get the next available worker when the foreach has no data partition involved.
+  Worker* GetNextAvailableWorker();
 
   Worker* GetMostMemWorker();
 
@@ -426,6 +427,11 @@ class Scheduler {
   Timer total_scheduler_timer_;
   double total_scheduler_time_;
   double total_child_scheduler_time_;
+
+  // Tracking which worker to execute next task.
+  // This is mainly used when a foreach has no data partition involved and the next
+  // worker is fetched in round-robin fashion.
+  int current_Worker;
 
   boost::mutex single_threading_mutex;
 
@@ -467,7 +473,7 @@ class InMemoryScheduler : public Scheduler {
   explicit InMemoryScheduler(const std::string &hostname, PrestoMaster* presto_master);
   ~InMemoryScheduler();
   virtual void AddTask(const std::vector<TaskArg*> &tasks,
-		       const int scheduler_policy = 0,
+                       const int scheduler_policy = 0,
                        const std::vector<int> *inputs = NULL);
   virtual void ChildDone(uint64_t taskid, void *task, TaskType type);
 
@@ -542,7 +548,7 @@ class OOCScheduler : public Scheduler {
  public:
   explicit OOCScheduler(const std::string &hostname, PrestoMaster* presto_master);
   virtual void AddTask(const std::vector<TaskArg*> &tasks,
-		       const int scheduler_policy = 0,
+                       const int scheduler_policy = 0,
                        const std::vector<int> *addtask = NULL);
   virtual void ChildDone(uint64_t taskid, void *task, TaskType type);
   virtual void Flush(Worker *worker, size_t size = 0);
