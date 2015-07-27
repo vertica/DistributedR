@@ -156,6 +156,7 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
   void createcomposite(CreateCompositeRequest req);
   void foreachcomplete(ForeachCompleteRequest req);
   void verticaload(VerticaDLRequest req);
+  void prepare_persist(const std::string& split_name, int executor, uint64_t taskid);
 
   WorkerInfo* getClient(const ServerInfo& location);
 
@@ -190,6 +191,10 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
 
   std::pair<int, int> GetClusterInfo() {
     return std::make_pair<int, int>(num_workers_, num_executors_);
+  }
+
+  void PersistPost(uint64_t taskid) {
+    sync_persist_[taskid]->post();
   }
 
 protected:
@@ -258,6 +263,8 @@ protected:
   };
   boost::unordered_map<std::string, worker_stats> worker_stats_;
   boost::mutex worker_stat_mutex_;
+  
+  boost::unordered_map<uint64_t, boost::interprocess::interprocess_semaphore*> sync_persist_;
 
   DataLoader* data_loader_;
   TaskScheduler* scheduler_;

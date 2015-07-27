@@ -225,6 +225,18 @@ void WorkerInfo::NewTransfer(const FetchRequest& fetch) {
   SendZMQMessagePush(req);  // send message
 }
 
+/** This function lets a worker to persist a split for one of its executor
+ * @param persist Contains information about the object to be persisted and source executor
+ * @return NULL
+ */
+void WorkerInfo::Persist(const PersistRequest& persist) {
+  WorkerRequest req;  // Create a request to worker
+  req.set_type(WorkerRequest::PERSIST);
+  req.mutable_fetch()->CopyFrom(persist);
+  //  SendZMQMessage(req, res);
+  SendZMQMessagePush(req);  // send message
+}
+
 /** Functio to create a composite array
  * @param createcomposite information about this composite array creation
  * @return NULL

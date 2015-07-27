@@ -65,6 +65,7 @@ class WorkerInfo {
   void Fetch(const FetchRequest& fetch);
   void NewTransfer(const FetchRequest& fetch);
   void NewExecuteR(const NewExecuteRRequest& newexecr);
+  void Persist(const PersistRequest& persist);
   void IO(const IORequest& io);
   void Clear(const ClearRequest& clear);
   void CreateComposite(const CreateCompositeRequest& createcomposite);

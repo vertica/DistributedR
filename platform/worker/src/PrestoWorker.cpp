@@ -406,19 +406,6 @@ void PrestoWorker::fetchtoR(string name, ServerInfo location,
  */
 void PrestoWorker::newtransfer(string name, ServerInfo location,
                                size_t size, string store) {
-
-  if(DATASTORE == RINSTANCE) {
-    // open connection to a requester
-    NewArg arg;
-    arg.set_arrayname(name);
-    arg.set_varname(name);
-    std::vector<NewArg> transfer_arg;
-    transfer_arg.push_back(arg);
-
-    //Persist to worker if not already on worker.
-    scheduler_->ValidatePartitions(transfer_arg, -1);
-  }
-
   int32_t sockfd = presto::connect(location.name(), location.presto_port());
   if (sockfd < 0) {
     ostringstream msg;
@@ -577,6 +564,33 @@ void PrestoWorker::clear(ClearRequest req) {
   master_->TaskDone(done);
 */ 
   LOG_DEBUG("CLEAR Task                     - Sent TASKDONE message to Master.");
+}
+
+void PrestoWorker::prepare_persist(const std::string& name, int executor, uint64_t taskid) {
+
+  shmem_arrays_mutex_.lock();
+  shmem_arrays_.insert(name);
+  shmem_arrays_mutex_.unlock();
+
+  PersistRequest persist_req;
+  persist_req.set_id(000);
+  persist_req.set_uid(000);
+  persist_req.set_split_name(name);
+  persist_req.set_executor(executor);
+  persist_req.set_parenttaskid(taskid);
+
+  WorkerRequest* wrk_req = new WorkerRequest;
+  wrk_req->Clear();
+  wrk_req->set_type(WorkerRequest::PERSIST);
+  wrk_req->mutable_persist()->CopyFrom(persist_req);
+
+  unique_lock<mutex> lock(requests_queue_mutex_[EXECUTE]);
+  bool notify = requests_queue_[EXECUTE].empty();
+  requests_queue_[EXECUTE].push_back(wrk_req);
+  lock.unlock();
+
+  if (notify)
+    requests_queue_empty_[EXECUTE].notify_all();  
 }
 
 /* Create and send Execute Task to Worker to create
@@ -902,6 +916,7 @@ PrestoWorker::PrestoWorker(
     scheduler_ = NULL;
   } else {
     LOG_INFO("Creating scheduler");
+    sync_persist_.clear();
     scheduler_ = new TaskScheduler(this, executorpool_, &shmem_arrays_,
                                    &shmem_arrays_mutex_,
                                    num_executors_);
@@ -966,6 +981,7 @@ PrestoWorker::~PrestoWorker() {
     std::remove(get_shm_size_check_name().c_str());
   }
 
+  sync_persist_.clear();
   // Remove array stores
   for (boost::unordered_map<string, ArrayStore*>::iterator i =
            array_stores_.begin();
@@ -1109,26 +1125,58 @@ void PrestoWorker::HandleRequests(int type) {
               store = worker_req.fetch().store();
             }
             
+            if(DATASTORE == RINSTANCE) {
+              uint64_t taskid =  worker_req.fetch().uid();
+              boost::interprocess::interprocess_semaphore sema(0);
+              sync_persist_[taskid] = &sema;
+
+              NewArg arg;
+              arg.set_arrayname(worker_req.fetch().name());
+              arg.set_varname(worker_req.fetch().name());
+              std::vector<NewArg> transfer_arg;
+              transfer_arg.push_back(arg);
+
+              //Persist to worker if not already on worker.
+              scheduler_->ValidatePartitions(transfer_arg, -1, taskid);
+
+              // Wait until all partitions are validated
+              for(int i=0; i< transfer_arg.size(); i++) {
+                sync_persist_[taskid]->wait();
+              }
+              sync_persist_.erase(taskid);
+            }
+
             newtransfer(worker_req.fetch().name(),
                         worker_req.fetch().location(),
                         worker_req.fetch().size(),
                         store);
           }
           break;
+        case WorkerRequest::PERSIST:
+          {
+            LOG_INFO("New PERSIST Task - Received from Worker");
+            executorpool_->persist(worker_req.persist().split_name(),
+                                   worker_req.persist().executor(),
+                                   worker_req.persist().parenttaskid());
+          }
+          break;
         case WorkerRequest::CREATECOMPOSITE:
           {
+            LOG_INFO("New CREATECOMPOSITE TaskID %6zu - Received from Master", worker_req.createcomposite().uid());
+
             if(DATASTORE == WORKER) {
-              LOG_INFO("New CREATECOMPOSITE TaskID %6zu - Received from Master", worker_req.createcomposite().uid());
               createcomposite(worker_req.createcomposite());
             } else {
               vector<NewArg> task_args;
               task_args.clear();
+              uint64_t taskid = worker_req.createcomposite().uid();
+              boost::interprocess::interprocess_semaphore sema(0);
+              sync_persist_[taskid] = &sema;
+
               get_vector_from_repeated_field
                 <RepeatedPtrField<NewArg>::const_iterator,
                  NewArg>(worker_req.createcomposite().task_args().begin(),
                        worker_req.createcomposite().task_args_size(), &task_args);
-
-              LOG_INFO("Read task_arg %zu", task_args.size());
 
               vector<NewArg> cc_args;
               cc_args.clear();
@@ -1137,11 +1185,16 @@ void PrestoWorker::HandleRequests(int type) {
                 NewArg>(worker_req.createcomposite().cargs().begin(),
                        worker_req.createcomposite().cargs_size(), &cc_args);
 
-              LOG_INFO("Read composite array size %zu", cc_args.size());
-              LOG_INFO("New CREATECOMPOSITE TaskID %6zu - Received from Master", worker_req.createcomposite().uid());
+              LOG_INFO("Task_arg size(%zu), Composite array size(%zu)", task_args.size(), cc_args.size());
               int64_t executor_id = scheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());
               LOG_INFO("Added ParentTask %d. Returned executor is %d", worker_req.createcomposite().parenttaskid(), executor_id);
-              scheduler_->ValidateCCPartitions(cc_args, executor_id);
+              scheduler_->ValidateCCPartitions(cc_args, executor_id, taskid);
+
+              // Wait until all partitions are validated.
+              for(int i=0; i< cc_args.size(); i++) {
+                sync_persist_[taskid]->wait();
+              }
+              sync_persist_.erase(taskid);
 
               LOG_INFO("CREATECOMPOSITE %d : All partitions validated. Sent to executor %d", worker_req.createcomposite().uid(), executor_id);
               createcomposite(worker_req.createcomposite());
@@ -1210,9 +1263,20 @@ void PrestoWorker::HandleRequests(int type) {
                                    worker_req.newexecr().uid(),
                                    &worker_resp);
             } else {
+              uint64_t taskid = worker_req.newexecr().uid();
+              boost::interprocess::interprocess_semaphore sema(0);
+              sync_persist_[taskid] = &sema;
+
               int64_t executor_id = scheduler_->AddParentTask(new_args, worker_req.newexecr().parenttaskid());
-              scheduler_->ValidatePartitions(new_args, executor_id);
+              scheduler_->ValidatePartitions(new_args, executor_id, taskid);
+              //TODO: Add validation for CC newargs as well.
               LOG_INFO("EXECUTE %d : All partitions validated. Sent to executor %d", worker_req.newexecr().uid(), executor_id);
+
+              // Wait until all partitions are validated.
+              for(int i=0; i< new_args.size(); i++) {
+                sync_persist_[taskid]->wait();
+              }
+              sync_persist_.erase(taskid);
 
               executorpool_->execute(func, new_args, raw_args, composite_args,
                                      worker_req.newexecr().id(),
@@ -1323,7 +1387,9 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
         // new_transfer is sent by other worker
         type = SEND;  // This worker has to send to other workers
         break;
-
+      case WorkerRequest::PERSIST:
+        type = EXECUTE;
+        break;
       case WorkerRequest::HELLO:
         master_last_contacted_.start();
         type = HELLO;
@@ -1622,6 +1688,7 @@ void PrestoWorker::shutdown() {
     scheduler_ = NULL;
   }
 
+  sync_persist_.clear();
   // Remove array stores
   for (boost::unordered_map<string, ArrayStore*>::iterator i = array_stores_.begin();
       i != array_stores_.end(); i++) {

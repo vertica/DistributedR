@@ -93,10 +93,10 @@ class TaskScheduler {
   // When executor_id is -1, then persist to worker.
   bool IsSplitAvailable(const std::string& split_name, int executor_id=-1);
   bool IsBeingPersisted(const std::string& split_name);
-  void PersistToWorker(const std::string& split_name);
+  void PersistToWorker(const std::string& split_name, uint64_t taskid);
 
-  void ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id);
-  void ValidateCCPartitions(const std::vector<NewArg>& task_args, int executor_id);
+  void ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
+  void ValidateCCPartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
 
   int GetDeterministicExecutor(int32_t split_id);
   

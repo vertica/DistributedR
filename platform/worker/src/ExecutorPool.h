@@ -65,7 +65,7 @@ class ExecutorPool {
                std::vector<NewArg> composite_args, ::uint64_t id, 
                ::uint64_t uid, Response* res, int executor_id);
   void clear(std::vector<std::string> splits, int executor_id);
-  void persist_to_worker(std::string split_name, int executor_id);
+  void persist(std::string split_name, int executor_id, uint64_t taskid);
   //void newtransfer(std::string split_name, std::string server_name, int port_number, int executor_id);
 
   ~ExecutorPool();

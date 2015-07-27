@@ -778,7 +778,7 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
 }                                  
 
 
-void ExecutorPool::persist_to_worker(std::string split_name, int executor) {
+void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid) {
 
   LOG_INFO("ExecutorPool PERSIST: New Request of type PERSIST split(%s), executor(%d)", split_name.c_str(), executor);
 
@@ -825,6 +825,7 @@ void ExecutorPool::persist_to_worker(std::string split_name, int executor) {
 
   lock.lock();
   executors[executor].ready = true;
+  worker->PersistPost(taskid);
   executors[executor].sync.notify_one();
   lock.unlock();
 }

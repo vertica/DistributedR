@@ -77,6 +77,7 @@ message WorkerRequest {
     LOG = 13;
     VERTICALOAD = 14;
     FOREACHCOMPLETE = 15;
+    PERSIST = 16;
   }
   required Type type = 1;
   optional HelloRequest hello = 2;
@@ -90,6 +91,7 @@ message WorkerRequest {
   optional LogRequest log = 10;
   optional VerticaDLRequest verticaload = 11;
   optional ForeachCompleteRequest foreachcomplete = 12;
+  optional PersistRequest persist = 13;
   // shutdown doesn't have any request
 }
 
@@ -163,3 +165,11 @@ message ForeachCompleteRequest {
   required int64 uid = 2;
   required bool status = 3;
 };
+
+message PersistRequest {
+  required int64 id = 1;
+  required int64 uid = 2;
+  required string split_name = 3;
+  required int32 executor = 4;
+  required int64 parenttaskid = 5;
+}

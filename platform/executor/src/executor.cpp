@@ -761,7 +761,7 @@ int Executor::Clear() {
 
   RR[".tmp.clear"] = clear_vec;
   char cmd[CMD_BUF_SIZE];
-  snprintf(cmd, CMD_BUF_SIZE, "rm(list=.tmp.clear); gc();");
+  snprintf(cmd, CMD_BUF_SIZE, "rm(list=.tmp.clear);");
   RR.parseEvalQ(cmd);
   RR.parseEvalQ("print(ls())");
 
@@ -975,7 +975,9 @@ int main(int argc, char *argv[]) {
        SendResult(ex->err_msg);
     }
 
-    ex->ClearTaskData();
+    if(ex != NULL && next == EXECR) {
+       ex->ClearTaskData();
+    }
   } // end while(true)
   return 0;
 }
