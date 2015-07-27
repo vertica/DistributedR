@@ -59,7 +59,7 @@ class TransferServer {
 
  std::pair<void*, int64_t> transfer_blob(const string &name,
                              WorkerInfo* client, const string& myhostname,
-                             const string &store);
+                             const string &store, uint64_t taskid = -1);
 
   void* worker_transfer_server(void);
   void* R_transfer_server(void);

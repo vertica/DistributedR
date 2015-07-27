@@ -79,6 +79,7 @@ enum TASK_TYPE {
   IO,
   SEND,
   RECV,
+  SAVESPLIT,
   HELLO,
   MISC,
   VERTICALOAD,
@@ -86,19 +87,6 @@ enum TASK_TYPE {
 };
 
 #define GC_DEFAULT_GEN 1
-
-// Partition metadata in worker.
-struct PartitionInfo {
-  boost::unordered_set<int> executors;
-  std::string name;
-  size_t size;
-};
-
-struct NewSplit {
-  std::string name;
-  size_t size;
-  int executor;
-};
 
 #define NUM_THREADPOOLS (TASK_TYPE_NUM - EXECUTE)
 
@@ -110,6 +98,7 @@ struct NewSplit {
 #endif
 #define SEND_THREAD_NUM 4  // network sends
 #define RECV_THREAD_NUM 4  // network receives
+#define PERSIST_THREAD_NUM 0
 #define MISC_THREAD_NUM 2  // misc (composite creation, logging)
 #define HELLO_THREAD_NUM 1
 // The sequence of this variable has to comply with TASK_TYPE enum
@@ -117,6 +106,7 @@ static int NUM_THREADS[NUM_THREADPOOLS] = {EXEC_THREAD_NUM,
                                     IO_THREAD_NUM,
                                     SEND_THREAD_NUM,  
                                     RECV_THREAD_NUM,
+                                    PERSIST_THREAD_NUM,
                                     HELLO_THREAD_NUM,
                                     MISC_THREAD_NUM};
 

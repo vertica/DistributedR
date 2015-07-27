@@ -48,7 +48,7 @@ namespace presto {
  * @return return code from server
  */
 std::pair<void*, int64_t> TransferServer::transfer_blob(const string &name, WorkerInfo* client,
-                                    const string& myhostname, const string& store) {
+                                    const string& myhostname, const string& store, uint64_t taskid) {
   // Setup the transfer
   //this->dest_ = addr;
   //this->size_ = size;
@@ -92,6 +92,7 @@ std::pair<void*, int64_t> TransferServer::transfer_blob(const string &name, Work
   FetchRequest req;
   req.mutable_location()->CopyFrom(location);
   req.set_name(name);
+  req.set_uid(taskid);
   if (source_ == WORKER)
     req.set_policy(FetchRequest::WORKER_CONN);
   else
@@ -100,7 +101,6 @@ std::pair<void*, int64_t> TransferServer::transfer_blob(const string &name, Work
   if (!store.empty()) {
     req.set_store(store);
   }
-
   client->NewTransfer(req);  // request transfer to remote workers
 
   void* server_ret;

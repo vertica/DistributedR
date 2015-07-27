@@ -84,19 +84,16 @@ class TaskScheduler {
 
   void foreachcomplete(bool status);
   void StageUpdatedPartition(const std::string& split_name, size_t size, int executor_id);
-
-  // Returns the executor on which the task should be executed.
+  void ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
   int64_t AddParentTask(const std::vector<NewArg>& task_args, int64_t parenttaskid);
+  void DeleteSplit(const std::string& splitname);
+
+protected:
+  // Returns the executor on which the task should be executed.
   int64_t GetBestExecutor(const std::vector<NewArg>& partitions);
   int64_t ExecutorToPersistFrom(const std::string& split_name);
-
-  // When executor_id is -1, then persist to worker.
-  bool IsSplitAvailable(const std::string& split_name, int executor_id=-1);
+  bool IsSplitAvailable(const std::string& split_name, int executor_id=-1); //If executor_id is -1, then persist to worker.
   bool IsBeingPersisted(const std::string& split_name);
-  void PersistToWorker(const std::string& split_name, uint64_t taskid);
-
-  void ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
-  void ValidateCCPartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
 
   int GetDeterministicExecutor(int32_t split_id);
   

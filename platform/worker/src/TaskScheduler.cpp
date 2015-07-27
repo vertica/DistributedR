@@ -87,9 +87,7 @@ bool TaskScheduler::IsBeingPersisted(const std::string& split_name) {
 
 int64_t TaskScheduler::ExecutorToPersistFrom(const std::string& split_name) {
    unique_lock<recursive_mutex> metalock(metadata_mutex);
-   if(executor_splits.find(split_name) != executor_splits.end())
-     LOG_INFO("ExecutorToPersistFrom: Partition(%s) exists", split_name.c_str());
-   else
+   if(executor_splits.find(split_name) == executor_splits.end())
      LOG_ERROR("ExecutorToPersistFrom: Partition(%s) does not exist", split_name.c_str());
 
    ExecSplit* partition = executor_splits[split_name];
@@ -109,29 +107,29 @@ int64_t TaskScheduler::ExecutorToPersistFrom(const std::string& split_name) {
    metalock.unlock();
 }
 
-void TaskScheduler::PersistToWorker(const std::string& split_name, uint64_t taskid) {
+/*void TaskScheduler::PersistToWorker(const std::string& split_name, uint64_t taskid) {
    int target_executor = ExecutorToPersistFrom(split_name);
    LOG_INFO("PersistToWorker::Partitions(%s) will be persisted from executor(%d)", split_name.c_str(), target_executor);
    worker->prepare_persist(split_name, target_executor, taskid);
    
-   /*shmem_arrays_mutex->lock();
-   shmem_arrays->insert(split_name);
-   shmem_arrays_mutex->unlock();
-   executorpool->persist_to_worker(split_name, target_executor);*/
-}
+   //shmem_arrays_mutex->lock();
+   //shmem_arrays->insert(split_name);
+   //shmem_arrays_mutex->unlock();
+   //executorpool->persist_to_worker(split_name, target_executor);
+}*/
 
 
 int64_t TaskScheduler::AddParentTask(const std::vector<NewArg>& task_args, int64_t parenttaskid) {
   ::uint64_t executor_id = -1;
-  if(task_args.size() > 0) LOG_INFO("AddParentTask: parenttaskid is %d with partition name %s", parenttaskid, task_args[0].arrayname().c_str());
+  //if(task_args.size() > 0) LOG_INFO("AddParentTask: parenttaskid is %d with partition name %s", parenttaskid, task_args[0].arrayname().c_str());
   unique_lock<recursive_mutex> lock(parent_mutex);
   if(parent_tasks.find(parenttaskid) != parent_tasks.end()) {
     executor_id = parent_tasks[parenttaskid];
     LOG_INFO("AddParentTask: Found parent taskid %u. This task should be executed on Executor %u", parenttaskid, executor_id);
   } else {
-    LOG_INFO("AddParentTask: Parent task nt found! Assigning an executor");
+    //LOG_INFO("AddParentTask: Parent task nt found! Assigning an executor");
     executor_id = GetBestExecutor(task_args);
-    LOG_INFO("AddParentTask: Parent task %d: Executor chosen is %d", parenttaskid, executor_id);
+    LOG_INFO("AddParentTask: Parenttask(%d) not found. Assigned Executor(%d)", parenttaskid, executor_id);
     parent_tasks[parenttaskid] = executor_id;
   }
 
@@ -228,12 +226,15 @@ void TaskScheduler::ValidatePartitions(const std::vector<NewArg>& task_args, int
       if(!IsSplitAvailable(all_partitions[i], executor_id)) {
         LOG_INFO("ValidatePartitions: Partition(%s) not available on executor(%d). Intra-worker persist needed.", all_partitions[i].c_str(), executor_id);
         if (!IsBeingPersisted(all_partitions[i])) {
-           LOG_INFO("ValidatePartitions: Partition(%s) is not on worker. Start persist", all_partitions[i].c_str());
-           PersistToWorker(all_partitions[i], taskid);
            persist = true;
+           //LOG_INFO("ValidatePartitions: Partition(%s) is not on worker. Start persist", all_partitions[i].c_str());
+           int target_executor = ExecutorToPersistFrom(all_partitions[i]);
+           LOG_INFO("ValidatePartitions: Partition(%s) will be persisted from executor(%d)", all_partitions[i].c_str(), target_executor);
+           worker->prepare_persist(all_partitions[i], target_executor, taskid);
+           //PersistToWorker(all_partitions[i], taskid);
         }
       } else
-        LOG_INFO("ValidatePartitions: Partition(%s) is already on worker.", all_partitions[i].c_str());
+        LOG_INFO("ValidatePartitions: Partition(%s) doesnt need to be persisted", all_partitions[i].c_str());
 
       if(!persist) worker->PersistPost(taskid);
       metalock.unlock();
@@ -241,15 +242,15 @@ void TaskScheduler::ValidatePartitions(const std::vector<NewArg>& task_args, int
 }
 
 
-void TaskScheduler::ValidateCCPartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid) {
+/*void TaskScheduler::ValidateCCPartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid) {
    for(int i=0; i<task_args.size(); i++) {
       std::string split_name = task_args[i].arrayname();
       LOG_INFO("ValidatingCC %s", split_name.c_str());
 
-      /*int32_t version;
-      ParseVersionNumber(split_name, &version); 
+      //int32_t version;
+      //ParseVersionNumber(split_name, &version); 
       //LOG_INFO("Version is %d", version);
-      if(version == 0) continue;*/
+      //if(version == 0) continue;
 
       unique_lock<recursive_mutex> metalock(metadata_mutex);
       bool persist = false;
@@ -266,7 +267,7 @@ void TaskScheduler::ValidateCCPartitions(const std::vector<NewArg>& task_args, i
       if(!persist) worker->PersistPost(taskid);
       metalock.unlock();
    }
-}
+}*/
 
 
 void TaskScheduler::StageUpdatedPartition(const std::string &name, size_t size, int executor_id) {
@@ -369,6 +370,27 @@ void TaskScheduler::foreachcomplete(bool status) {
 
   clear_map.clear();
   LOG_INFO("Foreach cleanup complete");
+}
+
+
+void TaskScheduler::DeleteSplit(const std::string& splitname) {
+  boost::unordered_set<int> executors;
+
+  unique_lock<recursive_mutex> metalock(metadata_mutex);
+  if(executor_splits.find(splitname) != executor_splits.end()) {
+    executors = executor_splits[splitname]->executors;
+    delete executor_splits[splitname];
+    executor_splits.erase(splitname);
+  } else
+    LOG_ERROR("DeleteSplit: Split %s not found in executors", splitname.c_str());
+  metalock.unlock();
+
+  std::vector<std::string> splits;
+  splits.push_back(splitname);
+
+  for(boost::unordered_set<int>::iterator it = executors.begin(); it != executors.end(); ++it) {
+      executorpool->clear(splits, *it);
+  }
 }
 
 }  // namespace presto
