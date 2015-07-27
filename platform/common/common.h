@@ -35,7 +35,7 @@
 #include <unistd.h>
 #include <sys/statvfs.h>
 #include <ifaddrs.h>
-#include <netinet/in.h> 
+#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <boost/version.hpp>
 
@@ -102,7 +102,7 @@ typedef enum {
   TASK_EXCEPTION
 } TaskStatus;
 
-/** This enum indicates a bit index of each attribute 
+/** This enum indicates a bit index of each attribute
  * when HelloReply message is sent from a worker.
  */
 typedef enum {
@@ -153,7 +153,7 @@ static void ParseVersionNumber(const string& split_name, int32_t* version) {
 static void ParseSplitName(const string& split_name, string* darray_name,
     int32_t* split_id) {
   // Extract the split id from the array
-  int name_token = IsCompositeArray(split_name) ? '.' : '_'; 
+  int name_token = IsCompositeArray(split_name) ? '.' : '_';
   const char* idx = index(split_name.c_str(), name_token);
   *split_id = (int32_t)(strtol(idx + 1, NULL, 10));
   darray_name->assign(split_name.substr(0, idx - split_name.c_str()));
@@ -239,24 +239,24 @@ static string server_to_string(const ServerInfo &server) {
  */
 int32_t connect(std::string hostname, int32_t port);
 
-/* a function that creates a ZMQ socket and bind an open port in the configured range 
+/* a function that creates a ZMQ socket and bind an open port in the configured range
  * @param start_port the start port range
  * @param end_port the end port range
  * @param ctx ZeroMQ socket context
- * @param port_in_use an out parameter that returns the port address that is bind to a socket 
+ * @param port_in_use an out parameter that returns the port address that is bind to a socket
  * @param type the socket type. default is ZMQ_PULL
  * @ret a socket that is created from the function - THIS HAS TO BE FREED AFTER USAGE!!!!!!
- * @throws PrestoWarningException when there is no available open port in the configured range 
- */ 
+ * @throws PrestoWarningException when there is no available open port in the configured range
+ */
 socket_t* CreateBindedSocket(int start_port, int end_port, context_t* ctx, int* port_in_use, int type = ZMQ_PULL);
 
-/* a function that creates a Berkeley socket and bind an open port in the configured range 
+/* a function that creates a Berkeley socket and bind an open port in the configured range
  * @param start_port the start port range
  * @param end_port the end port range
- * @param port_in_use an out parameter that returns the port address that is bind to a socket 
- * @ret a socket that is created from the function 
- * @throws PrestoWarningException when there is no available open port in the configured range 
- */ 
+ * @param port_in_use an out parameter that returns the port address that is bind to a socket
+ * @ret a socket that is created from the function
+ * @throws PrestoWarningException when there is no available open port in the configured range
+ */
 int32_t CreateBindedSocket(int start_port, int end_port, int* port_in_use);
 
 void ResetCurPortNum();
@@ -311,8 +311,13 @@ size_t get_total_memory();
  */
 size_t get_used_memory();
 
+/** get used memory size of the system based on the process id's.
+ * @return used memory size
+ */
+size_t get_used_memory(std::vector<pid_t> pids);
+
 /** It generates presto shm segment name.  Format - presto-shm-UID
- * @return presto darray shared memory prefix 
+ * @return presto darray shared memory prefix
  */
 static string get_presto_shm_prefix() {
   std::string shm_prefix;

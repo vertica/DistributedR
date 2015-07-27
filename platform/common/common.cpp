@@ -65,15 +65,15 @@ int32_t connect(std::string hostname, int32_t port) {
   return sockfd;
 }
 
-/* a function that creates a ZMQ socket and bind an open port in the configured range 
+/* a function that creates a ZMQ socket and bind an open port in the configured range
  * @param start_port the start port range
  * @param end_port the end port range
  * @param ctx ZeroMQ socket context
- * @param port_in_use an out parameter that returns the port address that is bind to a socket 
+ * @param port_in_use an out parameter that returns the port address that is bind to a socket
  * @param type the socket type. default is ZMQ_PULL
  * @ret a socket that is created from the function - THIS HAS TO BE FREED AFTER USAGE!!!!!!
- * @throws PrestoWarningException when there is no available open port in the configured range 
- */ 
+ * @throws PrestoWarningException when there is no available open port in the configured range
+ */
 socket_t* CreateBindedSocket(int start_port, int end_port, context_t* ctx, int* port_in_use, int type) {
   socket_t* sock = new socket_t(*ctx, type);
 #ifdef ZMQ_LINGER
@@ -105,13 +105,13 @@ socket_t* CreateBindedSocket(int start_port, int end_port, context_t* ctx, int* 
   return sock;
 }
 
-/* a function that creates a Berkeley socket and bind an open port in the configured range 
+/* a function that creates a Berkeley socket and bind an open port in the configured range
  * @param start_port the start port range
  * @param end_port the end port range
- * @param port_in_use an out parameter that returns the port address that is bind to a socket 
- * @ret a socket that is created from the function 
- * @throws PrestoWarningException when there is no available open port in the configured range 
- */ 
+ * @param port_in_use an out parameter that returns the port address that is bind to a socket
+ * @ret a socket that is created from the function
+ * @throws PrestoWarningException when there is no available open port in the configured range
+ */
 int32_t CreateBindedSocket(int start_port, int end_port, int* port_in_use) {
   int32_t serverfd = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (serverfd < 0) {
@@ -125,7 +125,7 @@ int32_t CreateBindedSocket(int start_port, int end_port, int* port_in_use) {
 
   bool bind_succeed = false;
   port_bind_mutex.lock();
-  for (int i = 0; i < num_port_cand; ++i){    
+  for (int i = 0; i < num_port_cand; ++i){
     struct sockaddr_in addr;
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -197,6 +197,32 @@ size_t get_used_memory() {
   return used_mem;
 }
 
+size_t get_used_memory(std::vector<pid_t> pids){
+    pids.push_back(getpid());
+    size_t used_mem = 0;
+    for(size_t i = 0; i < pids.size(); i++){
+        stringstream ss;
+        ss << "/proc/" << pids[i] << "/status";
+        FILE *fp = fopen(ss.str().c_str(), "r");
+        if(fp != NULL){
+            size_t bufsize = 1024 * sizeof(char);
+            char* buf = (char*)malloc(bufsize);
+            long value = -1L;
+            while(getline(&buf, &bufsize, fp) >= 0){
+                if(strncmp(buf, "VmRSS:", 6) != 0) continue;
+                sscanf(buf, "%*s%ld", &value);
+                break;
+            }
+            fclose(fp);
+            free((void *)buf);
+            if(value != -1L){
+                used_mem += (size_t)value*1024L;
+            }
+        }
+    }
+    return used_mem;
+}
+
 std::string check_out_of_memory(vector<pid_t> child_pids) {
   ostringstream msg;
   std::string exec_msg = presto_exec("dmesg | tail | grep 'Out of memory' | grep 'R-executor-bin'");
@@ -205,7 +231,7 @@ std::string check_out_of_memory(vector<pid_t> child_pids) {
   if (exec_msg.size() > 0) {
     for (int i = 0; i < child_pids.size(); ++i) {
       std::stringstream ss;
-      ss << child_pids[i];    
+      ss << child_pids[i];
       std::size_t found = exec_msg.find(ss.str());
       if (found != std::string::npos) {
         //fprintf(stderr, "%8.3lf : Exec message : %s\n", abs_time()/1e6, exec_msg.c_str());
@@ -240,7 +266,7 @@ std::vector<std::string> get_ipv4_addresses() {
       ips.push_back(string(addressBuffer));
     } else if (ifa->ifa_addr->sa_family == AF_INET6) {
       // skip IPV6 for the time being
-    } 
+    }
   }
   if (ifAddrStruct!=NULL) freeifaddrs(ifAddrStruct);
   return ips;

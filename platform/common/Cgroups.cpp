@@ -53,6 +53,7 @@ void attach_process(pid_t pid){
 }
 
 void attach_processes(vector<pid_t> pids){
+    pids.push_back(getpid());
 
     std::vector<pid_t>::size_type size = pids.size();
     for(unsigned j = 0; j < size; j++){
