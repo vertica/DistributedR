@@ -274,6 +274,8 @@ hpdegbm <- function(
     } else {
        finalModel <- list(GBM_model1,best.iter1)
     }
+
+    class(finalModel) <- c("hpdegbm", "gbm")
     return (finalModel)
 
 } # end of hpdegbm for model training

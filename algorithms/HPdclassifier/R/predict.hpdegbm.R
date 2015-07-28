@@ -45,7 +45,7 @@
 ####################################################################################
 ###                     Data-distributed and model-centralized prediction function of distributed GBM
 ####################################################################################
-predict.hpdegbm <- function(model, best.iter, newdata, appType="binary-classification", type="link", trace = FALSE)
+predict.hpdegbm <- function(object, newdata, appType="binary-classification", type="link", trace = FALSE)
 {
   # model: assembled GBM model
   # best.iter: best iteration of sub-models
@@ -59,8 +59,8 @@ predict.hpdegbm <- function(model, best.iter, newdata, appType="binary-classific
   # test data : npartition_test/nExecutor_test. maybe different from train data
 
   # check function arguments
-  if(missing(model))
-     stop("'model' is a required argument")
+  if(missing(object))
+     stop("'object' is a required argument")
 
   if(missing(best.iter))
      stop("'best.iter' is a required argument")
@@ -71,6 +71,9 @@ predict.hpdegbm <- function(model, best.iter, newdata, appType="binary-classific
   if(!is.dframe(newdata) && !is.darray(newdata) && !is.data.frame(newdata) && !is.matrix(newdata))
      stop("'newdata' must be a dframe or darray or data.frame or matrix")
  
+  # extract GBM models and corresponding best iterations (n.trees)
+  model <- object[[1]]
+  best.iter <- object[[2]]
 
   # prediction for distributed big data 
   if((is.dframe(newdata)) || (is.darray(newdata))) {
