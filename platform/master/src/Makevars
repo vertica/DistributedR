@@ -41,6 +41,15 @@ executor: third_party messaging common
 ddc:
 	(cd distributed-data-connector/ddc/; make)
 
+clean:
+	(cd messaging; make clean )
+	(cd common; make clean )
+	(cd worker; make clean )
+	(cd executor; make clean )
+	rm *.o *.so
+
+clean-third-party:
+	(cd third_party; make clean )
 
 ## Use the R_HOME indirection to support installations of multiple R version
 R_CXXFLAGS = $(shell R CMD config --cppflags)  $(shell $(R_HOME)/bin/Rscript -e "Rcpp:::CxxFlags()") $(shell $(R_HOME)/bin/Rscript -e "RInside:::CxxFlags()")

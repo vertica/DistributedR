@@ -49,10 +49,11 @@ clean:
 	rm -rf $(INSTALLDIR)/include/
 	rm -rf $(INSTALLDIR)/lib/
 	rm -rf $(INSTALLDIR)/share/
-	cd boost_1_50_0/ && ./b2 --clean
-	rm -rf boost_1_50_0/stage/
-	rm -rf boost_1_50_0/b2
 	cd zeromq-$(ZMQ_VERSION) && make clean
 	cd libuuid-1.0.3 && make clean
 	cd protobuf-$(PROTOBUF_VERSION) && make clean
+	cd libcgroup-0.41 && make clean
 	cd atomicio && make clean
+	cd boost_1_50_0/ && ./b2 --clean
+	rm -rf boost_1_50_0/stage/
+	rm -rf boost_1_50_0/b2
