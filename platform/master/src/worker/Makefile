@@ -9,6 +9,9 @@ CXXFLAGS = -fPIC -std=c++0x -g -O2 -fopenmp -finline-limit=10000 -DNDEBUG -I../t
 
 LDFLAGS = -L../third_party/install/lib  -lpthread -lboost_thread -lboost_system -lboost_log -lboost_log_setup -lboost_chrono -lboost_filesystem -lboost_date_time -latomicio -lR-common -lR-proto -lzmq -luuid -lprotobuf -lrt -lcgroup
 
+# To enable zipkin-based tracing add the following to CXXFLAGS and LDFLAGS
+# # BLKIN_INCLUDE = -I../third_party/install/include/blkin
+# # BLKIN_LINKER_FLAGS = -lzipkin-c -lblkin-front -lzipkin-cpp
 
 PRESTO_COMMON_DIR = .
 PRESTO_COMMON_HEADERS = $(wildcard ${PRESTO_COMMON_DIR}/*.h)
