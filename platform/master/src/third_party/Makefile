@@ -42,6 +42,13 @@ $(INSTALLDIR)/lib/libcgroup.a:
 
 atomicio:
 	cd atomicio && make
+
+blkin: $(INSTALLDIR)/lib/libzipkin-cpp.so
+
+$(INSTALLDIR)/lib/libzipkin-cpp.a: $(INSTALLDIR)/lib/libboost_chrono.a
+	tar -zxf blkin.tar.gz
+	cd blkin/; autoreconf -fi; CFLAGS="-fPIC -I$(INSTALLDIR)/../boost_1_50_0" CXXFLAGS="-fPIC -I$(INSTALLDIR)/../boost_1_50_0" LDFLAGS=-fPIC ./configure --prefix=$(INSTALLDIR) --enable-static --enable-shared=no --without-babeltrace; make -j$(NCORES) && make install; 
+	
 clean: 
 	rm -rf $(INSTALLDIR)/bin/protoc
 	rm -rf $(INSTALLDIR)/bin/R-executor-bin
