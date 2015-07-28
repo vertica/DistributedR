@@ -24,7 +24,6 @@ NAMESPACE <- environment()
 }
 # Google protobuf allows sending upto 64MB of data at a time. 1MB less for safe.
 .protobuf_max_msg_size = 63 * 1024*1024
-.rcpp_obj_max_size = 2 * 1024 * 1024 * 1024 ## Rcpp allows upto 2GB of raw data
 
 # The class 'splits' represents a collection of splits in a particular
 # distributed array. It consists of a list of split-ids, a handle to the
