@@ -133,9 +133,10 @@ expect_error(hpdRF_parallelTree(X1 ~ .,data = data, na.action = 0),
 
 })
 
-model <- hpdRF_parallelTree(X1 ~ .,data = data)
 
 context("Invalid Inputs to Predict Function")
+
+model <- hpdRF_parallelTree(X1 ~ .,data = data)
 test_that("invalid newdata input to predict function",{
 expect_error(predict(model), "'newdata' is a required argument")
 expect_error(predict(model,newdata = matrix(1:9,3,3)),

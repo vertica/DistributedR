@@ -1,386 +1,178 @@
+#####################################################################################
+# Copyright [2013] Hewlett-Packard Development Company, L.P.                        # 
+#                                                                                   #
+# This program is free software; you can redistribute it and/or                     #
+# modify it under the terms of the GNU General Public License                       #
+# as published by the Free Software Foundation; either version 2                    #
+# of the License, or (at your option) any later version.                            #
+#                                                                                   #
+# This program is distributed in the hope that it will be useful,                   #
+# but WITHOUT ANY WARRANTY; without even the implied warranty of                    #
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the                      #
+# GNU General Public License for more details.                                      #
+#                                                                                   #
+# You should have received a copy of the GNU General Public License                 #
+# along with this program; if not, write to the Free Software                       #
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.    #
+#####################################################################################
 
 
-.buildSubTreesLocally <- function(observations, responses, 
-	forest, nodes, max_time = 300)
+hpdrpart <- function(formula, data, weights, subset , na.action = na.omit, 
+	 model = FALSE, x = FALSE, y = FALSE, params = NULL, 
+	 control = NULL, cost = NULL, 
+	 completeModel = TRUE, nBins = 256L, do.trace = FALSE)
 {
-	workers = length(nodes)
-	data_local = dlist(npartitions = npartitions(observations)*workers)
 
-	foreach(i, 1:npartitions(observations), function(
-		   forest = splits(attr(forest,"dforest"),i),
-		   observations = splits(observations,i),
-		   responses = splits(responses,i),
-		   nodes = nodes,
-		   data_local = splits(data_local,
-		   	         as.list(1:workers +(i-1)*workers)))
+	if(!identical(na.action, na.exclude) &
+		!identical(na.action, na.omit) &
+		!identical(na.action, na.fail))
+		stop("'na.action' must be either na.exclude, na.omit, na.fail")
+
+	if(missing(weights))
+		weights = NULL
+	if(!missing(subset))
+		warning("'subset' not implemented. Adjust using weights parameter")
+	if(missing(subset))
+		subset = NULL
+	if(is.null(control))
+		control = rpart.control()
+
+	if(missing(formula))
+		stop("'formula' is a required argument")
+	if(!inherits(formula, "formula"))
+		stop("'formula' is not of class formula")
+
+	if(missing(data))
+		stop("'data' is a required argument")
+	if(!is.dframe(data) & !is.data.frame(data))
+		stop("'data' must be a dframe or data.frame")
+	if(is.data.frame(data))
+		data = as.dframe(data)
+	if(attr(data,"npartitions")[2] > 1)
+		stop("'data' must be partitioned rowise")
+
+	nBins = as.integer(nBins)
+	if(nBins <= 0)
+		stop("'nBins' must be more than 0")
+
+	tryCatch({
+	test_formula <- data.frame(matrix(0,0,ncol(data)))
+	colnames(test_formula) <- colnames(data)
+	model.frame(terms(formula, data = test_formula),
+		data = test_formula)
+	}, error = function(e){
+	   stop(paste("unable to apply formula to 'data'.",e))
+	})
+
+
+	tryCatch({
+	variables <- .parse_formula(formula, data, 
+		  na.action = na.action, trace = do.trace)
+	},
+	error = function(cond){
+	      stop(paste("could not apply formula to 'data'.", cond))
+	})
+
+	observations = variables$x
+	responses = variables$y
+	features_cardinality = as.integer(variables$x_cardinality)
+	response_cardinality = as.integer(variables$y_cardinality)
+	classes = variables$y_classes
+	true_responses = variables$true_responses
+	xlevels = variables$x_classes
+	x_colnames = variables$x_colnames
+
+
+
+	tree <- .hpdRF_distributed(observations, responses, ntree = 1L, 
+	     bin_max = as.integer(nBins), 
+	     features_cardinality = features_cardinality,
+	     response_cardinality = response_cardinality, 
+	     features_num = as.integer(ncol(observations)),
+	     threshold = 1L, weights = weights, nodes_per_worker=1L,
+	     max_nodes = .Machine$integer.max, node_size = control$minsplit, 
+	     replacement = TRUE, cutoff = 1L, classes = classes, 
+	     completeModel = FALSE, 
+	     max_nodes_per_iteration = .Machine$integer.max,
+	     trace = do.trace, features_min = NULL, features_max = NULL,
+	     min_split = control$minbucket, max_depth = control$maxdepth, 
+	     cp = control$cp)
+	     
+	model = convertToRpartModel(tree$forest, x_colnames)
+	model$call = match.call()
+	model$terms = variables$terms
+	if(is.na(response_cardinality))
+		model$method = "regression"
+	if(!is.na(response_cardinality))
+		model$method = "classification"
+	model$control = control
+	model$params = params
+	model$na.action = na.action
+	model$numresp = 0
+	if(length(classes) > 0)
 	{
-		library(HPdclassifier)
-		forest = .Call("unserializeForest",forest[[1]])
-		weights_local = .Call("getLeafWeights",forest);
-		observations_indices_local = .Call("getLeafIndices",forest);
-
-		loadData <- function(nodes, observations, responses, 
-			 weights_local, observations_indices_local)
-		{
-
-			weights_local = weights_local[nodes]
-			observations_indices_local = 
-				observations_indices_local[nodes]
-
-			total_indices = unlist(observations_indices_local)
-			total_indices = unique(total_indices)
-			observations_local = observations[total_indices,]
-			observations_local = data.frame(observations_local)
-			names(observations_local) <- rep(" ",ncol(observations_local))
-			responses_local = responses[total_indices,]
-			responses_local = data.frame(responses_local)
-			names(responses_local) <- rep(" ", ncol(responses_local))
-			
-			observations_indices_local = 
-				lapply(observations_indices_local,
-				function(indices) 
-				match(indices,total_indices))
-			local_data = list(observations_local=observations_local, 
-				   responses_local = responses_local, 
-				   weights_local = weights_local, 
-				   observations_indices_local = observations_indices_local)
-			return(local_data)
-		}
-		data_local = lapply(nodes, loadData, 
-			      observations = observations, 
-			      responses = responses, 
-			      weights_local = weights_local,
-			      observations_indices_local)
-		update(data_local)
-		.Call("garbageCollectForest",forest)
-		gc()			
-	}, progress = TRUE, scheduler = 1)
-	print("here2")
-	local_tree <- .train_tree_locally(forest, data_local, nodes,max_time)
-	return(local_tree)
-}
-
-
-#x,y,weights,indices are dobjects
-.train_tree_locally <- function(tree, data_local, nodes, max_time = 300)
-{
-	workers = length(nodes)
-	cores <- sum(distributedR_status()$Inst)
-	dnodes <- .buildLocalNodes(tree, data_local, max_time, 
-	       workers, combine = TRUE)
-
-	local_tree = .initializeLocalNodes(dnodes)
-	leaf_table <- .attachLocalNodes(local_tree, NULL, NULL)
-	redistribution_info <- .assignNodes(leaf_table, cores, workers)
-	nodes <- redistribution_info$nodes 
-	leaf_table <- redistribution_info$leaf_table 
-	workers <- redistribution_info$workers
-	.Call("printForest",local_tree,NULL,NULL)
-
-	while(!is.null(nodes))
-	{
-		data_local <- .loadNodeData(dnodes, data_local, nodes)
-		dnodes <- .buildLocalNodes(tree, data_local, max_time, workers,
-		       combine = FALSE)
-		leaf_table <- .attachLocalNodes(local_tree, dnodes, leaf_table)
-		redistribution_info <- .assignNodes(leaf_table, cores, workers)
-		nodes <- redistribution_info$nodes 
-		leaf_table <- redistribution_info$leaf_table 
-		workers <- redistribution_info$workers
-		gc()
+		model$numresp = length(classes[[1]])
+		model$classes = classes[[1]]
 	}
-	#.Call("printForest",local_tree,NULL,NULL)
-	return(local_tree)
+	class(model) <- c("hpdrpart","rpart")
+
+	if(is.data.frame(data))
+		responses = getpartition(responses)
+	model$variable.importance <- 
+		varImportance(model,data,responses)
+	return(model)
 }
-.initializeLocalNodes <- function(dnodes)
+
+predict.hpdrpart <- function(model, newdata,do.trace = FALSE)
 {
-	local_tree = lapply(1:npartitions(dnodes), function(i) 
-		   .Call("unserializeForest",getpartition(dnodes,i)[[1]]))
+	if(missing(newdata))
+		stop("'newdata' is a required argument")
+	if(!is.dframe(newdata) & !is.data.frame(newdata))
+		stop("'newdata' must be a dframe or data.frame")
+	was.data.frame = is.data.frame(newdata)
+	if(is.data.frame(newdata))
+		newdata = as.dframe(newdata)
+	if(attr(newdata,"npartitions")[2] > 1)
+		stop("'newdata' must be partitioned rowise")
 
-	
-	if(length(local_tree) == 1)
-	{
-		local_tree = local_tree[[1]]
-	}
-	if(length(local_tree)>1)
-	{
-		for(i in 2:length(local_tree))
+	predictions = dframe(npartitions = npartitions(newdata))
+	foreach(i,1:npartitions(newdata),
+		function(model=model, 
+			newdata = splits(newdata,i), 
+			predictions = splits(predictions,i))
 		{
-		      .Call("mergeCompletedForest",
-		      local_tree[[1]],local_tree[[i]])
-		}
-		local_tree = local_tree[[1]]
-	}
-	return(local_tree)
+			library(rpart)
+			class(model) <- class(model)[-1]
+			predictions = predict(model,newdata,type = "vector")
+			if(model$method=="classification")
+			predictions = factor(model$classes[predictions], 
+				    levels = model$classes)
+			predictions = data.frame(predictions)
+			update(predictions)
+		},progress = do.trace)
+	if(was.data.frame)
+		predictions = getpartition(predictions)
+	return(predictions)
 }
 
-.loadNodeData <- function(tree, data_local_old, nodes, trace = TRUE)
+convertToRpartModel <- function(tree, varnames)
 {
-
-	if(trace)
-	print("loading data")
-
-	workers = length(nodes)
-	new_workers = length(nodes[[1]])
-	input_partitions = npartitions(data_local_old)/workers
-	data_local_new <- dlist(npartitions=workers*new_workers)
-
-	foreach(i, 1:workers, 
-		   function(		   
-		   tree = splits(tree,i),
-		   data_local_old = splits(data_local_old,
-		   	         as.list(i + workers*(1:input_partitions-1))),
-		   data_local_new = splits(data_local_new,
-		   	         as.list(1:new_workers +(i-1)*new_workers)),
-		   nodes = nodes[[i]],
-		   i = i)
-		   {
-			library(HPdclassifier)
-			tree = .Call("unserializeForest",tree[[1]])
-			observations = do.call(rbind,lapply(data_local_old, 
-				   function(x) x$observations_local))
-			responses = do.call(rbind,lapply(data_local_old, 
-				   function(x) x$responses_local))
-
-
-			observations_indices_local = 
-				.Call("getLeafIndices",tree);
-			weights_local = .Call("getLeafWeights",tree);
-
-			loadData <- function(nodes, observations, responses, 
-				 weights_local, observations_indices_local)
-		   	{
-
-			weights_local = weights_local[nodes]
-			observations_indices_local = 
-				observations_indices_local[nodes]
-
-			total_indices = unlist(observations_indices_local)
-			total_indices = unique(total_indices)
-			observations_local = observations[total_indices,]
-			observations_local = data.frame(observations_local)
-			names(observations_local) <- 
-				rep(" ",ncol(observations_local))
-			responses_local = responses[total_indices,]
-			responses_local = data.frame(responses_local)
-			names(responses_local) <- 
-				rep(" ", ncol(responses_local))
-			
-			observations_indices_local = 
-				lapply(observations_indices_local,
-				function(indices) 
-				match(indices,total_indices))
-			local_data = list(observations_local=
-						observations_local, 
-				   responses_local = 
-				   		responses_local, 
-				   weights_local = 
-				   		weights_local, 
-				   observations_indices_local = 
-				   		observations_indices_local)
-			return(local_data)
-			}
-
-			data_local_new = lapply(nodes, loadData, 
-				      observations = observations, 
-				      responses = responses, 
-				      weights_local = weights_local,
-				      observations_indices_local)
-			update(data_local_new)
-			.Call("garbageCollectForest",tree)
-			gc()	
-		   }, progress = FALSE, scheduler = 1)
-
-	return(data_local_new)
+	model <- .Call("rpartModel",tree)
+	csplit <- model[[8]]
+	splits <- cbind(count = 0, model[[7]], improve = 0, model[[6]],adj = 0)
+	model[[8]] <- NULL
+	varnames = c("<leaf>", varnames)
+	model[[2]] = varnames[model[[2]]+1]
+	leaf_ids = model[[1]]
+	model = data.frame(var = model[[2]], n = 0, wt = 0, 
+	      dev = model[[3]], yval = model[[4]], complexity = model[[5]])
+	colnames(model) <- c("var", "n","wt","dev", "yval", "complexity")
+	rownames(model) <- leaf_ids
+	model <- cbind(model, ncompete = 0, nsurrogate = 0)
+	colnames(splits) <- c("count","ncat", "improve","index","adj")
+	rownames(splits) <- model$var 
+	splits <- splits[complete.cases(splits),]
+	csplit <- matrix(3-csplit,nrow = attr(csplit,"nrow"))
+	model <- list(frame = model, splits = splits, csplit = csplit)
+	return(model)
 }
-
-.buildLocalNodes <- function(tree, data_local, max_time, workers,
-		 node_size = 1, max_nodes_per_iteration = 100, 
-		 trace = TRUE, combine = TRUE)
-{
-	if(trace)
-	print("building nodes")
-
-	forestparam = .Call("getForestParameters",tree)
-	dnodes = dlist(npartitions = workers)
-	input_partitions = npartitions(data_local)/workers
-
-	temp = sapply(1:npartitions(data_local),
-		function(x) length(getpartition(data_local,x)$weights_local))
-
-	foreach(i,1:workers, function(
-			dnodes = splits(dnodes,i),
-     		       	features_cardinality = forestparam[[1]],
-		       	response_cardinality = forestparam[[2]],
-			features_num = forestparam[[3]],
-		       	features_min = forestparam[[4]],
-		       	features_max = forestparam[[5]],
-		       	bin_max = forestparam[[6]],
-			data_local = splits(data_local,
-				as.list(i + workers*
-				(1:input_partitions-1))),
-			node_size = node_size,
-			nparts = input_partitions,
-			max_nodes_per_iteration = max_nodes_per_iteration,
-			hpdRF_local = .hpdRF_local,
-			max_time = max_time,
-			combine = combine,
-			tree_ids = i,
-			random_seed = sample.int(1000,i))
-      {
-		library(HPdclassifier)
-		set.seed(random_seed)
-		observations_local = lapply(data_local, 
-				   function(x) x$observations_local)
-		responses_local = lapply(data_local, 
-				   function(x) x$responses_local)
-		weights_local = lapply(data_local, 
-			      	   function(x) x$weights_local)
-		observations_indices_local = lapply(data_local, 
-				   function(x) x$observations_indices_local)
-		rm(data_local)
-
-		observations = do.call(rbind, observations_local)
-		responses = do.call(rbind, responses_local)
-
-
-		offset = sapply(observations_local, function(obs_local) 
-		       if(is.null(obs_local)) 0 else nrow(obs_local))
-		offset = c(0,cumsum(offset[-length(observations_local)]))
-
-		if(combine)
-		{
-		weights = lapply(1:length(weights_local[[1]]), function(i)
-			do.call(c,lapply(1:length(weights_local), function(j)
-				weights_local[[j]][[i]])))
-
-		observations_indices_local = 
-		lapply(1:length(observations_indices_local[[1]]), function(i)
-			lapply(1:length(observations_indices_local), function(j)
-				observations_indices_local[[j]][[i]]))
-		
-		observations_indices = lapply(observations_indices_local, 
-			function(obs_local) do.call(c,
-			lapply(1:length(obs_local), function(partition_id) 
-			{
-				if(length(obs_local[[partition_id]]) > 0)
-					return(obs_local[[partition_id]]+
-					offset[partition_id])
-				return(integer(0))
-			})))
-		}
-		if(!combine)
-		{
-		weights = unlist(weights_local,recursive = FALSE)
-		observations_indices = lapply(
-			1:length(observations_indices_local), 
-			function(x) lapply(observations_indices_local[[x]], 
-			function(y) y + offset[x]))
-		observations_indices = unlist(observations_indices_local,
-				     recursive = FALSE)
-		}
-
-		max_nodes = as.integer(rep(100,tree_ids))
-		tree_ids = as.integer(rep(tree_ids,length(weights)))
-		nodes = hpdRF_local(observations, responses, 
-			length(weights), as.integer(bin_max), 
-			as.integer(features_cardinality), 
-			as.integer(response_cardinality), 
-			features_num, 
-			node_size = node_size,
-			weights, observations_indices, 
-			features_min, features_max, 
-			max_nodes = as.integer(max_nodes),
-			tree_ids = as.integer(tree_ids), 
-			max_nodes_per_iteration = 
-				as.integer(max_nodes_per_iteration),
-			max_time = max_time)
-
-		dnodes = list(.Call("serializeForest",nodes))
-		.Call("garbageCollectForest",nodes)
-		update(dnodes)
-		gc()
-     	},progress = FALSE, scheduler = 1)
-
-	return(dnodes)
-}
-
-.attachLocalNodes <- function(tree, dnodes, leaf_table, trace = TRUE)
-{
-	if(trace)
-	print("attaching nodes")
-	if(!is.null(dnodes))	
-	{
-		temp_nodes = lapply(1:npartitions(dnodes), function(x)
-		   	   .Call("unserializeForest",getpartition(dnodes,x)[[1]]))
-		temp_nodes_indices = lapply(1:length(temp_nodes),function(x) 
-			   as.integer(leaf_table[which(leaf_table[,1]==x),2]))
-		tree_indices = lapply(1:length(temp_nodes),function(x) 
-			   as.integer(leaf_table[which(leaf_table[,1]==x),3]))
-
-		.Call("stitchForest",tree, temp_nodes, 
-			tree_indices, temp_nodes_indices)
-	
-	}		
-	leaf_table <- .Call("getLeafTreeIDs",tree)
-	leaf_table <- cbind(leaf_table,.Call("getLeafIDs",tree))
-	leaf_table <- cbind(leaf_table,1:nrow(leaf_table))
-	leaf_table <- cbind(leaf_table, .Call("getLeafCounts",tree))
-	return(leaf_table)
-}
-
-.assignNodes <- function(leaf_table, cores, prev_workers, trace = TRUE)
-{
-	if(trace)
-	print("assigning nodes")
-	if(nrow(leaf_table) == 0)
-		return(NULL)
-
-	temp_leaf_table = leaf_table[order(leaf_table[,4],decreasing = TRUE),]
-	input_partitions = prev_workers
-	workers = min(cores,nrow(leaf_table))
-	nodes_temp = lapply(1:input_partitions, 
-		   function(x) vector('list',workers))
-	counts = rep(0,workers)
-	indices = rep(1,workers)
-
-	for(i in 1:nrow(temp_leaf_table))
-	{
-		worker = which.min(counts)
-		counts[[worker]] = counts[[worker]]+temp_leaf_table[i,4]
-		nodes_temp[[temp_leaf_table[i,1]]][[worker]] <- 
-			c(nodes_temp[[temp_leaf_table[i,1]]][[worker]],
-			temp_leaf_table[i,2])
-	}
-
-	new_leaf_table = NULL
-	if(length(nodes_temp) > 0)
-	{
-	for(i in 1:length(nodes_temp))
-	{
-		if(length(nodes_temp[[i]]) > 0)
-		{
-		for(j in 1:length(nodes_temp[[i]]))
-		{
-			if(length(nodes_temp[[i]][[j]]) > 0)
-			{
-			for(k in 1:length(nodes_temp[[i]][[j]]))
-			{
-				leaf_index = which(leaf_table[,1] == i & 
-					   leaf_table[,2] == 
-					   nodes_temp[[i]][[j]][[k]])
-
-				new_leaf_table = rbind(new_leaf_table,
-				c(j,indices[j], leaf_table[leaf_index,3]))
-				indices[j] <- indices[j] + 1
-			}
-			}
-		}
-		}
-	}
-	}
-	return(list(nodes = nodes_temp, 
-			  leaf_table = new_leaf_table, 
-			  workers = workers))
-}
-

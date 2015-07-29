@@ -21,9 +21,8 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		   mtry, replace=TRUE, cutoff, nodesize, 
 		   maxnodes = min(.Machine$integer.max,nrow(data)), do.trace = FALSE, 
 		   keep.forest = TRUE, na.action = na.omit, 
-		   nBins=256, completeModel=FALSE)
-
-
+		   nBins=256, completeModel=FALSE, 
+		   reduceModel = FALSE, varImp = FALSE)
 {
 	if(!identical(na.action, na.exclude) &
 		!identical(na.action, na.omit) &
@@ -336,7 +335,8 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			print("computing oob statistics")
 
 		oob_predictions = .predictOOB(forest, observations, 
-			responses, oob_indices, cutoff, classes, do.trace)
+			responses, oob_indices, cutoff, classes, 
+			reduceModel = reduceModel,do.trace)
 			},error = function(e)
 			{
 				print(paste("aborting oob computations. received error:", e))
@@ -348,7 +348,6 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	timing_info <- Sys.time()
 
 	rm(observations)
-	rm(responses)
 	gc()
 
 	model = list()
@@ -464,6 +463,17 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	if(do.trace & completeModel)
 	print(timing_info)
 
+	if(do.trace & completeModel & varImp)
+	print("computing model importance")
+	timing_info <- Sys.time()
+	if(varImp & completeModel)
+		model$importance <- varImportance(model,data,responses)
+	timing_info <- Sys.time() - timing_info
+	if(do.trace & completeModel & varImp)
+	print(timing_info)
+	rm(responses)
+	gc()
+
 	return(model)
 }
 
@@ -539,6 +549,7 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 	print("processing formula")
 	
 	terms = dlist(npartitions = npartitions(x))
+	x_colnames = dlist(npartitions = npartitions(x))
 	foreach(i,1:npartitions(data), function(
 				       data = splits(data,i),
 				       column_names = colnames(data),
@@ -546,6 +557,7 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 				       y = splits(y,i),
 				       model_formula = formula,
 				       model_terms = splits(terms,i),
+				       x_colnames = splits(x_colnames,i),
 				       na.action = na.action)
 	{
   		assign("data", na.action(data), globalenv())
@@ -565,14 +577,17 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 		}
 		x <- model.frame(delete.response(model_terms), 
 		     	data = data, na.action = na.action)
-
 		attr(x,"terms") <- NULL
+
 		rm(data)
-		print(gc())
+		gc()
 		update(x)
+		x_colnames <- list(colnames(x))
+		update(x_colnames)
 		model_terms = list(model_terms)
 		update(model_terms)
 	},progress = trace)
+	x_colnames = getpartition(x_colnames,1)[[1]]
 
 
 	suppressWarnings({
@@ -623,7 +638,8 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 		  y_cardinality = y_cardinality,
 		  y_classes = y_levels$Levels,
 		  x_classes = x_levels$Levels,
-		  true_responses = true_responses))
+		  true_responses = true_responses,
+		  x_colnames = x_colnames))
 }
 
 deploy.hpdRF_parallelTree <- function(model)
