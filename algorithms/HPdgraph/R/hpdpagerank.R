@@ -148,7 +148,7 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
                 if(class(dg) == "matrix")
                     tp <- tp + rowSums(dg)
                 else
-                    tp <- tp + .Call("rowSums", dg, PACKAGE="MatrixHelper")
+                    tp <- tp + .Call("rowSums", dg, PACKAGE="Executor")
                 update(tp)
             }, scheduler=1)
             env$index <- env$index + nWorkers
@@ -163,7 +163,7 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
                 if(class(dg) == "matrix")
                     tp <- tp + rowSums(dg * wi)
                 else
-                    tp <- tp + .Call("rowSums", dg * wi, PACKAGE="MatrixHelper")
+                    tp <- tp + .Call("rowSums", dg * wi, PACKAGE="Executor")
                 update(tp)
             }, scheduler=1)
             env$index <- env$index + nWorkers
