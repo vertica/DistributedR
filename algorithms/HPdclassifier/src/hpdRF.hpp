@@ -96,11 +96,6 @@ extern "C"
 SEXP undoSplits(SEXP R_forest, SEXP R_node_ids);
 }
 
-hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
-				    int *feature_cardinality, int obs_index,
-				    bool na_pass, int* leaf_count, 
-				    double** weight);
-
 
 int convertTreetoRpart(hpdRFnode* tree, int* indices,
 		       int* var, double* dev, 
