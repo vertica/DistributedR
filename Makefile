@@ -22,11 +22,7 @@
 ## === Build targets
 
 
-.PHONY: clean third_party test boost docs manual tutorial faq distclean install blkin trace_build
-
-install:
-	$(MAKE)
-	sudo bin/install_distributedR.sh
+.PHONY: clean third_party test docs manual tutorial faq
 
 ## === Test targets
 TEST_OUTPUT_FILES=$(PWD)/test_platform.out
@@ -89,8 +85,5 @@ algorithm_docs:
 	R CMD Rd2pdf --no-preview --force --output=$(DOC_DIR_ALGORITHMS)/HPdata/HPdata-Manual.pdf $(PWD)/algorithms/HPdata
 
 
-## === Uninstall and Clean targets
 
-uninstall:
-	sudo bin/uninstall_distributedR.sh ${ARGS}
 
