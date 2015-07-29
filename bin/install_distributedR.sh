@@ -55,7 +55,7 @@ install -m 444 $PWD/third_party/atomicio/LICENSE        $INSTALLBASE/third_party
 
 /sbin/ldconfig -v > /dev/null 2>&1
 
-for thing in distributedR Executor MatrixHelper; do
+for thing in distributedR Executor; do
     echo -e "\nInstalling $thing"
     R CMD INSTALL --no-html $INSTALLBASE/install/$thing
     if [ $? -ne 0 ]; then
