@@ -572,16 +572,16 @@ void PrestoWorker::prepare_persist(const std::string& name, int executor, uint64
   wrk_req->set_type(WorkerRequest::PERSIST);
   wrk_req->mutable_persist()->CopyFrom(persist_req);
 
-  LOG_INFO("prepare_persist: Received Persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
+  //LOG_INFO("prepare_persist: Received Persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
 
-  unique_lock<mutex> lock(requests_queue_mutex_[SAVESPLIT]);
-  bool notify = requests_queue_[SAVESPLIT].empty();
-  LOG_INFO("prepare_persist: Check Persist task(%s, %d) for main task %d ==> %d", name.c_str(), executor, taskid, notify);
-  requests_queue_[SAVESPLIT].push_back(wrk_req);
+  unique_lock<mutex> lock(requests_queue_mutex_[PERSISTSPLIT]);
+  bool notify = requests_queue_[PERSISTSPLIT].empty();
+  //LOG_INFO("prepare_persist: Check Persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
+  requests_queue_[PERSISTSPLIT].push_back(wrk_req);
 
-  LOG_INFO("prepare_persist: Added to queue Persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
+  //LOG_INFO("prepare_persist: Added to queue Persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
   if (notify)
-    requests_queue_empty_[SAVESPLIT].notify_all();
+    requests_queue_empty_[PERSISTSPLIT].notify_all();
   lock.unlock();
     
   LOG_INFO("prepare_persist: Notified Persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
@@ -1122,7 +1122,10 @@ void PrestoWorker::HandleRequests(int type) {
             if(DATASTORE == RINSTANCE) {
               uint64_t taskid =  worker_req.fetch().uid();
               boost::interprocess::interprocess_semaphore sema(0);
+
+              unique_lock<recursive_mutex> lock(persist_mutex_);
               sync_persist_[taskid] = &sema;
+              lock.unlock();
 
               NewArg arg;
               arg.set_arrayname(worker_req.fetch().name());
@@ -1131,15 +1134,17 @@ void PrestoWorker::HandleRequests(int type) {
               transfer_arg.push_back(arg);
 
               //Persist to worker if not already on worker.
-              scheduler_->ValidatePartitions(transfer_arg, -1, taskid);
+              int32_t num_persisted = scheduler_->ValidatePartitions(transfer_arg, -1, taskid);
+              LOG_INFO("NEWTRANSFER %d : num_persisted(%d)", taskid, num_persisted);
 
               // Wait until all partitions are validated
-              LOG_INFO("NEWTRANSFER Task %d: Waiting for dep PERSIST tasks(%zu) to complete", taskid, transfer_arg.size());
-              for(int i=0; i< transfer_arg.size(); i++) {
+              for(int i=0; i< num_persisted; i++) {
                 sync_persist_[taskid]->wait();
               }
-              LOG_INFO("NEWTRANSFER Task %d: Waiting for dep PERSIST tasks to complete", taskid);
+              LOG_INFO("NEWTRANSFER %d: dep PERSIST tasks complete", taskid);
+              lock.lock();
               sync_persist_.erase(taskid);
+              lock.unlock();
             }
 
             newtransfer(worker_req.fetch().name(),
@@ -1166,8 +1171,12 @@ void PrestoWorker::HandleRequests(int type) {
               vector<NewArg> task_args;
               task_args.clear();
               uint64_t taskid = worker_req.createcomposite().uid();
+              uint64_t parenttaskid = worker_req.createcomposite().parenttaskid();
               boost::interprocess::interprocess_semaphore sema(0);
+
+              unique_lock<recursive_mutex> lock(persist_mutex_);
               sync_persist_[taskid] = &sema;
+              lock.unlock();
 
               get_vector_from_repeated_field
                 <RepeatedPtrField<NewArg>::const_iterator,
@@ -1181,17 +1190,18 @@ void PrestoWorker::HandleRequests(int type) {
                 NewArg>(worker_req.createcomposite().cargs().begin(),
                        worker_req.createcomposite().cargs_size(), &cc_args);
 
-              //LOG_INFO("Task_arg size(%zu), Composite array size(%zu)", task_args.size(), cc_args.size());
               int64_t executor_id = scheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());
-              //LOG_INFO("Added ParentTask %d. Returned executor is %d", worker_req.createcomposite().parenttaskid(), executor_id);
-              //scheduler_->ValidateCCPartitions(cc_args, executor_id, taskid);
-              scheduler_->ValidatePartitions(cc_args, -1, taskid);
+              int32_t num_persisted = scheduler_->ValidatePartitions(cc_args, -1, taskid);
+              LOG_INFO("CREATECOMPOSITE %d : num_persisted(%d)", taskid, num_persisted);
 
               // Wait until all partitions are validated.
-              for(int i=0; i< cc_args.size(); i++) {
+              for(int i=0; i< num_persisted; i++) {
                 sync_persist_[taskid]->wait();
               }
+              LOG_INFO("CREATECOMPOSITE %d: dep PERSIST tasks complete", taskid);
+              lock.lock();
               sync_persist_.erase(taskid);
+              lock.unlock();
 
               LOG_INFO("CREATECOMPOSITE %d : All partitions validated. Sent to executor %d", worker_req.createcomposite().uid(), executor_id);
               createcomposite(worker_req.createcomposite());
@@ -1254,29 +1264,34 @@ void PrestoWorker::HandleRequests(int type) {
 
           {
             if(DATASTORE == WORKER) {
-              LOG_INFO("DataStore is worker");
               executorpool_->execute(func, new_args, raw_args, composite_args,
                                    worker_req.newexecr().id(),
                                    worker_req.newexecr().uid(),
                                    &worker_resp);
             } else {
               uint64_t taskid = worker_req.newexecr().uid();
+              uint64_t parenttaskid = worker_req.newexecr().parenttaskid();
               boost::interprocess::interprocess_semaphore sema(0);
-              sync_persist_[taskid] = &sema;
 
-              int64_t executor_id = scheduler_->AddParentTask(new_args, worker_req.newexecr().parenttaskid());
-              scheduler_->ValidatePartitions(new_args, executor_id, taskid);
+              unique_lock<recursive_mutex> lock(persist_mutex_);
+              sync_persist_[taskid] = &sema;
+              lock.unlock();
+
+              int64_t executor_id = scheduler_->AddParentTask(new_args, parenttaskid, taskid);
+              int32_t num_persisted = scheduler_->ValidatePartitions(new_args, executor_id, taskid);
               //TODO: Add validation for CC newargs as well.
-              LOG_INFO("EXECUTE %d : All partitions validated. Sent to executor %d", worker_req.newexecr().uid(), executor_id);
+              LOG_INFO("EXECUTE %d : (%d)partitions will be persisted.", taskid, num_persisted);
 
               // Wait until all partitions are validated.
-              LOG_INFO("EXECUTE %d: Waiting for dep PERSIST tasks(#%zu) to complete", taskid, new_args.size());
-              for(int i=0; i< new_args.size(); i++) {
+              for(int i=0; i< num_persisted; i++) {
                 sync_persist_[taskid]->wait();
               }
               LOG_INFO("EXECUTE %d: dep PERSIST tasks complete", taskid);
+              lock.lock();
               sync_persist_.erase(taskid);
+              lock.unlock();
 
+              LOG_INFO("EXECUTE %d : All partitions validated, sent to executor(%d)", taskid, executor_id);
               executorpool_->execute(func, new_args, raw_args, composite_args,
                                      worker_req.newexecr().id(),
                                      worker_req.newexecr().uid(),
@@ -1386,9 +1401,6 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
         // new_transfer is sent by other worker
         type = SEND;  // This worker has to send to other workers
         break;
-      /*case WorkerRequest::PERSIST:
-        type = RECV;
-        break;*/
       case WorkerRequest::HELLO:
         master_last_contacted_.start();
         type = HELLO;
@@ -1396,12 +1408,10 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
       case WorkerRequest::CREATECOMPOSITE:
       case WorkerRequest::FOREACHCOMPLETE:
       case WorkerRequest::CLEAR:
+      case WorkerRequest::VERTICALOAD:
       case WorkerRequest::LOG:
         master_last_contacted_.start();
         type = MISC;
-        break;
-      case WorkerRequest::VERTICALOAD:
-        type = VERTICALOAD;
         break;
       case WorkerRequest::SHUTDOWN:
         if (master_ == NULL) {

@@ -84,13 +84,13 @@ class TaskScheduler {
 
   void foreachcomplete(bool status);
   void StageUpdatedPartition(const std::string& split_name, size_t size, int executor_id);
-  void ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
-  int64_t AddParentTask(const std::vector<NewArg>& task_args, int64_t parenttaskid);
+  int32_t ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
+  int64_t AddParentTask(const std::vector<NewArg>& task_args, int64_t parenttaskid, int taskid=-99);
   void DeleteSplit(const std::string& splitname);
 
 protected:
   // Returns the executor on which the task should be executed.
-  int64_t GetBestExecutor(const std::vector<NewArg>& partitions);
+  int64_t GetBestExecutor(const std::vector<NewArg>& partitions, int taskid);
   int64_t ExecutorToPersistFrom(const std::string& split_name);
   bool IsSplitAvailable(const std::string& split_name, int executor_id=-1); //If executor_id is -1, then persist to worker.
   bool IsBeingPersisted(const std::string& split_name);
@@ -100,9 +100,10 @@ protected:
  private:
   void AddExecutor(int id);
   boost::unordered_map<std::string, ExecSplit*> executor_splits; //map<name, split_info>
-  boost::unordered_set<std::string> *shmem_arrays;
-  boost::unordered_map<int, ExecStat*> executor_stat;  //which executor has how much memory
   boost::unordered_map<uint64_t, int> parent_tasks;   //map<parent_task, exec_id>//to keep track of executor on which execution will happen.
+  boost::unordered_map<int, ExecStat*> executor_stat;  //which executor has how much memory
+
+  boost::unordered_set<std::string> *shmem_arrays;
 
   // Metadata for fetch/newtransfer
   //boost::unordered_set<std::string> fetched_partitions_; //All Partitions fetched into a worker from another worker
@@ -112,7 +113,8 @@ protected:
   boost::unordered_set<SplitUpdate*> updated_splits;
 
   //Process Communication
-  boost::recursive_mutex parent_mutex;
+  boost::mutex parent_mutex;
+  boost::mutex stage_mutex;
   boost::recursive_mutex metadata_mutex;
   boost::timed_mutex *shmem_arrays_mutex;
 

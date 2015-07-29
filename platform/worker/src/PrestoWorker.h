@@ -79,10 +79,9 @@ enum TASK_TYPE {
   IO,
   SEND,
   RECV,
-  SAVESPLIT,
+  PERSISTSPLIT,
   HELLO,
   MISC,
-  VERTICALOAD,
   TASK_TYPE_NUM
 };
 
@@ -171,6 +170,10 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
   int GetStartPortRange() {return start_port_range_;}
   int GetEndPortRange(){return end_port_range_;}
 
+  void PersistPost(uint64_t taskid) { 
+    sync_persist_[taskid]->post(); 
+  }
+
   DataLoader* GetDataLoaderPtr() {
     return data_loader_;
   }
@@ -181,10 +184,6 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
 
   std::pair<int, int> GetClusterInfo() {
     return std::make_pair<int, int>(num_workers_, num_executors_);
-  }
-
-  void PersistPost(uint64_t taskid) {
-    sync_persist_[taskid]->post();
   }
 
 protected:
@@ -255,6 +254,7 @@ protected:
   boost::mutex worker_stat_mutex_;
   
   boost::unordered_map<uint64_t, boost::interprocess::interprocess_semaphore*> sync_persist_;
+  boost::recursive_mutex persist_mutex_;
 
   DataLoader* data_loader_;
   TaskScheduler* scheduler_;
