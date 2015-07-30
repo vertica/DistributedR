@@ -218,6 +218,7 @@ struct ForeachStatus {
   int num_tasks;
   bool is_error;
   std::ostringstream error_stream;
+  boost::interprocess::interprocess_semaphore *sema;
 };
 
 // Abstract Scheduler class that keeps track of metadata
@@ -344,7 +345,8 @@ class Scheduler {
     foreach_status_ = foreach_status;
   }
 
-  void ForeachComplete(bool status);
+  void UpdateWorkerMetadata(bool status);
+  //void MetadataUpdateReply(MetadataUpdateRequest update);
 
   // Current implementation is basedon assumption that 
   // atmost 1 foreach() will run at time
@@ -399,8 +401,7 @@ class Scheduler {
   uint64_t IsSplitBeingAcquired(Split *split, Worker *worker);
 
   // completely delete a split (from all workers, arraystores, bookkeeping)
-  void DeleteSplit(Split *split, bool delete_in_worker = false);
-
+  void DeleteSplit(Split *split, bool delete_in_worker = false, Worker* current_worker = NULL);
   
   Worker* GetRndAvailableWorker();
 

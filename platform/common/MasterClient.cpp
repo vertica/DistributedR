@@ -178,6 +178,23 @@ void MasterClient::WorkerAborting(const WorkerAbortRequest& workerabort) {
   req.mutable_workerabort()->CopyFrom(workerabort);
   SendZMQMessagePush(req);
 }
+
+/** Send a worker aborting message upon worker exiting. Upon getting this, the master shutdown the sessions by killing all other workers
+ * @param workerabort worker aboring message (include the reason why it is aborting)
+ * @return NULL
+ */
+/*void MasterClient::MetadataUpdateReply(const MetadataUpdateReply& metadataupdate) {
+  LOG_INFO("1");
+  MasterRequest req;
+  LOG_INFO("2");
+  req.set_type(MasterRequest::METADATAUPDATEREPLY);
+  LOG_INFO("3");
+  req.mutable_metadataupdate()->CopyFrom(metadataupdate);
+  LOG_INFO("4");
+  SendZMQMessagePush(req);
+  LOG_INFO("5");
+}*/
+
 // NOTE: Right now this does a simple blocking call using a thread-local
 // socket. We could try other ZMQ techniques like queues/routers here.
 // void MasterClient::SendZMQMessage(const MasterRequest& req, Response* res) {

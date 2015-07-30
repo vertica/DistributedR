@@ -403,6 +403,7 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
   ForeachStatus &foreach = *(new ForeachStatus);
   foreach.num_tasks = calls;
   foreach.is_error = false;
+  foreach.sema = &sema;
 
   get_scheduler(presto_master_exp)->InitializeForeach(&foreach);
   get_scheduler(presto_master_exp)->AddTask(tasks, scheduler_policy, &inputs);
@@ -443,6 +444,11 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
     for(volatile int i = 0; i < calls; i++) {
       sema.wait();
     }
+
+    //track metadata update in workers.
+    /*for(int i = 0; i < pm->NumClients(); i++) {
+      sema.wait();
+    }*/
   }
   signal(SIGINT, r_sigint_handler);  // revert to default
 

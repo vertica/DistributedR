@@ -911,7 +911,10 @@ PrestoWorker::PrestoWorker(
   } else {
     LOG_INFO("Creating scheduler");
     sync_persist_.clear();
-    scheduler_ = new TaskScheduler(this, executorpool_, &shmem_arrays_,
+    scheduler_ = new TaskScheduler(this, master_.get(),
+                                   executorpool_, 
+                                   &my_location_,
+                                   &shmem_arrays_,
                                    &shmem_arrays_mutex_,
                                    num_executors_);
   }
@@ -1208,11 +1211,21 @@ void PrestoWorker::HandleRequests(int type) {
             }
           }
           break;
-        case WorkerRequest::FOREACHCOMPLETE:
+        case WorkerRequest::METADATAUPDATE:
           {
-            LOG_INFO("New FOREACHCOMPLETE TaskID %6zu - Received from Master", worker_req.foreachcomplete().uid());
+            LOG_INFO("New METADATAUPDATE TaskID %6zu - Received from Master", worker_req.metadataupdate().uid());
             executorpool_->reset_executors();
-            scheduler_->foreachcomplete(worker_req.foreachcomplete().status());
+            scheduler_->ForeachComplete(worker_req.metadataupdate().id(), 
+                                        worker_req.metadataupdate().uid(), 
+                                        worker_req.metadataupdate().status());
+
+            /*LOG_INFO("Sending update notification to master");
+            MetadataUpdateReply req;
+            req.set_id(worker_req.metadataupdate().id());
+            req.set_uid(worker_req.metadataupdate().uid());
+            //req.mutable_location()->CopyFrom(worker->SelfServerInfo());
+            //req.set_status(status);
+            master_->MetadataUpdateReply(req);*/
           }
           break;
         case WorkerRequest::VERTICALOAD:
@@ -1405,8 +1418,11 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
         master_last_contacted_.start();
         type = HELLO;
         break;
+      case WorkerRequest::METADATAUPDATE:
+        master_last_contacted_.start();
+        type = METADATAUPDATE;
+        break;
       case WorkerRequest::CREATECOMPOSITE:
-      case WorkerRequest::FOREACHCOMPLETE:
       case WorkerRequest::CLEAR:
       case WorkerRequest::VERTICALOAD:
       case WorkerRequest::LOG:

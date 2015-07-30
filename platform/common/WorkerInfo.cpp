@@ -253,11 +253,11 @@ void WorkerInfo::CreateComposite(
  * @param complete information whether the foreach was successful or not
  * @return NULL
  */
-void WorkerInfo::ForeachComplete(
-    const ForeachCompleteRequest& complete) {
+void WorkerInfo::MetadataUpdate(
+    const MetadataUpdateRequest& metadataupdate) {
   WorkerRequest req;
-  req.set_type(WorkerRequest::FOREACHCOMPLETE);
-  req.mutable_foreachcomplete()->CopyFrom(complete);
+  req.set_type(WorkerRequest::METADATAUPDATE);
+  req.mutable_metadataupdate()->CopyFrom(metadataupdate);
   SendZMQMessagePush(req);
 }
 

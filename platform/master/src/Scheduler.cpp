@@ -346,20 +346,24 @@ void Scheduler::PurgeUpdates(TaskDoneRequest* req) {
   * Workers can start updating thier medatata including clearing old partitions
   */
 
-void Scheduler::ForeachComplete(bool success) {
+void Scheduler::UpdateWorkerMetadata(bool success) {
   boost::unordered_map<std::string, Worker*>::iterator wit;
   for(wit=workers.begin(); wit != workers.end(); ++wit) {
     WorkerInfo* wi = wit->second->workerinfo;
     ::int64_t taskid = GetNewTaskID();
-    ForeachCompleteRequest req;
+    MetadataUpdateRequest req;
     req.set_status(success);
     req.set_id(000);
     req.set_uid(taskid);
 
-    wi->ForeachComplete(req);
-    LOG_INFO("FOREACHCOMPLETE TaskID %12d - Sent to Worker %s", taskid, wi->hostname().c_str());
+    wi->MetadataUpdate(req);
+    LOG_INFO("METADATAUPDATE Request TaskID %12d - Sent to Worker %s", taskid, wi->hostname().c_str());
   }
 }
+
+/*void Scheduler::MetadataUpdateReply(MetadataUpdateRequest update) {
+  foreach_status_->sema->post();  
+}*/
 
 /** This handles task-done. It generally updates worker information after performing a task.
  * It updates split information after a task (if needed)
@@ -751,7 +755,7 @@ void Scheduler::AddSplit(const string &name, size_t size,
     if(DATASTORE == WORKER) {
       DeleteSplit(splits[grandparent], true);
     } else {
-      DeleteSplit(splits[grandparent]);
+      DeleteSplit(splits[grandparent], false, worker);
     }
   }
 
@@ -1064,7 +1068,7 @@ bool Scheduler::IsSplitOnWorker(Split *split, Worker *worker) {
   return 0;
 }
 
-void Scheduler::DeleteSplit(Split *split, bool delete_in_worker) {
+void Scheduler::DeleteSplit(Split *split, bool delete_in_worker, Worker* current_worker) {
   if (split == NULL) {
     LOG_ERROR("DeleteSplit: input split is null");
     throw PrestoWarningException("DeleteSplit: input split is null");
@@ -1086,7 +1090,13 @@ void Scheduler::DeleteSplit(Split *split, bool delete_in_worker) {
   boost::unordered_set<Worker*> workers = split->workers;
   for (boost::unordered_set<Worker*>::iterator i = workers.begin();
        i != workers.end(); i++) {
-    Delete(split, *i, delete_in_worker);
+
+    if(DATASTORE == WORKER)
+      Delete(split, *i, delete_in_worker);
+    else {
+      if(*i != current_worker) Delete(split, *i, delete_in_worker);
+    }
+
   }
 
   boost::unordered_set<ArrayStore*> arraystores = split->arraystores;

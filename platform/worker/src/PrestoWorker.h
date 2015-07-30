@@ -82,6 +82,7 @@ enum TASK_TYPE {
   PERSISTSPLIT,
   HELLO,
   MISC,
+  METADATAUPDATE,
   TASK_TYPE_NUM
 };
 
@@ -100,6 +101,7 @@ enum TASK_TYPE {
 #define PERSIST_THREAD_NUM 0
 #define MISC_THREAD_NUM 2  // misc (composite creation, logging)
 #define HELLO_THREAD_NUM 1
+#define METADATA_THREAD_NUM 1
 // The sequence of this variable has to comply with TASK_TYPE enum
 static int NUM_THREADS[NUM_THREADPOOLS] = {EXEC_THREAD_NUM,
                                     IO_THREAD_NUM,
@@ -107,7 +109,8 @@ static int NUM_THREADS[NUM_THREADPOOLS] = {EXEC_THREAD_NUM,
                                     RECV_THREAD_NUM,
                                     PERSIST_THREAD_NUM,
                                     HELLO_THREAD_NUM,
-                                    MISC_THREAD_NUM};
+                                    MISC_THREAD_NUM,
+                                    METADATA_THREAD_NUM};
 
 class PrestoWorker : public ISubject<google::protobuf::Message> {
  public:
@@ -143,7 +146,7 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
                 vector<CompositeArg> composite_args,
                 uint64_t id, uint64_t uid, Response* res);
   void createcomposite(CreateCompositeRequest req);
-  void foreachcomplete(ForeachCompleteRequest req);
+  void metadataupdate(MetadataUpdateRequest req);
   void verticaload(VerticaDLRequest req);
   void prepare_persist(const std::string& split_name, int executor, uint64_t taskid);
 

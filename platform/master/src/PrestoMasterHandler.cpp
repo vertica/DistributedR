@@ -148,7 +148,11 @@ void PrestoMasterHandler::Run(context_t* ctx, int port_start, int port_end) {
             thr.detach();
           }
           break;
-
+        /*case MasterRequest::METADATAUPDATEREPLY:
+         {
+            scheduler_->MetadataUpdateReply(master_req.metadataupdate());
+         }
+         break;*/
         default:
           {
             LOG_ERROR("Unknown message received from Worker. Possible reasons - Check the correctness of the configuration - Either Hostname or Port of the Master and Workers has to be different");
@@ -250,7 +254,7 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
 
        if(DATASTORE == RINSTANCE) {
          //Send status to all workers, so that they can update the metadata at their end.
-         scheduler_->ForeachComplete(!foreach_error);
+         scheduler_->UpdateWorkerMetadata(!foreach_error);
        }
 
        boost::unordered_map< ::uint64_t, TaskDoneRequest*>::iterator itr = scheduler_->taskdones_.begin();

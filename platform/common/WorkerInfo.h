@@ -69,7 +69,7 @@ class WorkerInfo {
   void IO(const IORequest& io);
   void Clear(const ClearRequest& clear);
   void CreateComposite(const CreateCompositeRequest& createcomposite);
-  void ForeachComplete(const ForeachCompleteRequest& complete);
+  void MetadataUpdate(const MetadataUpdateRequest& metadataupdate);
   void Log(const LogRequest& log);
   void VerticaLoad(const VerticaDLRequest& verticaload);
   bool IsRunning();

@@ -704,10 +704,6 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
 
   LOG_INFO("ExecutorPool CLEAR: New Request of type CLEAR #splits(%d), executor(%d)", splits.size(), executor);
 
-  /*unique_lock<mutex> lock(poolmutex);
-  // Wait till the executor is ready
-  while(executors[executor].ready==false) {};
-  lock.unlock();*/
   unique_lock<mutex> lock(executors[executor].executor_mutex);
   LOG_INFO("ExecutorPool CLEAR: Waiting for the executor to be available(%d)", executor);
   while(executors[executor].ready==false) { executors[executor].sync.wait(lock); } //LOG_INFO("ExecutorPool: In loop(%d)", target_executor);}
@@ -721,46 +717,29 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
      fprintf(executors[executor].send, "%s\n", splits[i].c_str());
   }
   fflush(executors[executor].send);
-  LOG_INFO("ExecutorPool CLEAR: Sent CLEAR executor(%d). Not wait for completion", executor);
+  LOG_INFO("ExecutorPool CLEAR: Sent CLEAR executor(%d).", executor);
 
-  /*char task_msg[EXCEPTION_MSG_SIZE];
+  char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
-    //char cname[100];  // to keep a resultant split name
-    //int success;
-    //int32_t ret = ParseClearLine(executor->recv, &success);
-    //LOG_INFO("Ret is %d", ret);
-    //if(ret != 1) {
-    //  LOG_ERROR("Error clearning partitions");
-    //}
-    //break;
     char cname[100];  // to keep a resultant split name
     size_t size;
     size_t rdim, cdim;
     int empty;
     memset(task_msg, 0x00, sizeof(task_msg));
+
     // This function blocks as it is waiting for fscanf from executor.
-    int32_t ret = ParseUpdateLine(executor->recv, cname, &size,
+    int32_t ret = ParseUpdateLine(executors[executor].recv, cname, &size,
                                   &empty, &rdim, &cdim, task_msg);
-    //LOG_INFO("ret is %d", ret);
     if (ret != 5) {
-        // we are using size field to indicate the task result
-        //req.set_task_result(TASK_EXCEPTION);
         ostringstream msg;
         msg << "Error from worker " << server_to_string(*my_location) 
             << check_out_of_memory(child_proc_ids_) << endl << "Failed to parse function execution result from executor";
-        //req.set_task_message(msg.str());
         LOG_ERROR(msg.str());
         break;
     }
-      
-    // & means the task is complete
-    // After a task is done, all update() variables are processed first.
-    // After all updates are propagated, the task completes.
+
     if (strncmp(cname, "&", 100) == 0) {
-       // we are using size field to indicate the task result
        LOG_INFO("Clear Task complete.");
-       //req.set_task_result(size);
-       //req.set_task_message(string(task_msg));
        if (size==TASK_EXCEPTION){
           ostringstream msg;
           msg << "TASK_EXCEPTION : Clear task execution failed at Executor " << executor << " with message: " << task_msg;
@@ -768,8 +747,7 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
        }
        break;
     }   
-
-  }*/
+  }
 
   lock.lock();
   executors[executor].ready = true;

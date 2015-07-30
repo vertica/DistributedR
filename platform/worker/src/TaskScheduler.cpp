@@ -45,22 +45,27 @@ void TaskScheduler::AddExecutor(int id) {
 }
 
 void TaskScheduler::DeleteSplit(const std::string& splitname) {
+  LOG_INFO("DeleteSplit: Deleting %s", splitname.c_str());
   boost::unordered_set<int> executors;
+  bool exists = false;
 
   unique_lock<recursive_mutex> metalock(metadata_mutex);
   if(executor_splits.find(splitname) != executor_splits.end()) {
     executors = executor_splits[splitname]->executors;
     delete executor_splits[splitname];
     executor_splits.erase(splitname);
+    exists = true;
   } else
     LOG_ERROR("DeleteSplit: Split %s not found in executors", splitname.c_str());
   metalock.unlock();
 
-  std::vector<std::string> splits;
-  splits.push_back(splitname);
+  if (exists) {
+    std::vector<std::string> splits;
+    splits.push_back(splitname);
 
-  for(boost::unordered_set<int>::iterator it = executors.begin(); it != executors.end(); ++it) {
-      executorpool->clear(splits, *it);
+    for(boost::unordered_set<int>::iterator it = executors.begin(); it != executors.end(); ++it) {
+       executorpool->clear(splits, *it);
+    }
   }
 }
 
@@ -190,8 +195,10 @@ bool TaskScheduler::IsBeingPersisted(const std::string& split_name) {
 int64_t TaskScheduler::ExecutorToPersistFrom(const std::string& split_name) {
    int executor_id = -1; 
    unique_lock<recursive_mutex> metalock(metadata_mutex);
-   if(executor_splits.find(split_name) == executor_splits.end())
+   if(executor_splits.find(split_name) == executor_splits.end()) {
      LOG_ERROR("ExecutorToPersistFrom: Partition(%s) does not exist", split_name.c_str());
+     return 0;
+   }
 
    ExecSplit* partition = executor_splits[split_name];
    boost::unordered_set<int>::iterator it = partition->executors.begin();
@@ -270,7 +277,7 @@ void TaskScheduler::StageUpdatedPartition(const std::string &name, size_t size, 
   * Merge Staged metadata to main metadata or clear old partitions.
   *
   */
-void TaskScheduler::foreachcomplete(bool status) {
+void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
   boost::unordered_map<int, std::vector<std::string>> clear_map;
 
   unique_lock<recursive_mutex> metalock(metadata_mutex);
@@ -307,7 +314,7 @@ void TaskScheduler::foreachcomplete(bool status) {
        ParseSplitName(split->name, &darray_name, &split_id);
        LOG_INFO("foreachcomplete: Parsed parent is %s %d %d", darray_name.c_str(), split_id, version);
 
-      if(version>1) {  // Version 0 does not exist.
+      if(version > 1) {  // Version 0 does not exist.
         string parent = darray_name + "_" +
         int_to_string(split_id) + "_" +
         int_to_string(version - GC_DEFAULT_GEN);
@@ -323,14 +330,14 @@ void TaskScheduler::foreachcomplete(bool status) {
           }
         }
 
+        SharedMemoryObject::remove(parent.c_str());
         //erase from metadata
         delete executor_splits[parent];
         executor_splits.erase(parent);
       }
     }
     stagelock.unlock();
-  }
-  else {
+  } else {
     // Discard changes and cleanup executors.
     LOG_INFO("Foreach has failed. Rollback! %zu", updated_splits.size());
     // Populate clear_map for batch clean
@@ -352,13 +359,26 @@ void TaskScheduler::foreachcomplete(bool status) {
   updated_splits.clear();
   metalock.unlock();
 
+  /*LOG_INFO("Sending update notification to master");
+  MetadataUpdateRequest req;
+  req.set_id(id);
+  req.set_uid(uid);
+  LOG_INFO("Sent1");
+  //req.mutable_location()->CopyFrom(worker->SelfServerInfo());
+  //req.set_location(worker->SelfServerInfo());
+  LOG_INFO("Sent2");
+  //req.set_status(status);
+  LOG_INFO("Sent3");
+  master->MetadataUpdate(req);
+  LOG_INFO("Sent");*/
+
   for(boost::unordered_map<int, std::vector<std::string>>::iterator itr = clear_map.begin();
       itr != clear_map.end(); itr++) {
      executorpool->clear(itr->second, itr->first);
   }
 
   clear_map.clear();
-  LOG_INFO("Foreach cleanup complete");
+  LOG_INFO("Foreach complete");
 }
 
 }  // namespace presto

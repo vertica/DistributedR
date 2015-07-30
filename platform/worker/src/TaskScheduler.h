@@ -23,19 +23,6 @@
 #ifndef _TASK_SCHEDULER_
 #define _TASK_SCHEDULER_
 
-/*#include <stdio.h>
-#include <boost/unordered_map.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/condition_variable.hpp>
-#include <boost/interprocess/shared_memory_object.hpp>
-#include <boost/interprocess/mapped_region.hpp>
-
-#include <deque>
-#include <map>
-#include <set>
-#include <string>
-#include <vector>*/
-
 #include <boost/unordered_map.hpp>
 #include <boost/unordered_set.hpp>
 #include <boost/thread/mutex.hpp>
@@ -44,7 +31,7 @@
 #include "common.h"
 #include "dLogger.h"
 #include "shared.pb.h"
-#include "timer.h"
+#include "MasterClient.h"
 
 namespace presto {
 
@@ -71,9 +58,12 @@ struct ExecStat {
 
 class TaskScheduler {
  public:
-  TaskScheduler(PrestoWorker* pw_,ExecutorPool* ep_, boost::unordered_set<std::string> *shmem_arrays_,
+  TaskScheduler(PrestoWorker* pw_, MasterClient* master_, ExecutorPool* ep_,
+                ServerInfo *my_location_,
+                boost::unordered_set<std::string> *shmem_arrays_,
                 boost::timed_mutex *shmem_arrays_mutex_, int nExecutors):
-                worker(pw_),executorpool(ep_), shmem_arrays(shmem_arrays_),
+                worker(pw_),executorpool(ep_), master(master_), 
+                my_location(my_location_), shmem_arrays(shmem_arrays_),
                 shmem_arrays_mutex(shmem_arrays_mutex_) {
     for(int i=0; i < nExecutors; i++) {
         AddExecutor(i);
@@ -82,14 +72,13 @@ class TaskScheduler {
 
   ~TaskScheduler() {}
 
-  void foreachcomplete(bool status);
+  void ForeachComplete(uint64_t id, uint64_t uid, bool status);
   void StageUpdatedPartition(const std::string& split_name, size_t size, int executor_id);
   int32_t ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
   int64_t AddParentTask(const std::vector<NewArg>& task_args, int64_t parenttaskid, int taskid=-99);
   void DeleteSplit(const std::string& splitname);
 
 protected:
-  // Returns the executor on which the task should be executed.
   int64_t GetBestExecutor(const std::vector<NewArg>& partitions, int taskid);
   int64_t ExecutorToPersistFrom(const std::string& split_name);
   bool IsSplitAvailable(const std::string& split_name, int executor_id=-1); //If executor_id is -1, then persist to worker.
@@ -118,8 +107,10 @@ protected:
   boost::recursive_mutex metadata_mutex;
   boost::timed_mutex *shmem_arrays_mutex;
 
+  ServerInfo *my_location;
   ExecutorPool* executorpool;
   PrestoWorker* worker;
+  MasterClient* master;
 };
 
 }  // namespace presto

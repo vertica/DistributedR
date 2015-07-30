@@ -750,8 +750,9 @@ int Executor::Clear() {
     //Remove partition
     std::string split_str = std::string(split);
     if (in_memory_partitions.find(split_str) != in_memory_partitions.end()) {
-       LOG_INFO("Removing %s from in_memory", split);
+       LOG_INFO("Removing %s from in_memory", split_str.c_str());
        delete in_memory_partitions[split_str];
+       in_memory_partitions.erase(split_str);
     }
 
     clear_vec.push_back(split);
@@ -783,10 +784,11 @@ int Executor::PersistToWorker() {
   LOG_INFO("Partition %s should be persist to worker", split);
 
   //Serialize first
-  char cmd[CMD_BUF_SIZE];
+  char emessage[CMD_BUF_SIZE];
   if(in_memory_partitions.find(split) == in_memory_partitions.end()) {
-    LOG_ERROR("PersistToWorker => Split %s to be transferred is not found", split);
-    throw PrestoWarningException("PersistToWorker => Split to be transferred is not found");
+    LOG_ERROR("PersistToWorker => Split(%s) not found", split);
+    snprintf(emessage, CMD_BUF_SIZE, "PersistToWorker => Split(%s) not found", split);
+    throw PrestoWarningException(std::string(emessage));
   }
 
   ARRAYTYPE orig_class = in_memory_partitions[std::string(split)]->GetClassType();
@@ -971,7 +973,7 @@ int main(int argc, char *argv[]) {
       strncpy(ex->err_msg, exception.what(), sizeof(ex->err_msg)-1);
     }
     
-    if(ex != NULL && (next == EXECR || next == PERSIST)) {
+    if(ex != NULL && (next == EXECR || next == PERSIST || next == CLEAR)) {
        SendResult(ex->err_msg);
     }
 

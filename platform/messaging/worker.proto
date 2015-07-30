@@ -76,7 +76,7 @@ message WorkerRequest {
     IO = 12;
     LOG = 13;
     VERTICALOAD = 14;
-    FOREACHCOMPLETE = 15;
+    METADATAUPDATE = 15;
     PERSIST = 16;
   }
   required Type type = 1;
@@ -90,7 +90,7 @@ message WorkerRequest {
   optional IORequest io = 9;
   optional LogRequest log = 10;
   optional VerticaDLRequest verticaload = 11;
-  optional ForeachCompleteRequest foreachcomplete = 12;
+  optional MetadataUpdateRequest metadataupdate = 12;
   optional PersistRequest persist = 13;
   // shutdown doesn't have any request
 }
@@ -160,7 +160,7 @@ message VerticaDLRequest {
   optional int64 uid = 6;
 };
 
-message ForeachCompleteRequest {
+message MetadataUpdateRequest {
   required int64 id = 1;
   required int64 uid = 2;
   required bool status = 3;
