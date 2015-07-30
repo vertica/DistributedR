@@ -172,12 +172,9 @@ void* TransferServer::worker_transfer_server(void) {
   char split_size[128];
   memset(split_size, 0x00, 128);
   int rbytes = read(new_fd, split_size, sizeof(split_size)-1);
-  //int rbytes = atomicio(read, new_fd, split_size, sizeof(split_size)-1);
-  LOG_INFO("worker_transfer_server: Read Size is %s. Replacing the passed size %zu. Sizeof(split_size)=%zu", split_size, size_, sizeof(split_size));
   size_ = (size_t)(atoi(split_size));
-  LOG_INFO("worker_transfer_server: Size of split transferred(%zu)", size_);
 
-  LOG_INFO("Size is %zu", size_);
+  LOG_INFO("Split size(%zu)", size_);
   if(destination_ == WORKER) {
     SharedMemoryObject shm(
       boost::interprocess::open_or_create, name_.c_str(),
@@ -193,14 +190,10 @@ void* TransferServer::worker_transfer_server(void) {
 
     LOG_INFO("worker_transfer_server: Transfered to a Shared memory file %s(%zu)", name_.c_str(), size_);
   } else {
-    if(dest_ == NULL) {
-      LOG_INFO("dest_ is NULL. mallocing");
+    if(dest_ == NULL)
       dest_ = malloc(size_);
-    } else
-      LOG_INFO("dest_ is already set");
 
     LOG_INFO("worker_transfer_server: Transferred to buffer(%zu)", size_);
-
     bytes_fetched_ += (size_);
     atomicio(read, new_fd, dest_, size_);
   }

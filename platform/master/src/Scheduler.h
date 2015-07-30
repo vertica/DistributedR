@@ -346,7 +346,9 @@ class Scheduler {
   }
 
   void UpdateWorkerMetadata(bool status);
-  //void MetadataUpdateReply(MetadataUpdateRequest update);
+  void MetadataUpdateReply(MetadataUpdateReply update) {
+    foreach_status_->sema->post();
+  }
 
   // Current implementation is basedon assumption that 
   // atmost 1 foreach() will run at time

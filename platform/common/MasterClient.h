@@ -63,7 +63,7 @@ class MasterClient : public ISubject<google::protobuf::Message> {
   void TaskDone(const TaskDoneRequest& req);
   void HelloReply(const HelloReplyRequest& req);
   void WorkerAborting(const WorkerAbortRequest& workerabort);
-  //void MetadataUpdateReply(const MetadataUpdateReply& metadataupdate);
+  void MetadataUpdated(const MetadataUpdateReply& metadataupdate);
 
   string hostname() {
     return hostname_;

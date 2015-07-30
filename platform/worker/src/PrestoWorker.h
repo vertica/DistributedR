@@ -151,6 +151,9 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
   void prepare_persist(const std::string& split_name, int executor, uint64_t taskid);
 
   WorkerInfo* getClient(const ServerInfo& location);
+  boost::shared_ptr<MasterClient> getMaster() {
+    return master_;
+  }
 
   void send_update_array(const std::string& darray_name);
   void HandleRequests(int type);

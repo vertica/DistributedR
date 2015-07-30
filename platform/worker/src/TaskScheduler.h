@@ -58,12 +58,11 @@ struct ExecStat {
 
 class TaskScheduler {
  public:
-  TaskScheduler(PrestoWorker* pw_, MasterClient* master_, ExecutorPool* ep_,
-                ServerInfo *my_location_,
+  TaskScheduler(PrestoWorker* pw_, ExecutorPool* ep_, 
                 boost::unordered_set<std::string> *shmem_arrays_,
                 boost::timed_mutex *shmem_arrays_mutex_, int nExecutors):
-                worker(pw_),executorpool(ep_), master(master_), 
-                my_location(my_location_), shmem_arrays(shmem_arrays_),
+                worker(pw_),executorpool(ep_), 
+                shmem_arrays(shmem_arrays_),
                 shmem_arrays_mutex(shmem_arrays_mutex_) {
     for(int i=0; i < nExecutors; i++) {
         AddExecutor(i);
@@ -107,10 +106,8 @@ protected:
   boost::recursive_mutex metadata_mutex;
   boost::timed_mutex *shmem_arrays_mutex;
 
-  ServerInfo *my_location;
   ExecutorPool* executorpool;
   PrestoWorker* worker;
-  MasterClient* master;
 };
 
 }  // namespace presto

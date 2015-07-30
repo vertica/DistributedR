@@ -361,10 +361,6 @@ void Scheduler::UpdateWorkerMetadata(bool success) {
   }
 }
 
-/*void Scheduler::MetadataUpdateReply(MetadataUpdateRequest update) {
-  foreach_status_->sema->post();  
-}*/
-
 /** This handles task-done. It generally updates worker information after performing a task.
  * It updates split information after a task (if needed)
  * @param req information about a task done

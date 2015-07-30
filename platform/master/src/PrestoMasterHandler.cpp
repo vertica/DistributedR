@@ -148,11 +148,11 @@ void PrestoMasterHandler::Run(context_t* ctx, int port_start, int port_end) {
             thr.detach();
           }
           break;
-        /*case MasterRequest::METADATAUPDATEREPLY:
+        case MasterRequest::METADATAUPDATEREPLY:
          {
             scheduler_->MetadataUpdateReply(master_req.metadataupdate());
          }
-         break;*/
+         break;
         default:
           {
             LOG_ERROR("Unknown message received from Worker. Possible reasons - Check the correctness of the configuration - Either Hostname or Port of the Master and Workers has to be different");

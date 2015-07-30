@@ -60,7 +60,7 @@ message TaskDoneRequest {
   required int64 id = 1;
   repeated string update_names = 2;
   repeated int64 update_sizes = 3;
-  optional ServerInfo location = 4;
+  required ServerInfo location = 4;
   repeated string update_stores = 5;
   repeated bool update_empties = 6;
   required int64 uid = 7;

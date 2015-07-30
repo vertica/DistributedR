@@ -425,7 +425,7 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
 #endif
 
   if (wait) {
-    // pool.wait();
+    //wait for task completion.
     int prev = -1;
     for (volatile int i = 0; i < calls; i++) {
       if (progress) {
@@ -441,14 +441,15 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
       printf("\rprogress: 100%%\n");
     }
 
+    //wait for master metadata update
     for(volatile int i = 0; i < calls; i++) {
       sema.wait();
     }
 
-    //track metadata update in workers.
-    /*for(int i = 0; i < pm->NumClients(); i++) {
+    //wait for worker metadata update
+    for(int i = 0; i < pm->NumClients(); i++) {
       sema.wait();
-    }*/
+    }
   }
   signal(SIGINT, r_sigint_handler);  // revert to default
 

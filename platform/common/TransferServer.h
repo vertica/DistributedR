@@ -49,12 +49,8 @@ class TransferServer {
   }
 
   ~TransferServer() {
-    LOG_INFO("TransferServer: Destructor called");
-    if(dest_!=NULL) {
-      free(dest_); 
-      LOG_INFO("dest_is not null and freed");
-    } else
-      LOG_INFO("dest_ is null. Do nothing");
+    if(dest_!=NULL)
+      free(dest_);
   }
 
  std::pair<void*, int64_t> transfer_blob(const string &name,

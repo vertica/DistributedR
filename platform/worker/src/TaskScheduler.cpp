@@ -359,18 +359,13 @@ void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
   updated_splits.clear();
   metalock.unlock();
 
-  /*LOG_INFO("Sending update notification to master");
-  MetadataUpdateRequest req;
+  LOG_INFO("Sending update notification to master");
+  MetadataUpdateReply req;
   req.set_id(id);
   req.set_uid(uid);
-  LOG_INFO("Sent1");
-  //req.mutable_location()->CopyFrom(worker->SelfServerInfo());
-  //req.set_location(worker->SelfServerInfo());
-  LOG_INFO("Sent2");
+  req.mutable_location()->CopyFrom(worker->SelfServerInfo());
   //req.set_status(status);
-  LOG_INFO("Sent3");
-  master->MetadataUpdate(req);
-  LOG_INFO("Sent");*/
+  worker->getMaster()->MetadataUpdated(req);
 
   for(boost::unordered_map<int, std::vector<std::string>>::iterator itr = clear_map.begin();
       itr != clear_map.end(); itr++) {

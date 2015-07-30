@@ -431,17 +431,12 @@ void PrestoWorker::newtransfer(string name, ServerInfo location,
       shm, boost::interprocess::read_write);
     void* addr = region.get_address();
 
+    //Send size of the split
     split_size = region.get_size();
-    LOG_INFO("Newtransfer: size of the split(%zu)", split_size);
     char splitsize_buf[128];
     memset(splitsize_buf, 0x00, 128);
     snprintf(splitsize_buf, 128, "%zu", split_size);
-
-    //std::ostringstream splitsize_str;
-    //splitsize_str << split_size;
-    //LOG_INFO("%s %zu", shmsize_str.str().c_str(), strlen(shmsize_str.str().c_str()));
     bytes_written = send(sockfd, splitsize_buf, strlen(splitsize_buf), 0);
-    LOG_INFO("Newtransfer: Written size %zu, bytes_written %zu buffer_lenght %zu", split_size, bytes_written, strlen(splitsize_buf));
 
     // TODO(shivaram): Test if this works correctly and add this
     // for compressed arrays as well
@@ -911,9 +906,7 @@ PrestoWorker::PrestoWorker(
   } else {
     LOG_INFO("Creating scheduler");
     sync_persist_.clear();
-    scheduler_ = new TaskScheduler(this, master_.get(),
-                                   executorpool_, 
-                                   &my_location_,
+    scheduler_ = new TaskScheduler(this, executorpool_, 
                                    &shmem_arrays_,
                                    &shmem_arrays_mutex_,
                                    num_executors_);
@@ -1218,14 +1211,6 @@ void PrestoWorker::HandleRequests(int type) {
             scheduler_->ForeachComplete(worker_req.metadataupdate().id(), 
                                         worker_req.metadataupdate().uid(), 
                                         worker_req.metadataupdate().status());
-
-            /*LOG_INFO("Sending update notification to master");
-            MetadataUpdateReply req;
-            req.set_id(worker_req.metadataupdate().id());
-            req.set_uid(worker_req.metadataupdate().uid());
-            //req.mutable_location()->CopyFrom(worker->SelfServerInfo());
-            //req.set_status(status);
-            master_->MetadataUpdateReply(req);*/
           }
           break;
         case WorkerRequest::VERTICALOAD:
