@@ -152,13 +152,13 @@ db2dgraph <- function(tableName, dsn, from, to, weight, npartitions, row_wise = 
             odbcClose(connect)
 
             if (row_wise) {
-              x <- .Call("hpdsparseMatrix",iIndex=segment[[1]]-start, jIndex=segment[[2]], xValue=1, d=dim(x), PACKAGE="MatrixHelper")
-              w <- .Call("hpdsparseMatrix",iIndex=segment[[1]]-start, jIndex=segment[[2]], xValue=segment[[3]], d=dim(x), PACKAGE="MatrixHelper")
+              x <- .Call("hpdsparseMatrix",iIndex=segment[[1]]-start, jIndex=segment[[2]], xValue=1, d=dim(x), PACKAGE="Executor")
+              w <- .Call("hpdsparseMatrix",iIndex=segment[[1]]-start, jIndex=segment[[2]], xValue=segment[[3]], d=dim(x), PACKAGE="Executor")
 #A              x <- sparseMatrix(i=segment[[1]]-start, j=segment[[2]], x=1, index1=FALSE, dims=dim(x))
 #A              w <- sparseMatrix(i=segment[[1]]-start, j=segment[[2]], x=segment[[3]], index1=FALSE, dims=dim(x))
             } else {
-              x <- .Call("hpdsparseMatrix",iIndex=segment[[1]], jIndex=segment[[2]]-start, xValue=1, d=dim(x), PACKAGE="MatrixHelper")
-              w <- .Call("hpdsparseMatrix",iIndex=segment[[1]], jIndex=segment[[2]]-start, xValue=segment[[3]], d=dim(x), PACKAGE="MatrixHelper")
+              x <- .Call("hpdsparseMatrix",iIndex=segment[[1]], jIndex=segment[[2]]-start, xValue=1, d=dim(x), PACKAGE="Executor")
+              w <- .Call("hpdsparseMatrix",iIndex=segment[[1]], jIndex=segment[[2]]-start, xValue=segment[[3]], d=dim(x), PACKAGE="Executor")
 #A              x <- sparseMatrix(i=segment[[1]], j=segment[[2]]-start, x=1, index1=FALSE, dims=dim(x))
 #A              w <- sparseMatrix(i=segment[[1]], j=segment[[2]]-start, x=segment[[3]], index1=FALSE, dims=dim(x))
             }
@@ -197,10 +197,10 @@ db2dgraph <- function(tableName, dsn, from, to, weight, npartitions, row_wise = 
             odbcClose(connect)
 
             if (row_wise) {
-              x <- .Call("hpdsparseMatrix",iIndex=segment[[1]]-start, jIndex=segment[[2]], xValue=1, d=dim(x), PACKAGE="MatrixHelper")
+              x <- .Call("hpdsparseMatrix",iIndex=segment[[1]]-start, jIndex=segment[[2]], xValue=1, d=dim(x), PACKAGE="Executor")
 #A              x <- sparseMatrix(i=segment[[1]]-start, j=segment[[2]], x=1, index1=FALSE, dims=dim(x))
             } else {
-              x <- .Call("hpdsparseMatrix",iIndex=segment[[1]], jIndex=segment[[2]]-start, xValue=1, d=dim(x), PACKAGE="MatrixHelper")
+              x <- .Call("hpdsparseMatrix",iIndex=segment[[1]], jIndex=segment[[2]]-start, xValue=1, d=dim(x), PACKAGE="Executor")
 #A              x <- sparseMatrix(i=segment[[1]], j=segment[[2]]-start, x=1, index1=FALSE, dims=dim(x))
             }
             update(x)
@@ -295,8 +295,8 @@ file2dgraph <- function(pathPrefix, nVertices, verticesInSplit, isWeighted, row_
                         erri <- list(file=fname, error="Error in the range of vertices in the split files")
                         update(erri)
                     } else {
-                        x <- .Call("hpdsparseMatrix",iIndex=f$x-start, jIndex=f$y, xValue=1, d=dim(x), PACKAGE="MatrixHelper")
-                        w <- .Call("hpdsparseMatrix",iIndex=f$x-start, jIndex=f$y, xValue=f$w, d=dim(x), PACKAGE="MatrixHelper")
+                        x <- .Call("hpdsparseMatrix",iIndex=f$x-start, jIndex=f$y, xValue=1, d=dim(x), PACKAGE="Executor")
+                        w <- .Call("hpdsparseMatrix",iIndex=f$x-start, jIndex=f$y, xValue=f$w, d=dim(x), PACKAGE="Executor")
 #A                        x <- sparseMatrix(i=f$x-start, j=f$y, x=1, index1=FALSE, dims=dim(x))
 #A                        w <- sparseMatrix(i=f$x-start, j=f$y, x=f$w, index1=FALSE, dims=dim(x))
                         update(x)
@@ -309,8 +309,8 @@ file2dgraph <- function(pathPrefix, nVertices, verticesInSplit, isWeighted, row_
                         erri <- list(file=fname, error="Error in the range of vertices in the split files")
                         update(erri)
                     } else {
-                        x <- .Call("hpdsparseMatrix",iIndex=f$x, jIndex=f$y-start, xValue=1, d=dim(x), PACKAGE="MatrixHelper")
-                        w <- .Call("hpdsparseMatrix",iIndex=f$x, jIndex=f$y-start, xValue=f$w, d=dim(x), PACKAGE="MatrixHelper")
+                        x <- .Call("hpdsparseMatrix",iIndex=f$x, jIndex=f$y-start, xValue=1, d=dim(x), PACKAGE="Executor")
+                        w <- .Call("hpdsparseMatrix",iIndex=f$x, jIndex=f$y-start, xValue=f$w, d=dim(x), PACKAGE="Executor")
 #A                        x <- sparseMatrix(i=f$x, j=f$y-start, x=1, index1=FALSE, dims=dim(x))
 #A                        w <- sparseMatrix(i=f$x, j=f$y-start, x=f$w, index1=FALSE, dims=dim(x))
                         update(x)
@@ -343,7 +343,7 @@ file2dgraph <- function(pathPrefix, nVertices, verticesInSplit, isWeighted, row_
                         erri <- list(file=fname, error="Error in the range of vertices in the split files")
                         update(erri)
                     } else {
-                        x <- .Call("hpdsparseMatrix",iIndex=f$x-start, jIndex=f$y, xValue=1, d=dim(x), PACKAGE="MatrixHelper")
+                        x <- .Call("hpdsparseMatrix",iIndex=f$x-start, jIndex=f$y, xValue=1, d=dim(x), PACKAGE="Executor")
 #A                        x <- sparseMatrix(i=f$x-start, j=f$y, x=1, index1=FALSE, dims=dim(x))
                         update(x)
                     }
@@ -354,7 +354,7 @@ file2dgraph <- function(pathPrefix, nVertices, verticesInSplit, isWeighted, row_
                         erri <- list(file=fname, error="Error in the range of vertices in the split files")
                         update(erri)
                     } else {
-                        x <- .Call("hpdsparseMatrix",iIndex=f$x, jIndex=f$y-start, xValue=1, d=dim(x), PACKAGE="MatrixHelper")
+                        x <- .Call("hpdsparseMatrix",iIndex=f$x, jIndex=f$y-start, xValue=1, d=dim(x), PACKAGE="Executor")
 #A                        x <- sparseMatrix(i=f$x, j=f$y-start, x=1, index1=FALSE, dims=dim(x))
                         update(x)
                     }
