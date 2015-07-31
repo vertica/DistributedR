@@ -284,7 +284,7 @@ class Scheduler {
   // create name of a composite from its splits
   static std::string CompositeName(const Arg &arg);
   static std::string CompositeName(vector<string>& array_names);
-  void DeleteSplit(const string& split_name, bool delete_in_worker = false);
+  void DeleteSplit(const string& split_name);
 
   boost::unordered_map<std::string, Worker*>& GetWorkerInfo() {
     return workers;
@@ -384,7 +384,7 @@ class Scheduler {
   uint64_t Delete(Split *split, ArrayStore *store,
                   bool metadata_already_erased = false);
   uint64_t Delete(Split *split, Worker *worker,
-                  bool delete_in_worker = false,
+                  bool delete_in_worker = true,
                   bool metadata_already_erased = false);
 
   // send a log msg to the worker
@@ -403,7 +403,7 @@ class Scheduler {
   uint64_t IsSplitBeingAcquired(Split *split, Worker *worker);
 
   // completely delete a split (from all workers, arraystores, bookkeeping)
-  void DeleteSplit(Split *split, bool delete_in_worker = false, Worker* current_worker = NULL);
+  void DeleteSplit(Split *split, Worker* current_worker = NULL);
   
   Worker* GetRndAvailableWorker();
 

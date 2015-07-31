@@ -332,13 +332,17 @@ void Scheduler::SetForeachError(bool value){
 /** Removes invalid splits created on worker in case of errored foreach.
  */
 void Scheduler::PurgeUpdates(TaskDoneRequest* req) {
-  for(int i=0; i<req->update_names_size(); i++) {
-     Split *split = new Split;
-     split->name=req->update_names(i);
-     Worker *worker = workers[server_to_string(req->location())];
-     //split->workers.insert(worker);
-     split->size=req->update_sizes(i);
-     Delete(split, worker, true, true);
+  // Do nothing if storage layer is RINSTANCE.
+  // Will be taken care by fault tolerance mechanism in worker itself.
+  if(DATASTORE == WORKER) {
+    for(int i=0; i<req->update_names_size(); i++) {
+       Split *split = new Split;
+       split->name=req->update_names(i);
+       Worker *worker = workers[server_to_string(req->location())];
+       split->size=req->update_sizes(i);
+       Delete(split, worker, true, true);
+       delete split;
+    }
   }
 }
 
@@ -415,10 +419,10 @@ bool Scheduler::Done(TaskDoneRequest* req) {
     }
 
     // update a split's worker information by adding newly received hostname
-    //fetchtask->split->workers.insert(fetchtask->to);
+    fetchtask->split->workers.insert(fetchtask->to);
     // a worker that receives a split, and update the worker's information
     worker = fetchtask->to;
-    //worker->splits_dram.insert(fetchtask->split);
+    worker->splits_dram.insert(fetchtask->split);
     worker->fetchtasks.erase(fetchtask);
     worker->sendtasks.erase(fetchtask);
     worker->used += fetchtask->split->size;
@@ -749,20 +753,20 @@ void Scheduler::AddSplit(const string &name, size_t size,
   if (splits.find(grandparent) != splits.end()) {
     LOG_DEBUG("AddSplit: garbage collecting %s", grandparent.c_str());
     if(DATASTORE == WORKER) {
-      DeleteSplit(splits[grandparent], true);
+      DeleteSplit(splits[grandparent]);
     } else {
-      DeleteSplit(splits[grandparent], false, worker);
+      DeleteSplit(splits[grandparent], worker);
     }
   }
 
   lock.unlock();
 }
 
-void Scheduler::DeleteSplit(const string& split_name, bool delete_in_worker) {
+void Scheduler::DeleteSplit(const string& split_name) {
   unique_lock<recursive_mutex> lock(metadata_mutex);
   if (splits.find(split_name) != splits.end()) {
     LOG_INFO("DeleteSplit: garbage collecting split %s", split_name.c_str());
-    DeleteSplit(splits[split_name], delete_in_worker);
+    DeleteSplit(splits[split_name]);
   } else {
     LOG_WARN("DeleteSplit: garbage collection failed for split %s", split_name.c_str());
   }
@@ -976,7 +980,7 @@ void Scheduler::DeleteSplit(const string& split_name, bool delete_in_worker) {
 ::uint64_t Scheduler::Delete(Split *split, Worker *worker,
                            bool delete_in_worker,
                            bool metadata_already_erased) {
-  ::uint64_t id = GetNewTaskID();
+  LOG_INFO("Delete_in_worker is %d", delete_in_worker);
   LOG("delete from mem task %zu: %s on %s\n",
       id,
       split->name.c_str(),
@@ -990,7 +994,9 @@ void Scheduler::DeleteSplit(const string& split_name, bool delete_in_worker) {
   }
   lock.unlock();
 
+  ::uint64_t id = 0;
   if(delete_in_worker) {
+    id = GetNewTaskID();
     ClearRequest req;
     req.set_name(split->name);
     req.set_uid(id);
@@ -1009,7 +1015,7 @@ void Scheduler::DeleteSplit(const string& split_name, bool delete_in_worker) {
 bool Scheduler::IsSplitOnWorker(Split *split, Worker *worker) {
   bool ret;
   unique_lock<recursive_mutex> lock(metadata_mutex);
-  ret = split->size == 0 || contains_key(worker->splits_dram, split);
+  ret = (split->size == 0 || contains_key(worker->splits_dram, split));
   lock.unlock();
   return ret;
 }
@@ -1064,7 +1070,7 @@ bool Scheduler::IsSplitOnWorker(Split *split, Worker *worker) {
   return 0;
 }
 
-void Scheduler::DeleteSplit(Split *split, bool delete_in_worker, Worker* current_worker) {
+void Scheduler::DeleteSplit(Split *split, Worker* current_worker) {
   if (split == NULL) {
     LOG_ERROR("DeleteSplit: input split is null");
     throw PrestoWarningException("DeleteSplit: input split is null");
@@ -1088,9 +1094,17 @@ void Scheduler::DeleteSplit(Split *split, bool delete_in_worker, Worker* current
        i != workers.end(); i++) {
 
     if(DATASTORE == WORKER)
-      Delete(split, *i, delete_in_worker);
+      Delete(split, *i);
     else {
-      if(*i != current_worker) Delete(split, *i, delete_in_worker);
+      // Delete_in_worker should be false only for the workers which updated the split.
+      // In that scenario, clear will be taken care by the fault-tolerance mechanism of the worker
+      bool delete_in_worker = true;
+      if(current_worker != NULL) {
+        delete_in_worker = (*i == current_worker) ? false : true;
+      }
+
+      LOG_INFO("Final delete_in_worker(%d)", delete_in_worker); 
+      Delete(split, *i, delete_in_worker);
     }
 
   }

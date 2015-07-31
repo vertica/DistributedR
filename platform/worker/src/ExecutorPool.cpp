@@ -421,7 +421,6 @@ void ExecutorPool::execute(std::vector<std::string> func,
 
      string name(cname);  // the name of a split after task completion
      worker->GetScheduler()->StageUpdatedPartition(name, size, target_executor);
-
      req.add_update_names(name);
      req.add_update_sizes(size);
      req.add_update_empties(empty);
@@ -464,7 +463,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
                            std::vector<RawArg> raw_args,
                            std::vector<NewArg> composite_args,
                            ::uint64_t id, ::uint64_t uid, Response* res) {
-  LOG_INFO("EXECUTE TaskID %18zu - Waiting for an Available Executor", uid);
+  LOG_DEBUG("EXECUTE TaskID %18zu - Waiting for an Available Executor", uid);
 
   //Timer timer;
   //timer.start();
@@ -482,7 +481,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
     if (executors[exec_index].ready == false) {
       exec_index = (exec_index + 1) % num_executors;
     } else {
-      LOG_INFO("EXECUTE TaskID %18zu - Will be executed at Executor Id %d", uid, exec_index);
+      LOG_DEBUG("EXECUTE TaskID %18zu - Will be executed at Executor Id %d", uid, exec_index);
       //timer.start();
        // set an executor not ready to prevent further scheduling
       executors[exec_index].ready = false;

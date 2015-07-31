@@ -433,14 +433,10 @@ void PrestoWorker::newtransfer(string name, ServerInfo location,
 
     //Send size of the split
     split_size = region.get_size();
-    //LOG_INFO("Newtransfer: size of the split(%zu)", split_size);
-    char splitsize_buf[128];
-    memset(splitsize_buf, 0x00, 128);
-    snprintf(splitsize_buf, 128, "%zu", split_size);
-    //LOG_INFO("%s %zu", splitsize_buf, strlen(splitsize_buf));
-    bytes_written = send(sockfd, splitsize_buf, strlen(splitsize_buf), 0);
-    //bytes_written = atomicio(vwrite, sockfd, splitsize_buf, strlen(splitsize_buf));
-    LOG_INFO("Newtransfer: Written size %zu, bytes_written %zu buffer_lenght %zu", split_size, bytes_written, strlen(splitsize_buf));
+    char splitsize_buf[24];
+    memset(splitsize_buf, 0x00, 24);
+    snprintf(splitsize_buf, 24, "%zu", split_size);
+    bytes_written = send(sockfd, splitsize_buf, sizeof(splitsize_buf), 0);
 
     // TODO(shivaram): Test if this works correctly and add this
     // for compressed arrays as well
@@ -1086,18 +1082,6 @@ void PrestoWorker::HandleRequests(int type) {
           { 
             LOG_DEBUG("New FETCH TaskID %16zu - Received from Master", worker_req.fetch().uid());
 
-            if(DATASTORE == RINSTANCE) {
-              //Get only splits on this worker? Not possible probably.
-              vector<NewArg> task_args;
-              task_args.clear();
-              get_vector_from_repeated_field
-                <RepeatedPtrField<NewArg>::const_iterator,
-                 NewArg>(worker_req.fetch().task_args().begin(),
-                         worker_req.fetch().task_args_size(), &task_args);
-
-              int64_t executor_id = executorscheduler_->AddParentTask(task_args, worker_req.fetch().parenttaskid());
-            }
-
             string store;
             if (worker_req.fetch().has_store()) {
               store = worker_req.fetch().store();
@@ -1156,7 +1140,8 @@ void PrestoWorker::HandleRequests(int type) {
             if(DATASTORE == WORKER) {
               createcomposite(worker_req.createcomposite());
             } else {
-              vector<NewArg> task_args;
+              uint64_t taskid = worker_req.createcomposite().uid();
+              /*vector<NewArg> task_args;
               task_args.clear();
               uint64_t taskid = worker_req.createcomposite().uid();
               uint64_t parenttaskid = worker_req.createcomposite().parenttaskid();
@@ -1164,7 +1149,7 @@ void PrestoWorker::HandleRequests(int type) {
               get_vector_from_repeated_field
                 <RepeatedPtrField<NewArg>::const_iterator,
                  NewArg>(worker_req.createcomposite().task_args().begin(),
-                       worker_req.createcomposite().task_args_size(), &task_args);
+                       worker_req.createcomposite().task_args_size(), &task_args);*/
 
               vector<NewArg> cc_args;
               cc_args.clear();
@@ -1173,10 +1158,10 @@ void PrestoWorker::HandleRequests(int type) {
                 NewArg>(worker_req.createcomposite().cargs().begin(),
                        worker_req.createcomposite().cargs_size(), &cc_args);
 
-              int64_t executor_id = executorscheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());
+              //int64_t executor_id = executorscheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());
               executorscheduler_->ValidatePartitions(cc_args, -1, taskid);
 
-              LOG_INFO("CREATECOMPOSITE %d : All partitions validated. Sent to executor %d", worker_req.createcomposite().uid(), executor_id);
+              LOG_INFO("CREATECOMPOSITE %d : All partitions validated.", worker_req.createcomposite().uid());
               createcomposite(worker_req.createcomposite());
             }
           }

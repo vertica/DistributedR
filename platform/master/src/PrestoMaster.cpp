@@ -349,7 +349,7 @@ void PrestoMaster::DeleteDobject(string da_name) {
   for (; sit != si.end(); ++sit) {
     // iterate splits and find matching names
     if (sit->first.find(da_name) != std::string::npos) {
-      scheduler_->DeleteSplit(sit->first, true);
+      scheduler_->DeleteSplit(sit->first);
     }
   }
 }

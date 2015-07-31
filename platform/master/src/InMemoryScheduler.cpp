@@ -537,7 +537,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
             string splitname = name.substr(0, name.find('.'));
             if (contains_key(current_composite, splitname) &&
                 current_composite[splitname] != name) {
-              DeleteSplit(splits[current_composite[splitname]], true);
+              DeleteSplit(splits[current_composite[splitname]]);
               // fprintf(stderr, "GCing old composite %s\n",
               //         current_composite[splitname].c_str());
             }

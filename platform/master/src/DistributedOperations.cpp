@@ -446,9 +446,11 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
       sema.wait();
     }
 
-    //wait for worker metadata update
-    for(int i = 0; i < pm->NumClients(); i++) {
-      sema.wait();
+    if(DATASTORE == RINSTANCE) {
+      //wait for worker metadata update
+      for(int i = 0; i < pm->NumClients(); i++) {
+        sema.wait();
+      }
     }
   }
   signal(SIGINT, r_sigint_handler);  // revert to default

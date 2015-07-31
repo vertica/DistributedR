@@ -801,7 +801,7 @@ int Executor::PersistToWorker() {
 static void SendResult(const char* err_msg) {
   if (err_msg[0] != '\0') {
     ostringstream msg;
-    msg << "Executor Exception : Command[] "<< err_msg;
+    msg << "Executor Exception: "<< err_msg;
     LOG_ERROR(msg.str());
 
     AppendTaskResult(TASK_EXCEPTION, err_msg, out);
@@ -811,7 +811,6 @@ static void SendResult(const char* err_msg) {
     LOG_INFO("Task Success sent to Worker");
   }
 
-  //ClearTaskData();
   LOG_INFO("Flushing Task Data from Executor memory");
 }
 
@@ -971,7 +970,9 @@ int main(int argc, char *argv[]) {
       }
 	  
     } catch(const std::exception &exception) {
-      strncpy(ex->err_msg, exception.what(), sizeof(ex->err_msg)-1);
+      if(strlen(ex->err_msg) == 0) {  //Capture this exception only when it doesnt already have an exception
+        strncpy(ex->err_msg, exception.what(), sizeof(ex->err_msg)-1);
+      }
     }
     
     if(ex != NULL && (next == EXECR || next == PERSIST)) {
