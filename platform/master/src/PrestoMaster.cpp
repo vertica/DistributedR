@@ -760,17 +760,27 @@ List PrestoMaster::DdcSchedule(const string &url, const List &options) {
         base::ConfigurationMap planconf = plan.configurations[i];
         Rcpp::List rconf;
         if(extension == "csv") {
-            rconf["chunk_start"] = boost::any_cast<unsigned long>(planconf["chunkStart"]);
-            rconf["chunk_end"] = boost::any_cast<unsigned long>(planconf["chunkEnd"]);
-            rconf["schema"] = boost::any_cast<std::string>(planconf["schema"]);
-            rconf["file_type"] = std::string("csv");
-            rconf["delimiter"] = delimiter;
-            rconf["url"] = boost::any_cast<std::string>(planconf["url"]);
+            try {
+                rconf["chunk_start"] = boost::any_cast<unsigned long>(planconf["chunkStart"]);
+                rconf["chunk_end"] = boost::any_cast<unsigned long>(planconf["chunkEnd"]);
+                rconf["schema"] = boost::any_cast<std::string>(planconf["schema"]);
+                rconf["file_type"] = std::string("csv");
+                rconf["delimiter"] = delimiter;
+                rconf["url"] = boost::any_cast<std::string>(planconf["url"]);
+            }
+            catch(...) {
+                throw std::runtime_error("Plan doesn't contain all required information");
+            }
         }
         else if(extension == "orc") {
-            rconf["selected_stripes"] = boost::any_cast<std::string>(planconf["selectedStripes"]);
-            rconf["file_type"] = std::string("orc");
-            rconf["url"] = boost::any_cast<std::string>(planconf["url"]);
+            try {
+                rconf["selected_stripes"] = boost::any_cast<std::string>(planconf["selectedStripes"]);
+                rconf["file_type"] = std::string("orc");
+                rconf["url"] = boost::any_cast<std::string>(planconf["url"]);
+            }
+            catch(...) {
+                throw std::runtime_error("Plan doesn't contain all required information");
+            }
         }
         else {
             throw std::runtime_error("Unsupported file format or cannot detect extension");
