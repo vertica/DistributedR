@@ -18,48 +18,17 @@
 
 # Top level Makefile for Distributed R
 
-include vars.mk
 
 ## === Build targets
-all: third_party ${ATOMICIO_LIB} ${WORKER_BIN} ${MASTER_BIN} ${MASTER_RLIB} ${EXECUTOR_BIN} ${MATRIX_HELPER_RLIB}
 
-lint:
-	tools/lint.sh ${PRESTO_WORKER_SRC} ${PRESTO_MASTER_SRC} ${PRESTO_WORKER_HEADERS} ${PRESTO_MASTER_HEADERS} ${PRESTO_COMMON_HEADERS} ${PRESTO_COMMON_SRC} ${PRESTO_EXECUTOR_HEADERS} ${PRESTO_EXECUTOR_SRC}
 
-.PHONY: clean third_party test boost docs manual tutorial faq distclean install blkin trace_build
-
-${ATOMICIO_LIB}:
-	$(MAKE) -C third_party/atomicio
-
-boost:
-	$(MAKE) -C third_party boost
-
-third_party:
-	$(MAKE) -C third_party -j8 all
-
-install:
-	$(MAKE)
-	sudo bin/install_distributedR.sh
-
-blkin: 
-	$(MAKE) -C third_party -j8 blkin
-
-trace_build: GCC_FLAGS += -I ${BLKIN_INCLUDE} -DPERF_TRACE ${BLKIN_LINKER_FLAGS}
-
-trace_build: clean blkin all
+.PHONY: test docs manual tutorial faq
 
 ## === Test targets
+TEST_OUTPUT_FILES=$(PWD)/test_platform.out
 
 test:
 	$(MAKE) test_platform
-
-algotest:
-	$(MAKE)
-	$(PRESTO_RUN) $(PRESTO_DEF_WORKER_LIST) $(PRESTO_ALGOTEST_SCRIPT)
-
-stresstest:
-	$(MAKE)
-	$(PRESTO_RUN) $(PRESTO_DEF_WORKER_LIST) $(PRESTO_STRSTEST_SCRIPT)
 
 test_platform:
 	echo "library(distributedR); library(testthat); sink(paste(getwd(),'/test_platform.out',sep=''), type='output'); distributedR_start(); test_package('distributedR'); distributedR_shutdown()" | R --vanilla --slave --no-save
@@ -70,6 +39,16 @@ test_clean:
 	rm -rf ${TEST_OUTPUT_FILES}
 
 ## === Targets to generate documentation
+DOC_DIR = $(PWD)/doc
+DOC_DIR_PLATFORM = $(DOC_DIR)/platform
+DOC_DIR_ALGORITHMS = $(DOC_DIR)/algorithms
+MAN_OUTPUT = $(PWD)/doc/platform/Distributed-R-Manual.pdf
+MAN_DIR = $(PWD)/platform/master/man
+MAN_FILES = $(MAN_DIR)/package.Rd $(MAN_DIR)/start.Rd $(MAN_DIR)/shutdown.Rd $(MAN_DIR)/status.Rd $(MAN_DIR)/darray.Rd $(MAN_DIR)/dframe.Rd $(MAN_DIR)/dlist.Rd $(MAN_DIR)/as.darray.Rd $(MAN_DIR)/as.dframe.Rd $(MAN_DIR)/is.darray.Rd $(MAN_DIR)/is.dframe.Rd $(MAN_DIR)/is.dlist.Rd $(MAN_DIR)/as.factor.dframe.Rd $(MAN_DIR)/factor.dframe.Rd $(MAN_DIR)/unfactor.dframe.Rd $(MAN_DIR)/levels.dframe.Rd $(MAN_DIR)/npartitions.Rd $(MAN_DIR)/partitionsize.Rd $(MAN_DIR)/getpartition.Rd $(MAN_DIR)/clone.Rd $(MAN_DIR)/foreach.Rd $(MAN_DIR)/splits.Rd $(MAN_DIR)/update.Rd
+TUTORIAL_DIR = $(PWD)/platform/master/vignettes
+TUTORIAL_FILE = Tutorial
+TUTORIAL_DATA_FILE = Data
+FAQ_FILE = FAQ
 
 docs:
 	mkdir -p $(DOC_DIR_PLATFORM)
@@ -105,27 +84,19 @@ algorithm_docs:
 	mkdir -p $(DOC_DIR_ALGORITHMS)/HPdata
 	R CMD Rd2pdf --no-preview --force --output=$(DOC_DIR_ALGORITHMS)/HPdata/HPdata-Manual.pdf $(PWD)/algorithms/HPdata
 
-
-## === Uninstall and Clean targets
+install:
+	R CMD INSTALL platform/executor
+	R CMD INSTALL platform/master
+	R CMD INSTALL platform/matrix_helper
 
 uninstall:
-	sudo bin/uninstall_distributedR.sh ${ARGS}
+	R CMD REMOVE platform/executor
+	R CMD REMOVE platform/master
+	R CMD REMOVE platform/matrix_helper
 
 clean:
-	$(MAKE) -C third_party/atomicio clean
-	-${R_HOME}/bin/R CMD REMOVE -l ${R_INSTALL_DIR} distributedR
-	-${R_HOME}/bin/R CMD REMOVE -l ${R_INSTALL_DIR} Executor
-	-${R_HOME}/bin/R CMD REMOVE -l ${R_INSTALL_DIR} MatrixHelper
-	rm -rf ${GEN_DIR} ${PRESTO_PROTO}
-	rm -rf ${PRESTO_COMMON} ${PRESTO_COMMON_OBJS} ${LIB_DIR}
-	rm -rf ${MASTER_RLIB} ${PRESTO_MASTER_OBJS} ${MASTER_BIN} ${PRESTO_MASTER_DIR}/src/*.so
-	rm -rf ${WORKER_RLIB} ${PRESTO_WORKER_OBJS} ${WORKER_BIN} ${PRESTO_WORKER_DIR}/src/*.so
-	rm -rf ${EXECUTOR_RLIB} ${PRESTO_EXECUTOR_OBJS} ${EXECUTOR_BIN} ${PRESTO_EXECUTOR_DIR}/src/*.so
-	rm -rf ${PRESTO_MATRIX_HELPER_OBJS} ${PRESTO_MATRIX_HELPER_DIR}/src/*.so
-	rm -rf ${MAN_OUTPUT}
+	cd platform/master/src; make -f Makevars clean; cd ../../../
 
-#delete everything including boost installation from third_party
-distclean: clean
-	$(MAKE) -C third_party clean
+dist-clean:
+	cd platform/master/src; make -f Makevars clean-third-party; cd ../../../
 
-include build.mk
