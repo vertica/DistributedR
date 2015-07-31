@@ -19,8 +19,8 @@
 NCORES=$(shell getconf _NPROCESSORS_ONLN)
 
 
-.PHONY: all third_party messaging common worker executor
-all: third_party messaging common worker executor
+.PHONY: all third_party messaging common worker executor ddc
+all: third_party messaging common worker executor ddc
 
 #third party already passes -jNCORES to each component
 third_party:
@@ -46,6 +46,7 @@ clean:
 	(cd common; make clean )
 	(cd worker; make clean )
 	(cd executor; make clean )
+	(cd distributed-data-connector/ddc/; make clean )
 	rm *.o *.so
 
 clean-third-party:
@@ -59,9 +60,10 @@ R_LDFLAGS = -L$(shell $(R_HOME)/bin/Rscript -e "cat(system.file(package='RInside
 
 PKG_LIBS = $(R_LDFLAGS)
 
-PKG_LIBS += -Lthird_party/install/lib -lpthread -lboost_thread -lboost_system -lboost_log -lboost_log_setup -lboost_chrono -lboost_filesystem -lboost_date_time -latomicio -lR-common -lR-proto -lzmq -luuid -lprotobuf
+PKG_LIBS += -Lthird_party/install/lib -lpthread -lboost_thread -lboost_system -lboost_log -lboost_log_setup -lboost_chrono -lboost_filesystem -lboost_date_time -latomicio -lR-common -lR-proto -lzmq -luuid -lprotobuf -lhdfsutils_s -lddcmaster_s -lhdfsutils_s -lbase_s -lwebhdfs_s -lorc_s -lprotobuf -lsnappy -Ldistributed-data-connector/ddc/third-party/install/lib -lcurl -lyajl -lssl -lcrypto -lz -lglog
 
-PKG_CPPFLAGS = -Ithird_party/boost_1_50_0 -Ithird_party/install/include -Imessaging/gen-cpp -Icommon/ -DSTRICT_R_HEADERS -std=c++0x -fPIC -g -O2 -fopenmp -finline-limit=10000 -DNDEBUG $(R_CXXFLAGS)
+PKG_CPPFLAGS = -Ithird_party/boost_1_50_0 -Ithird_party/install/include -Imessaging/gen-cpp -Icommon/ -DSTRICT_R_HEADERS -std=c++0x -fPIC -g -O2 -fopenmp -finline-limit=10000 -DNDEBUG $(R_CXXFLAGS) -Idistributed-data-connector/ -Idistributed-data-connector/ddc -Idistributed-data-connector/ddc/hdfsutils/webhdfs -Idistributed-data-connector/ddc/third-party/install/include/ -Idistributed-data-connector/ddc/recordparser/orc/c++/include/ -Idistributed-data-connector/ddc/recordparser/orc/Release/c++/include/
+
 
 # To enable zipkin-based tracing add the following to PKG_LIBS and PKG_CPPFLAGS
 #   BLKIN_INCLUDE = -Ithird_party/install/include/blkin -DPERF_TRACE
