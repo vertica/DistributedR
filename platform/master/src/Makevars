@@ -16,21 +16,53 @@
 #Suite 330, Boston, MA 02111-1307 USA
 #####################################################################
 
-ATOMICIO_DIR = $(PWD)/../../../third_party/atomicio
-BOOST_DIR = $(PWD)/../../../third_party/install/include
-BOOST_LIB_DIR = $(PWD)/../../../third_party/install/lib
-BOOST_THREADPOOL_DIR = $(PWD)/../../../third_party/boost_threadpool/threadpool
-GEN_DIR = $(PWD)/../../messaging/gen-cpp/
-PRESTO_LIB_DIR = $(PWD)/../../../lib
-PROTO_LIB_DIR = /usr/local/lib/
-PRESTO_COMMON_DIR = $(PWD)/../../common
-ZERO_MQ_DIR = /usr/local/include/
+NCORES=$(shell getconf _NPROCESSORS_ONLN)
+
+
+.PHONY: all third_party messaging common worker executor
+all: third_party messaging common worker executor
+
+#third party already passes -jNCORES to each component
+third_party:
+	(mkdir -p third_party/install/bin third_party/install/lib third_party/install/include; cd third_party; make)
+
+messaging: third_party
+	(cd messaging/; make -j$(NCORES) )
+
+common: third_party messaging
+	(cd common; make -j$(NCORES) ) 
+
+worker: third_party messaging common
+	(cd worker; make -j$(NCORES) )
+
+executor: third_party messaging common
+	(cd executor; make -j$(NCORES) )
+
+ddc:
+	(cd distributed-data-connector/ddc/; make)
+
+clean:
+	(cd messaging; make clean )
+	(cd common; make clean )
+	(cd worker; make clean )
+	(cd executor; make clean )
+	rm *.o *.so
+
+clean-third-party:
+	(cd third_party; make clean )
 
 ## Use the R_HOME indirection to support installations of multiple R version
-PKG_LIBS = `$(R_HOME)/bin/Rscript -e "Rcpp:::LdFlags()"`
-PKG_LIBS += `$(R_HOME)/bin/Rscript -e "RInside:::LdFlags()"`
+R_CXXFLAGS = $(shell R CMD config --cppflags)  $(shell $(R_HOME)/bin/Rscript -e "Rcpp:::CxxFlags()") $(shell $(R_HOME)/bin/Rscript -e "RInside:::CxxFlags()")
+#R_LDFLAGS = $(shell R CMD config --ldflags)  $(shell $(R_HOME)/bin/Rscript -e "RInside:::LdFlags()") $(shell $(R_HOME)/bin/Rscript -e "Rcpp:::LdFlags()")
+# link to RInside statically
+R_LDFLAGS = -L$(shell $(R_HOME)/bin/Rscript -e "cat(system.file(package='RInside'),'/lib',sep='')") -Wl,-static -lRInside  -Wl,-Bdynamic -Wl,-rpath,$(shell $(R_HOME)/bin/Rscript -e "cat(system.file(package='RInside'),'/lib',sep='')")
 
-## protobuf lib has to be loaded at the end, otherwise boost in the shared lib folder can be loaded
-PKG_LIBS += -lm -L ${PRESTO_LIB_DIR} -Wl,-rpath,${PRESTO_LIB_DIR} -lR-proto -Wl,-rpath,${PRESTO_LIB_DIR} -lR-common -L$(BOOST_LIB_DIR) -Wl,-rpath,${BOOST_LIB_DIR} -lboost_log -lboost_log_setup -lboost_thread -lboost_chrono -lboost_system -lboost_filesystem -lboost_date_time -L ${ATOMICIO_DIR} -Wl,-rpath,${ATOMICIO_DIR} -latomicio  -lrt -L ${PROTO_LIB_DIR} -Wl,-rpath,${PROTO_LIB_DIR} 
+PKG_LIBS = $(R_LDFLAGS)
 
-PKG_CPPFLAGS = -I ${PRESTO_COMMON_DIR} -I ${BOOST_DIR} -I ${ZERO_MQ_DIR} -I ${GEN_DIR} -I ${BOOST_THREADPOOL_DIR} -I ${ATOMICIO_DIR} -g -DSTRICT_R_HEADERS 
+PKG_LIBS += -Lthird_party/install/lib -lpthread -lboost_thread -lboost_system -lboost_log -lboost_log_setup -lboost_chrono -lboost_filesystem -lboost_date_time -latomicio -lR-common -lR-proto -lzmq -luuid -lprotobuf
+
+PKG_CPPFLAGS = -Ithird_party/boost_1_50_0 -Ithird_party/install/include -Imessaging/gen-cpp -Icommon/ -DSTRICT_R_HEADERS -std=c++0x -fPIC -g -O2 -fopenmp -finline-limit=10000 -DNDEBUG $(R_CXXFLAGS)
+
+# To enable zipkin-based tracing add the following to PKG_LIBS and PKG_CPPFLAGS
+#   BLKIN_INCLUDE = -Ithird_party/install/include/blkin -DPERF_TRACE
+#   BLKIN_LINKER_FLAGS = -lzipkin-c -lblkin-front -lzipkin-cpp

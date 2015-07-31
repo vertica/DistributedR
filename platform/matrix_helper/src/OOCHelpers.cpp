@@ -16,8 +16,6 @@
  *Suite 330, Boston, MA 02111-1307 USA
  ********************************************************************/
 
-#include <boost/unordered_map.hpp>
-#include "../../../platform/common/timer.h"
 
 #include <Rinternals.h>
 #include <Rcpp.h>
@@ -225,7 +223,7 @@ RcppExport SEXP bfs_step(SEXP g, SEXP f, SEXP d, SEXP start) {
   INSTALL_SYMBOL(p);
   INSTALL_SYMBOL(x);
 
-  presto::Timer t;
+//  presto::Timer t;
 
   double *done = REAL(d);
   int *g_i = INTEGER(getAttrib(g, RSymbol_i));
@@ -243,7 +241,7 @@ RcppExport SEXP bfs_step(SEXP g, SEXP f, SEXP d, SEXP start) {
   // boost::unordered_map<int,int> parents; // change to hash map or something?
   vector<uint64_t> parents;
 
-  t.start();
+//  t.start();
   for (int i = 0; i < frontier_elems; i++) {
     int v = f_i[i];
     for (int j = g_p[v]; j < g_p[v+1]; j++) {
@@ -255,7 +253,7 @@ RcppExport SEXP bfs_step(SEXP g, SEXP f, SEXP d, SEXP start) {
       }
     }
   }
-  fprintf(stderr, "time frontier: %lf\n", t.restart()/1e6);
+//  fprintf(stderr, "time frontier: %lf\n", t.restart()/1e6);
 
   Rcpp::Language create_spm_call("new", "dgCMatrix");
   SEXP newobj;
@@ -306,7 +304,7 @@ RcppExport SEXP bfs_step(SEXP g, SEXP f, SEXP d, SEXP start) {
   //   j++;
   // }
 
-  fprintf(stderr, "time sm construct: %lf\n", t.restart()/1e6);
+//  fprintf(stderr, "time sm construct: %lf\n", t.restart()/1e6);
 
   Rf_setAttrib(newobj, RSymbol_Dim, dim);
   Rf_setAttrib(newobj, RSymbol_i, new_i);
@@ -330,7 +328,7 @@ RcppExport SEXP bfs_step2(SEXP g, SEXP f, SEXP d, SEXP start) {
   INSTALL_SYMBOL(p);
   INSTALL_SYMBOL(x);
 
-  presto::Timer t;
+//  presto::Timer t;
 
   double *done = REAL(d);
   int *g_i = INTEGER(getAttrib(g, RSymbol_i));
@@ -348,7 +346,7 @@ RcppExport SEXP bfs_step2(SEXP g, SEXP f, SEXP d, SEXP start) {
   vector<int> parents;
   vector<double> new_frontier;
 
-  t.start();
+//  t.start();
   for (int i = 0; i < frontier_elems; i++) {
     int v = f_i[i];
     for (int j = g_p[v]; j < g_p[v+1]; j++) {
@@ -360,7 +358,7 @@ RcppExport SEXP bfs_step2(SEXP g, SEXP f, SEXP d, SEXP start) {
       }
     }
   }
-  fprintf(stderr, "time frontier: %lf\n", t.restart()/1e6);
+//  fprintf(stderr, "time frontier: %lf\n", t.restart()/1e6);
 
   Rcpp::Language create_spm_call("new", "dgCMatrix");
   SEXP newobj;
@@ -411,7 +409,7 @@ RcppExport SEXP bfs_step2(SEXP g, SEXP f, SEXP d, SEXP start) {
   //   j++;
   // }
 
-  fprintf(stderr, "time sm construct: %lf\n", t.restart()/1e6);
+//  fprintf(stderr, "time sm construct: %lf\n", t.restart()/1e6);
 
   Rf_setAttrib(newobj, RSymbol_Dim, dim);
   Rf_setAttrib(newobj, RSymbol_i, new_i);

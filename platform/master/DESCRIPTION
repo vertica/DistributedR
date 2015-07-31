@@ -8,7 +8,7 @@ Maintainer: HP Vertica Analytics Team <distributedRTeam@external.groups.hp.com>
 Description: Distribute R for Big Data
 License: GPLv2
 LazyLoad: yes
-Depends: Rcpp (>= 0.11.0), RInside (>= 0.2.11), XML (>= 3.98-1.1),  R (>= 3.0.0)
+Depends: Rcpp (>= 0.11.0), RInside (>= 0.2.11), XML (>= 3.98-1.1),  R (>= 3.0.0), Executor (>= 1.2.0)
 LinkingTo: Rcpp, RInside
 Collate: 'dobject.R' 'darray.R' 'dframe.R' 'dlist.R' 'splits.R' 'darray_ops.R' 'dframe_ops.R' 'master.R' 'reduce.R' 'deploy.R'
 RcppModules: master_module, dobject_module
