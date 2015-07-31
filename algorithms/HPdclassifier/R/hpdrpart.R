@@ -81,6 +81,84 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	true_responses = variables$true_responses
 	xlevels = variables$x_classes
 	x_colnames = variables$x_colnames
+	if(length(classes) > 0)
+		classes = classes[[1]]
+	else
+		classes = NULL
+
+
+	if(!is.na(response_cardinality))
+		cutoff = as.numeric(rep(1/response_cardinality, 
+		       response_cardinality))
+	else if(is.na(response_cardinality))
+		cutoff = 0
+
+
+
+
+	DR_status = distributedR_status()
+
+	free_sh_mem = (DR_status$DarrayQuota - 
+		 DR_status$DarrayUsed)/
+		 DR_status$Inst
+	free_mem = (DR_status$SysMem - 
+		 DR_status$MemUsed)/
+		 DR_status$Inst
+
+	sizeof_double = 8 #8 bytes
+
+	free_sh_mem = min(free_sh_mem)*1024*1024/sizeof_double/2
+	free_mem = min(free_mem)*1024*1024/sizeof_double/2
+
+
+	sizeof_node_histogram = if(is.na(response_cardinality)) 2 
+			      else response_cardinality
+	sizeof_node_histogram = sizeof_node_histogram*nBins * ncol(observations) 
+	sizeof_tree_node = 15
+
+	#limit 50% of free_mem and free_sh_mem to building histograms
+	max_nodes_per_iteration = as.integer(floor(min(10000,
+				0.5*free_mem/sizeof_node_histogram,
+				0.5*free_sh_mem/sizeof_node_histogram)))
+
+	free_mem = free_mem - max_nodes_per_iteration*sizeof_node_histogram 
+	free_sh_mem = free_sh_mem - max_nodes_per_iteration*sizeof_node_histogram
+
+	#use 80% of remaining memory to transfer data during local tree building step
+	nodes_per_executor= 1
+	threshold = as.integer(min(
+		  .8*free_mem/nodes_per_executor/ncol(observations),
+		  .8*free_sh_mem/nodes_per_executor/ncol(observations)))
+
+	if(threshold > nrow(observations))
+	{
+		threshold = nrow(observations)
+		nodes_per_executor = as.integer(min(
+				   free_mem/threshold/ncol(observations),
+				   free_sh_mem/threshold/ncol(observations)))
+	}
+
+	free_mem = free_mem - ncol(observations)*threshold*nodes_per_executor
+	free_sh_mem = free_sh_mem - ncol(observations)*threshold*nodes_per_executor
+
+
+	threshold = as.integer(floor(threshold))
+	max_nodes_per_iteration = as.integer(floor(max_nodes_per_iteration))
+	nodes_per_executor = as.integer(floor(nodes_per_executor))
+
+	threshold = min(threshold,nrow(observations)/sum(DR_status$Inst))
+
+	if(do.trace)
+		print(paste("threshold",
+			toString(threshold),sep=" = "))
+
+	if(do.trace)
+		print(paste("nodes_per_executor",
+			toString(nodes_per_executor),sep=" = "))
+
+	if(do.trace)
+		print(paste("max_nodes_per_iteration",
+			toString(max_nodes_per_iteration),sep=" = "))
 
 
 
@@ -89,16 +167,25 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	     features_cardinality = features_cardinality,
 	     response_cardinality = response_cardinality, 
 	     features_num = as.integer(ncol(observations)),
-	     threshold = 1L, weights = weights, nodes_per_worker=1L,
+	     threshold = threshold, weights = weights, 
+	     nodes_per_worker=nodes_per_executor,
 	     max_nodes = .Machine$integer.max, node_size = control$minsplit, 
-	     replacement = TRUE, cutoff = 1L, classes = classes, 
+	     replacement = TRUE, cutoff = cutoff, classes = classes, 
 	     completeModel = FALSE, 
-	     max_nodes_per_iteration = .Machine$integer.max,
+	     max_nodes_per_iteration = max_nodes_per_iteration,
 	     trace = do.trace, features_min = NULL, features_max = NULL,
 	     min_split = control$minbucket, max_depth = control$maxdepth, 
 	     cp = control$cp)
 	     
+	if(do.trace)
+	print("converting to rpart model")
+	timing_info <- Sys.time()
 	model = convertToRpartModel(tree$forest, x_colnames)
+	timing_info <- Sys.time() - timing_info
+	if(do.trace )
+	print(timing_info)
+
+
 	model$call = match.call()
 	model$terms = variables$terms
 	if(is.na(response_cardinality))
@@ -109,17 +196,22 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	model$params = params
 	model$na.action = na.action
 	model$numresp = 0
-	if(length(classes) > 0)
-	{
-		model$numresp = length(classes[[1]])
-		model$classes = classes[[1]]
-	}
+	model$numresp = length(classes)
+	model$classes = classes
 	class(model) <- c("hpdrpart","rpart")
 
 	if(is.data.frame(data))
 		responses = getpartition(responses)
+
+	if(do.trace)
+	print("calculating variable importance")
+	timing_info <- Sys.time()
 	model$variable.importance <- 
 		varImportance(model,data,responses)
+	timing_info <- Sys.time() - timing_info
+	if(do.trace )
+	print(timing_info)
+
 	return(model)
 }
 
