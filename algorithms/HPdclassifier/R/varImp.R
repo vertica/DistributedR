@@ -11,10 +11,15 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 		stop("'ytest' must have exactly one column")
 	if(nrow(ytest) != nrow(xtest))
 		stop("'xtest' and 'ytest' must have same number of rows")
-	permutation = sample.int(nrow(xtest))
 	shuffle_column <- .shuffle_column_data_frame
 	if(is.dframe(xtest))
+	{
 		shuffle_column <- .shuffle_column_dframe
+		permutation <- sample.int(nrow(xtest))
+		xtest <- .shuffle_dframe(xtest,permutation)
+		ytest <- .shuffle_dframe(ytest,permutation)
+	}
+
 
 	categorical = FALSE
 	if(is.dframe(ytest))
@@ -47,7 +52,7 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 
 	importance = sapply(1:ncol(xtest), function(var)
 	{
-		shuffled_data = shuffle_column(xtest, var, permutation)
+		shuffled_data <- shuffle_column(xtest, var)
 		shuffled_predictions <- predict(model, shuffled_data)
 		distance_metric(ytest, shuffled_predictions)[1]
 	})
@@ -63,15 +68,35 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 	return(importance)
 }
 	
-.shuffle_column_data_frame <- function(data, column, permutation)
+.shuffle_column_data_frame <- function(data, column)
 {
 	shuffled_data <- data
-	shuffled_data[,column]<-data[permutation,column]
+	shuffled_data[,column]<-data[sample.int(nrow(data)),column]
 	return(shuffled_data)
 }
 
-.shuffle_column_dframe <- function(data, column, permutation)
+
+.shuffle_column_dframe <- function(data, column)
 {
+	shuffled_data <- dframe(npartitions = npartitions(data))
+	foreach(i,1:npartitions(data), 
+		function(data = splits(data,i), 
+		shuffled_data = splits(shuffled_data,i), 
+		column = column)
+		{
+			shuffled_data = data
+			shuffled_data[,column] = 
+				data[sample.int(nrow(data)),column]
+			update(shuffled_data)
+		},progress = FALSE)
+	colnames(shuffled_data) <- colnames(data)
+	return(shuffled_data)
+}
+
+
+.shuffle_dframe <- function(data,permutation)
+{
+	
 	rows_partition = partitionsize(data)[,1]
 	rows_partition = cumsum(rows_partition)
 	start_rows_partition = c(1,rows_partition[-length(rows_partition)]+1)
@@ -80,12 +105,13 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 	dest_partition = sapply(shuffle_column, function(new) 
 			      min(which((start_rows_partition <= new) &
 			      	(new <= end_rows_partition))))
-	
+
+
+
 
 	temp_data = dframe(npartitions = npartitions(data)*npartitions(data))
 	foreach(i,1:(npartitions(data)*npartitions(data)),
-	function(column = column,
-		source = ceiling(i/npartitions(data)),
+	function(source = ceiling(i/npartitions(data)),
 		dest = (i %% npartitions(data))+1,
 		temp_data = splits(temp_data,i), 
 		data = splits(data,ceiling(i/npartitions(data))),
@@ -94,22 +120,25 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 			end_rows_partition[ceiling(i/npartitions(data))]])
 	{
 		relevent_rows = dest_partition == dest
-		temp_data = data.frame(data[relevent_rows,column])
+		temp_data = data.frame(data[relevent_rows,])
 		update(temp_data)
 	},progress = FALSE)
 
+
+
+
 	shuffled_data = dframe(npartitions = npartitions(data))
 	foreach(i,1:npartitions(data),
-	function(column = column,
-		temp_data = splits(temp_data,
+	function(temp_data = splits(temp_data,
 			as.list(npartitions(data)*(i-1)+1:npartitions(data))),
 		shuffled_data = splits(shuffled_data,i),
 		data = splits(data,i))
 	{
-		shuffled_data = data
-		shuffled_data[,column] = do.call(rbind,temp_data)
+		shuffled_data = do.call(rbind,temp_data)
 		update(shuffled_data)
 	},progress = FALSE)
+
+
 	colnames(shuffled_data) <- colnames(data)
 	return(shuffled_data)
 }
