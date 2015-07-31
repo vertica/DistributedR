@@ -932,6 +932,7 @@ int main(int argc, char *argv[]) {
   LOG_DEBUG("New Update pointer to maintain list of updated split/composite variables in Function execution created.");
 
   // a buffer to keep the task result from RInside
+  //R.parseEvalQ("gcinfo(verbose=TRUE)");
   while (true) {
     Timer total_timer;
     total_timer.start();
@@ -973,7 +974,7 @@ int main(int argc, char *argv[]) {
       strncpy(ex->err_msg, exception.what(), sizeof(ex->err_msg)-1);
     }
     
-    if(ex != NULL && (next == EXECR || next == PERSIST || next == CLEAR)) {
+    if(ex != NULL && (next == EXECR || next == PERSIST)) {
        SendResult(ex->err_msg);
     }
 

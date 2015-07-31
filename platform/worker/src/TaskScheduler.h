@@ -27,6 +27,7 @@
 #include <boost/unordered_set.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/recursive_mutex.hpp>
+#include <boost/interprocess/sync/interprocess_semaphore.hpp>
 
 #include "common.h"
 #include "dLogger.h"
@@ -64,18 +65,20 @@ class TaskScheduler {
                 worker(pw_),executorpool(ep_), 
                 shmem_arrays(shmem_arrays_),
                 shmem_arrays_mutex(shmem_arrays_mutex_) {
+    sync_persist.clear();
     for(int i=0; i < nExecutors; i++) {
         AddExecutor(i);
     }
   }
 
-  ~TaskScheduler() {}
+  ~TaskScheduler();
 
   void ForeachComplete(uint64_t id, uint64_t uid, bool status);
   void StageUpdatedPartition(const std::string& split_name, size_t size, int executor_id);
   int32_t ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
   int64_t AddParentTask(const std::vector<NewArg>& task_args, int64_t parenttaskid, int taskid=-99);
   void DeleteSplit(const std::string& splitname);
+  void PersistDone(uint64_t taskid, int executor_id); 
 
 protected:
   int64_t GetBestExecutor(const std::vector<NewArg>& partitions, int taskid);
@@ -99,6 +102,10 @@ protected:
 
   //Stage metadata
   boost::unordered_set<SplitUpdate*> updated_splits;
+
+  //persist_sync
+  boost::unordered_map<uint64_t, boost::interprocess::interprocess_semaphore*> sync_persist;
+  boost::recursive_mutex persist_mutex;
 
   //Process Communication
   boost::mutex parent_mutex;

@@ -132,8 +132,6 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
 
   void shutdown();
 
-  /*void fetchtoR(std::string name, ServerInfo location,
-             uint64_t id, uint64_t uid, std::string store);*/
   void fetch(std::string name, ServerInfo location,
              size_t size, uint64_t id, uint64_t uid, std::string store);
   void newtransfer(std::string name, ServerInfo location,
@@ -176,16 +174,12 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
   int GetStartPortRange() {return start_port_range_;}
   int GetEndPortRange(){return end_port_range_;}
 
-  void PersistPost(uint64_t taskid) { 
-    sync_persist_[taskid]->post(); 
-  }
-
   DataLoader* GetDataLoaderPtr() {
     return data_loader_;
   }
 
   TaskScheduler* GetScheduler() {
-    return scheduler_;
+    return executorscheduler_;
   }
 
   std::pair<int, int> GetClusterInfo() {
@@ -259,11 +253,9 @@ protected:
   boost::unordered_map<std::string, worker_stats> worker_stats_;
   boost::mutex worker_stat_mutex_;
   
-  boost::unordered_map<uint64_t, boost::interprocess::interprocess_semaphore*> sync_persist_;
-  boost::recursive_mutex persist_mutex_;
 
   DataLoader* data_loader_;
-  TaskScheduler* scheduler_;
+  TaskScheduler* executorscheduler_;
 
   RequestLogger *mRequestLogger;
 };

@@ -433,10 +433,14 @@ void PrestoWorker::newtransfer(string name, ServerInfo location,
 
     //Send size of the split
     split_size = region.get_size();
+    //LOG_INFO("Newtransfer: size of the split(%zu)", split_size);
     char splitsize_buf[128];
     memset(splitsize_buf, 0x00, 128);
     snprintf(splitsize_buf, 128, "%zu", split_size);
+    //LOG_INFO("%s %zu", splitsize_buf, strlen(splitsize_buf));
     bytes_written = send(sockfd, splitsize_buf, strlen(splitsize_buf), 0);
+    //bytes_written = atomicio(vwrite, sockfd, splitsize_buf, strlen(splitsize_buf));
+    LOG_INFO("Newtransfer: Written size %zu, bytes_written %zu buffer_lenght %zu", split_size, bytes_written, strlen(splitsize_buf));
 
     // TODO(shivaram): Test if this works correctly and add this
     // for compressed arrays as well
@@ -532,7 +536,7 @@ void PrestoWorker::clear(ClearRequest req) {
 
     //clear from executors
     if(DATASTORE == RINSTANCE) {
-      scheduler_->DeleteSplit(req.name());
+      executorscheduler_->DeleteSplit(req.name());
     }
   }
 
@@ -567,14 +571,10 @@ void PrestoWorker::prepare_persist(const std::string& name, int executor, uint64
   wrk_req->set_type(WorkerRequest::PERSIST);
   wrk_req->mutable_persist()->CopyFrom(persist_req);
 
-  //LOG_INFO("prepare_persist: Received Persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
-
   unique_lock<mutex> lock(requests_queue_mutex_[PERSISTSPLIT]);
   bool notify = requests_queue_[PERSISTSPLIT].empty();
-  //LOG_INFO("prepare_persist: Check Persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
   requests_queue_[PERSISTSPLIT].push_back(wrk_req);
 
-  //LOG_INFO("prepare_persist: Added to queue Persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
   if (notify)
     requests_queue_empty_[PERSISTSPLIT].notify_all();
   lock.unlock();
@@ -902,14 +902,13 @@ PrestoWorker::PrestoWorker(
                                    master_ip, master_port);
 
   if(DATASTORE == WORKER) {
-    scheduler_ = NULL;
+    executorscheduler_ = NULL;
   } else {
     LOG_INFO("Creating scheduler");
-    sync_persist_.clear();
-    scheduler_ = new TaskScheduler(this, executorpool_, 
-                                   &shmem_arrays_,
-                                   &shmem_arrays_mutex_,
-                                   num_executors_);
+    executorscheduler_ = new TaskScheduler(this, executorpool_, 
+                                           &shmem_arrays_,
+                                           &shmem_arrays_mutex_,
+                                           num_executors_);
   }
   
   // Create multiple HandleRequest threads
@@ -948,6 +947,12 @@ PrestoWorker::~PrestoWorker() {
     }
   } catch(...) {}
 
+  LOG_INFO("Worker shutdown - Closing Worker scheduler");
+  if(executorscheduler_ != NULL) {
+    delete executorscheduler_;
+    executorscheduler_ = NULL;
+  }
+
   try {
     bool ret = shmem_arrays_mutex_.timed_lock(boost::get_system_time()+boost::posix_time::milliseconds(2000));
     if(ret  == true) {
@@ -971,7 +976,6 @@ PrestoWorker::~PrestoWorker() {
     std::remove(get_shm_size_check_name().c_str());
   }
 
-  sync_persist_.clear();
   // Remove array stores
   for (boost::unordered_map<string, ArrayStore*>::iterator i =
            array_stores_.begin();
@@ -1091,7 +1095,7 @@ void PrestoWorker::HandleRequests(int type) {
                  NewArg>(worker_req.fetch().task_args().begin(),
                          worker_req.fetch().task_args_size(), &task_args);
 
-              int64_t executor_id = scheduler_->AddParentTask(task_args, worker_req.fetch().parenttaskid());
+              int64_t executor_id = executorscheduler_->AddParentTask(task_args, worker_req.fetch().parenttaskid());
             }
 
             string store;
@@ -1117,11 +1121,6 @@ void PrestoWorker::HandleRequests(int type) {
             
             if(DATASTORE == RINSTANCE) {
               uint64_t taskid =  worker_req.fetch().uid();
-              boost::interprocess::interprocess_semaphore sema(0);
-
-              unique_lock<recursive_mutex> lock(persist_mutex_);
-              sync_persist_[taskid] = &sema;
-              lock.unlock();
 
               NewArg arg;
               arg.set_arrayname(worker_req.fetch().name());
@@ -1130,17 +1129,7 @@ void PrestoWorker::HandleRequests(int type) {
               transfer_arg.push_back(arg);
 
               //Persist to worker if not already on worker.
-              int32_t num_persisted = scheduler_->ValidatePartitions(transfer_arg, -1, taskid);
-              LOG_INFO("NEWTRANSFER %d : num_persisted(%d)", taskid, num_persisted);
-
-              // Wait until all partitions are validated
-              for(int i=0; i< num_persisted; i++) {
-                sync_persist_[taskid]->wait();
-              }
-              LOG_INFO("NEWTRANSFER %d: dep PERSIST tasks complete", taskid);
-              lock.lock();
-              sync_persist_.erase(taskid);
-              lock.unlock();
+              int32_t num_persisted = executorscheduler_->ValidatePartitions(transfer_arg, -1, taskid);
             }
 
             newtransfer(worker_req.fetch().name(),
@@ -1152,6 +1141,9 @@ void PrestoWorker::HandleRequests(int type) {
         case WorkerRequest::PERSIST:
           {
             LOG_INFO("New PERSIST Task - Received from Worker");
+            shmem_arrays_mutex_.lock();
+            shmem_arrays_.insert(worker_req.persist().split_name());
+            shmem_arrays_mutex_.unlock();
             executorpool_->persist(worker_req.persist().split_name(),
                                    worker_req.persist().executor(),
                                    worker_req.persist().parenttaskid());
@@ -1168,11 +1160,6 @@ void PrestoWorker::HandleRequests(int type) {
               task_args.clear();
               uint64_t taskid = worker_req.createcomposite().uid();
               uint64_t parenttaskid = worker_req.createcomposite().parenttaskid();
-              boost::interprocess::interprocess_semaphore sema(0);
-
-              unique_lock<recursive_mutex> lock(persist_mutex_);
-              sync_persist_[taskid] = &sema;
-              lock.unlock();
 
               get_vector_from_repeated_field
                 <RepeatedPtrField<NewArg>::const_iterator,
@@ -1186,18 +1173,8 @@ void PrestoWorker::HandleRequests(int type) {
                 NewArg>(worker_req.createcomposite().cargs().begin(),
                        worker_req.createcomposite().cargs_size(), &cc_args);
 
-              int64_t executor_id = scheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());
-              int32_t num_persisted = scheduler_->ValidatePartitions(cc_args, -1, taskid);
-              LOG_INFO("CREATECOMPOSITE %d : num_persisted(%d)", taskid, num_persisted);
-
-              // Wait until all partitions are validated.
-              for(int i=0; i< num_persisted; i++) {
-                sync_persist_[taskid]->wait();
-              }
-              LOG_INFO("CREATECOMPOSITE %d: dep PERSIST tasks complete", taskid);
-              lock.lock();
-              sync_persist_.erase(taskid);
-              lock.unlock();
+              int64_t executor_id = executorscheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());
+              executorscheduler_->ValidatePartitions(cc_args, -1, taskid);
 
               LOG_INFO("CREATECOMPOSITE %d : All partitions validated. Sent to executor %d", worker_req.createcomposite().uid(), executor_id);
               createcomposite(worker_req.createcomposite());
@@ -1208,7 +1185,7 @@ void PrestoWorker::HandleRequests(int type) {
           {
             LOG_INFO("New METADATAUPDATE TaskID %6zu - Received from Master", worker_req.metadataupdate().uid());
             executorpool_->reset_executors();
-            scheduler_->ForeachComplete(worker_req.metadataupdate().id(), 
+            executorscheduler_->ForeachComplete(worker_req.metadataupdate().id(), 
                                         worker_req.metadataupdate().uid(), 
                                         worker_req.metadataupdate().status());
           }
@@ -1269,25 +1246,10 @@ void PrestoWorker::HandleRequests(int type) {
             } else {
               uint64_t taskid = worker_req.newexecr().uid();
               uint64_t parenttaskid = worker_req.newexecr().parenttaskid();
-              boost::interprocess::interprocess_semaphore sema(0);
 
-              unique_lock<recursive_mutex> lock(persist_mutex_);
-              sync_persist_[taskid] = &sema;
-              lock.unlock();
-
-              int64_t executor_id = scheduler_->AddParentTask(new_args, parenttaskid, taskid);
-              int32_t num_persisted = scheduler_->ValidatePartitions(new_args, executor_id, taskid);
+              int64_t executor_id = executorscheduler_->AddParentTask(new_args, parenttaskid, taskid);
+              executorscheduler_->ValidatePartitions(new_args, executor_id, taskid);
               //TODO: Add validation for CC newargs as well.
-              LOG_INFO("EXECUTE %d : (%d)partitions will be persisted.", taskid, num_persisted);
-
-              // Wait until all partitions are validated.
-              for(int i=0; i< num_persisted; i++) {
-                sync_persist_[taskid]->wait();
-              }
-              LOG_INFO("EXECUTE %d: dep PERSIST tasks complete", taskid);
-              lock.lock();
-              sync_persist_.erase(taskid);
-              lock.unlock();
 
               LOG_INFO("EXECUTE %d : All partitions validated, sent to executor(%d)", taskid, executor_id);
               executorpool_->execute(func, new_args, raw_args, composite_args,
@@ -1656,9 +1618,6 @@ void PrestoWorker::shutdown() {
     bool ret = exec_pool_del_mutex_.timed_lock(boost::get_system_time()+boost::posix_time::milliseconds(2000));
     if(ret  == true) {
       if (executorpool_!= NULL) {
-        //TODO: Send shutdown to executors.
-        //for (int i=0; i<num_executors_; i++)
-        //    executorpool_->shutdown(i+1);
         delete executorpool_;
         executorpool_ = NULL;
       }
@@ -1692,13 +1651,12 @@ void PrestoWorker::shutdown() {
     std::remove(get_shm_size_check_name().c_str());
   }
 
-  LOG_INFO("Worker shutdown - Closing scheduler");
-  if(scheduler_ != NULL) {
-    delete scheduler_;
-    scheduler_ = NULL;
+  LOG_INFO("Worker shutdown - Closing Worker scheduler");
+  if(executorscheduler_ != NULL) {
+    delete executorscheduler_;
+    executorscheduler_ = NULL;
   }
 
-  sync_persist_.clear();
   // Remove array stores
   for (boost::unordered_map<string, ArrayStore*>::iterator i = array_stores_.begin();
       i != array_stores_.end(); i++) {

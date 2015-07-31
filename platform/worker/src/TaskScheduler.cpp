@@ -35,6 +35,29 @@ using namespace boost;
 
 namespace presto {
 
+TaskScheduler::~TaskScheduler() {
+  sync_persist.clear();
+  parent_tasks.clear();
+  
+  boost::unordered_map<std::string, ExecSplit*>::iterator exec_it;
+  for(exec_it = executor_splits.begin(); exec_it != executor_splits.end(); ++exec_it) {
+    delete exec_it->second;
+  }
+  executor_splits.clear();
+
+  boost::unordered_map<int, ExecStat*>::iterator stat_it; 
+  for(stat_it = executor_stat.begin(); stat_it != executor_stat.end(); ++stat_it) {
+    delete stat_it->second;
+  }
+  executor_stat.clear();
+
+  boost::unordered_set<SplitUpdate*>::iterator update_it; 
+  for(update_it = updated_splits.begin(); update_it != updated_splits.end(); ++update_it) {
+    delete *update_it;
+  }
+  updated_splits.clear();
+}
+
 void TaskScheduler::AddExecutor(int id) {
   ExecStat* stat = new ExecStat;
   stat->mem_used = 0;
@@ -70,14 +93,19 @@ void TaskScheduler::DeleteSplit(const std::string& splitname) {
 }
 
 int TaskScheduler::GetDeterministicExecutor(int32_t split_id) {
+  int exec_idx = 0;
   std::pair<int, int> cluster_info = worker->GetClusterInfo(); 
   if(cluster_info.first == 0) {
     LOG_ERROR("GetDeterministicExecutor:Number of workers is 0!");
     return 0;
   }
   //LOG_INFO("GetDeterministicExecutor: #Worker(%d), split_id(%d), num_exec(%d)", cluster_info.first, split_id, cluster_info.second);
-  int local_split_id = floor(split_id/cluster_info.first);
-  int exec_idx = local_split_id%cluster_info.second;
+  try {
+    int local_split_id = floor(split_id/cluster_info.first);
+    exec_idx = local_split_id%cluster_info.second;
+  } catch(std::exception &ex) {
+    LOG_ERROR("GetDeterministicExecutor: Error calculating deterministic executor %s", ex.what());
+  }
   return exec_idx;
 }
 
@@ -166,6 +194,14 @@ int64_t TaskScheduler::AddParentTask(const std::vector<NewArg>& task_args, int64
 
 /************************************** Validate Partitions ****************************************************************/
 
+void TaskScheduler::PersistDone(uint64_t taskid, int executor_id) {
+  unique_lock<recursive_mutex> metalock(metadata_mutex);
+  executor_stat[executor_id]->persist_load--;
+  metalock.unlock();
+  sync_persist[taskid]->post();
+}
+
+
 bool TaskScheduler::IsSplitAvailable(const std::string& split_name, int executor_id) {
    bool onExec = true;
 
@@ -232,15 +268,20 @@ int32_t TaskScheduler::ValidatePartitions(const std::vector<NewArg>& task_args, 
         all_partitions.push_back(task_args[i].arrayname());
    }
 
+   boost::interprocess::interprocess_semaphore sema(0); 
+   unique_lock<recursive_mutex> lock(persist_mutex);
+   sync_persist[taskid] = &sema;
+   lock.unlock();
+
    for(int i=0; i<all_partitions.size(); i++) {
       LOG_INFO("Validating %s(%d)", all_partitions[i].c_str(), taskid);
 
-      bool persist = false;
+      //bool persist = false;
       unique_lock<recursive_mutex> metalock(metadata_mutex);
       if(!IsSplitAvailable(all_partitions[i], executor_id)) {
         LOG_INFO("ValidatePartitions(%d): Partition(%s) not available on executor(%d). Intra-worker persist needed.", taskid, all_partitions[i].c_str(), executor_id);
         if (!IsBeingPersisted(all_partitions[i])) {
-           persist = true;
+           //persist = true;
            int target_executor = ExecutorToPersistFrom(all_partitions[i]);
            LOG_INFO("ValidatePartitions(%d): Partition(%s) will be persisted from executor(%d)", taskid, all_partitions[i].c_str(), target_executor);
            worker->prepare_persist(all_partitions[i], target_executor, taskid);
@@ -248,9 +289,20 @@ int32_t TaskScheduler::ValidatePartitions(const std::vector<NewArg>& task_args, 
         }
       } else
         LOG_INFO("ValidatePartitions(%d): Partition(%s) doesnt need to be persisted", taskid, all_partitions[i].c_str());
+
+      //if(!persist) PersistDone(taskid, 0);
       metalock.unlock();
-      //if(!persist) { worker->PersistPost(taskid); }
    }
+
+   //Wait for persist tasks to complete
+   for(int i=0; i< num_persisted; i++) {
+     sync_persist[taskid]->wait();
+   }
+
+   LOG_INFO("Task# %d: dep PERSIST tasks(%d) complete", num_persisted, taskid);
+   lock.lock();
+   sync_persist.erase(taskid);
+   lock.unlock();
 
    return num_persisted;
 }

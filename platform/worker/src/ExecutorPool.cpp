@@ -717,9 +717,9 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
      fprintf(executors[executor].send, "%s\n", splits[i].c_str());
   }
   fflush(executors[executor].send);
-  LOG_INFO("ExecutorPool CLEAR: Sent CLEAR executor(%d).", executor);
+  LOG_INFO("ExecutorPool CLEAR: Sent CLEAR executor(%d). No wait.", executor);
 
-  char task_msg[EXCEPTION_MSG_SIZE];
+  /*char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
     char cname[100];  // to keep a resultant split name
     size_t size;
@@ -747,7 +747,7 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
        }
        break;
     }   
-  }
+  }*/
 
   lock.lock();
   executors[executor].ready = true;
@@ -801,9 +801,9 @@ void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid
     }
   }
 
+  worker->GetScheduler()->PersistDone(taskid, executor);
   lock.lock();
   executors[executor].ready = true;
-  worker->PersistPost(taskid);
   executors[executor].sync.notify_one();
   lock.unlock();
 }

@@ -70,8 +70,8 @@ public:
   std::string prev_func_body;
   Rcpp::Language exec_call;
 
-  boost::mutex R_mutex;
-  boost::recursive_mutex metadata_mutex;
+  //boost::mutex R_mutex;
+  //boost::recursive_mutex metadata_mutex;
 
   //std::set<boost::thread*> server_threads;
 };
