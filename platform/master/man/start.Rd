@@ -85,15 +85,15 @@ distributedR_start (inst = 0, mem=0, cluster_conf="", log=2)
 
 \details{distributedR execution generates three types of log files:
 
-- Master log file (\code{R_master_<username>_<master_address>.<master_port_number>.log}) : contains Master level log
+- Master log (\code{R_master_<username>_<master_addr>.<master_port>.log}) : contains Master level log
 messages on \code{foreach} functions received, task requests created and sent to Worker nodes for
 execution etc. It is created in the /tmp/ folder of the Master node.
 
-- Worker log file (\code{R_worker_<username>_<master_address>.<master_port_number>.log}) : contains
+- Worker log (\code{R_worker_<username>_<master_addr>.<master_port>.log}) : contains
 Worker level messages on requests received from Master node and other Worker nodes etc. It
 is created in /tmp/ folder of each Worker node.
 
-- Executor log file (\code{R_executor_<username>_<master_address>.<master_port_number>_<executorID>.log}) : Each executor in
+- Executor log (\code{R_executor_<username>_<master_addr>.<master_port>_<executorID>.log}) : Each executor in
 each Worker node has its own log file. Normal execution log messages or Executor exceptions
 (depending on severity level chosen by user) are logged here. It is created in /tmp/ folder of each
 Worker node.

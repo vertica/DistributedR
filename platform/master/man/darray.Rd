@@ -7,7 +7,7 @@
   blocks. Distributed arrays can store only numeric data.}
 
 \usage{
-darray (dim, blocks, sparse = FALSE, data = 0, empty=FALSE, distribution_policy='roundrobin')
+darray (dim, blocks, sparse = FALSE, data = 0, empty=FALSE, distribution_policy)
 darray (npartitions, sparse = FALSE, distribution_policy='roundrobin')
 }
 
@@ -20,7 +20,7 @@ darray (npartitions, sparse = FALSE, distribution_policy='roundrobin')
   \item{empty}{if TRUE array is left unitialized, each partition is a zero matrix. Default is FALSE unless used with 'npartitions'.}
   \item{npartitions}{vector specifying number of partitions.}
   \item{distribution_policy}{defines policy to distribute array partitions across the workers.
-  The distribution policy used is 'roundrobin'. Currently, this argument is only for internal use.}
+  Default distribution policy is 'roundrobin'. Currently, this argument is only for internal use.}
 }
 
 \details{ By default, array partitions are internally stored as dense
