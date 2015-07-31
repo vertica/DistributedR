@@ -87,12 +87,10 @@ algorithm_docs:
 install:
 	R CMD INSTALL platform/executor
 	R CMD INSTALL platform/master
-	R CMD INSTALL platform/matrix_helper
 
 uninstall:
 	R CMD REMOVE platform/executor
 	R CMD REMOVE platform/master
-	R CMD REMOVE platform/matrix_helper
 
 clean:
 	cd platform/master/src; make -f Makevars clean; cd ../../../
