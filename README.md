@@ -17,11 +17,11 @@ You can also get a Virtual Machine with everything installed [here](http://www.v
 1. Install dependencies:  
   * On Ubuntu:  
 
-          $ sudo apt-get install -y make gcc g++ libxml2-dev rsync  
+          $ sudo apt-get install -y make gcc g++ libxml2-dev rsync bison byacc flex
 
   * On CentOS:
 
-          $ sudo yum install -y make gcc gcc-c++ libxml2-devel rsync
+          $ sudo yum install -y make gcc gcc-c++ libxml2-devel rsync bison byacc flex
 
 
 2. Install R:
@@ -41,25 +41,20 @@ You can also get a Virtual Machine with everything installed [here](http://www.v
 
 3. Install R dependencies:
 
-        $ sudo R # to install globally
+        $ sudo R  # to install globally
         R> install.packages(c('Rcpp','RInside','XML','randomForest','data.table'))
 
 4. Compile and install Distributed R:
 
-        $ make
-        $ make install
+        $ cd platform/
+        $ R CMD INSTALL executor
+        $ R CMD INSTALL matrix_helper
+        $ R CMD INSTALL master
 
-5. Configure local SSH:
-
-        $ ssh-keygen # choose defaults
-        $ chmod 600 ~/.ssh/id_rsa # set right permissions
-        $ cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys2
-        $ ssh localhost # should log in without a password
-
-6. Open R and run an example:
+5. Open R and run an example:
 
         library(distributedR)
-        distributedR_start() # start DR
+        distributedR_start()  # start DR
         distributedR_status()
 
         B <- darray(dim=c(9,9), blocks=c(3,3), sparse=FALSE) # create a darray
@@ -67,7 +62,7 @@ You can also get a Virtual Machine with everything installed [here](http://www.v
           init<-function(b = splits(B,i), index=i) {
           b <- matrix(index, nrow=nrow(b), ncol=ncol(b))
           update(b)
-        }) # initialize it
+        })  # initialize it
 
         getpartition(B) # collect darray data
 

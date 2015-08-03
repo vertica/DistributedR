@@ -159,3 +159,12 @@ test_that("Dense darrays: works", {
 
   })
 
+test_that("testing deterministic behavior of foreach", {
+  no_of_executors <- sum(distributedR_status()$Inst)
+  ## loading library in the first foreach to test if it persist in the all 
+  ## the executors
+  foreach(i, 1:no_of_executors, function() { library(testthat); } )
+ 
+  ## checking if the library was loaded by previous statement in all executors
+  foreach(i, 1:no_of_executors, function() { expect_that(TRUE, is_true()); } )
+})

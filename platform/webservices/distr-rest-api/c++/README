@@ -1,6 +1,0 @@
-To compile casablanca (restcpp):
-CXX=g++-4.8 cmake .. -DCMAKE_BUILD_TYPE=Release -DBOOST_INCLUDEDIR=/data/dr/third_party/install/include/ -DBOOST_LIBRARYDIR=/data/dr/third_party/install/lib/
-
-Remove -pedantic and -Werror and all the warnings except (-Wall -Wextra) from ./src/CMakeFiles/cpprest.dir/flags.make Add -fpermissive.
-
-Copy patched http_client_asio.cpp to destdir.

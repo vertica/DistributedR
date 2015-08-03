@@ -24,7 +24,6 @@ NAMESPACE <- environment()
 }
 # Google protobuf allows sending upto 64MB of data at a time. 1MB less for safe.
 .protobuf_max_msg_size = 63 * 1024*1024
-.rcpp_obj_max_size = 2 * 1024 * 1024 * 1024 ## Rcpp allows upto 2GB of raw data
 
 # The class 'splits' represents a collection of splits in a particular
 # distributed array. It consists of a list of split-ids, a handle to the
@@ -439,20 +438,7 @@ else{
     }   
   }
 
-  max_argval_size = 0
-  for (av in arg_vals) {
-    max_argval_size = max(max_argval_size, max(unlist(lapply(av, object.size))))
-  }
-  for (rav in raw_arg_vals) {
-    max_argval_size = max(max_argval_size, max(unlist(lapply(rav, object.size))))
-  }
-
-  #this limit applies to each individual argument instead of all arguments together
-  if(max_argval_size >= .rcpp_obj_max_size) {
-    stop(paste("Each function argument size cannot be larger than 2GB. Current size: ", max_argval_size, sep=""))
-  }
-
-  tryCatch({
+    tryCatch({
     pm <- get_pm_object()
     status <- .Call("DistributedObject_ExecR",
         pm,
