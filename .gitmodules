@@ -1,5 +1,5 @@
 
 [submodule "platform/master/src/distributed-data-connector"]
 	path = platform/master/src/distributed-data-connector
-	url = ssh://git@git.verticacorp.com:7999/jm/distributed-data-connector.git
+	url = https://github.com/vertica/distributed-data-connector.git
 	branch = master
