@@ -99,9 +99,3 @@ algorithm_docs:
 	R CMD Rd2pdf --no-preview --force --output=$(DOC_DIR_ALGORITHMS)/HPdgraph/HPdgraph-Manual.pdf $(PWD)/algorithms/HPdgraph
 	mkdir -p $(DOC_DIR_ALGORITHMS)/HPdata
 	R CMD Rd2pdf --no-preview --force --output=$(DOC_DIR_ALGORITHMS)/HPdata/HPdata-Manual.pdf $(PWD)/algorithms/HPdata
-
-clean:
-	cd platform/master/src; make -f Makevars clean; cd ../../../
-
-dist-clean:
-	cd platform/master/src; make -f Makevars clean-third-party; cd ../../../
