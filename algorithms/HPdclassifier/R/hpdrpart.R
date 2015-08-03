@@ -28,8 +28,6 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 		!identical(na.action, na.fail))
 		stop("'na.action' must be either na.exclude, na.omit, na.fail")
 
-	if(missing(weights))
-		weights = NULL
 	if(!missing(subset))
 		warning("'subset' not implemented. Adjust using weights parameter")
 	if(missing(subset))
@@ -85,6 +83,16 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 		classes = classes[[1]]
 	else
 		classes = NULL
+
+	if(missing(weights))
+	{
+		weights = clone(observations, ncol = 1, data = 1)
+	}
+	if(!is.dframe(weights))
+	{
+		weights = as.dframe(weights)
+	}
+	
 
 
 	if(!is.na(response_cardinality))
@@ -161,7 +169,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 			toString(max_nodes_per_iteration),sep=" = "))
 
 
-
+	suppressWarnings({
 	tree <- .hpdRF_distributed(observations, responses, ntree = 1L, 
 	     bin_max = as.integer(nBins), 
 	     features_cardinality = features_cardinality,
@@ -176,6 +184,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	     trace = do.trace, features_min = NULL, features_max = NULL,
 	     min_split = control$minbucket, max_depth = control$maxdepth, 
 	     cp = control$cp)
+	})
 	     
 	if(do.trace)
 	print("converting to rpart model")
