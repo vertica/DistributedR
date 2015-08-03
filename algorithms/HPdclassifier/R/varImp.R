@@ -1,3 +1,8 @@
+##This is a generic function for calculating permutation based variable importance
+##This function requires a model with which to test as well as xtest,ytest variables 
+##Also required is the a distance_metric function that can compare the loss in accuracy
+##between predictions. 
+
 varImportance <- function(model, xtest, ytest, distance_metric)
 {
 	if(!is.dframe(xtest) & !is.data.frame(xtest))
@@ -11,16 +16,20 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 		stop("'ytest' must have exactly one column")
 	if(nrow(ytest) != nrow(xtest))
 		stop("'xtest' and 'ytest' must have same number of rows")
+
+	#setting the shuffle function
 	shuffle_column <- .shuffle_column_data_frame
 	if(is.dframe(xtest))
 	{
 		shuffle_column <- .shuffle_column_dframe
+		#if the input was a dframe first randomize data then set shuffle function
 		permutation <- sample.int(nrow(xtest))
 		xtest <- .shuffle_dframe(xtest,permutation)
 		ytest <- .shuffle_dframe(ytest,permutation)
 	}
 
-
+	#determine if the output is categorical or not
+	#this is required to determine the default value of distance_metric
 	categorical = FALSE
 	if(is.dframe(ytest))
 	{
@@ -50,6 +59,8 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 			distance_metric <- meanSquared
 	}
 
+	#this loop will shuffle the column locally and predict and 
+	#compute the difference in errors
 	importance = sapply(1:ncol(xtest), function(var)
 	{
 		shuffled_data <- shuffle_column(xtest, var)
@@ -59,6 +70,7 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 
 	names(importance) <- colnames(xtest)
 
+	#compute the errors without any shuffling
 	normal_predictions = predict(model, xtest)
 	base_accuracy = distance_metric(ytest, normal_predictions)
 
@@ -68,6 +80,8 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 	return(importance)
 }
 	
+##This function shuffles an individual column of a data.frame
+
 .shuffle_column_data_frame <- function(data, column)
 {
 	shuffled_data <- data
@@ -75,6 +89,9 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 	return(shuffled_data)
 }
 
+##This function shuffles an individual column of a dframe
+##The shuffling only occurs locally. This is why there is a randomization
+##if xtest is a dframe
 
 .shuffle_column_dframe <- function(data, column)
 {
@@ -93,6 +110,10 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 	return(shuffled_data)
 }
 
+##This function shuffles/randomizes the dframe and mantains the
+##size of each partition if desired for load balancing
+##The idea of this is to reduce correlation between samples within the same split
+##so that within each split we can shuffle locally  
 
 .shuffle_dframe <- function(data,permutation)
 {
