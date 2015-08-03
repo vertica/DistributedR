@@ -7,7 +7,8 @@ distributedR_read <- function(url, ...) {
     pm <- get_pm_object()
     # 1. Schedule file across workers. Handles globbing also.
     plan <- pm$ddc_schedule(url, options)
-    print(plan)
+#    print(plan)
+
     #
     # plan$num_partitions
     #
