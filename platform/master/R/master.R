@@ -190,9 +190,9 @@ start_workers <- function(cluster_conf,
   return(TRUE)
 }
 
-distributedR_start <- function(inst=5, mem=0,
+distributedR_start <- function(inst=0, mem=0,
                          cluster_conf="",
-                         log=2, storage="executor") {
+                         log=2, storage="worker") {
   
   gcinfo(FALSE)
   gc()

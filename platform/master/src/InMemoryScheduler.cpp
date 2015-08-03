@@ -461,20 +461,10 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
                 // create a fetch task to prepare a task
                 //LOG_DEBUG("Task number %d - Task argument %d - Split %s is not on Worker %15s. It is will be fetched from Worker %15s", 
                 //          task_cnt, i+1, split, server_to_string(worker->server).c_str(), server_to_string(from->server).c_str());
-                ::uint64_t fetch_task_id = -1;
-                if(DATASTORE == WORKER) {
-                  fetch_task_id = Fetch(
-                      worker,
-                      from,
-                      split);
-                } else {
-                  fetch_task_id = Fetch(
-                      worker,
-                      from,
-                      split,
-                      &t->args,
-                      task_id);
-                }
+                ::uint64_t fetch_task_id = Fetch(
+                    worker,
+                    from,
+                    split);
     #ifdef PROFILING
                 fprintf(profiling_output_,
                         "%8.3lf %15s %6zu FETCH STRT %15s %7.2lfMB\n",
@@ -582,20 +572,10 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
                 if (beingfetched == 0) {
                   // if this is not being fetched, fetch it first
                   Worker *from = best_worker_to_fetch_from(split->workers);
-                  ::uint64_t fetch_task_id = -1;
-                  if(DATASTORE == WORKER) {
-                     fetch_task_id = Fetch(
-                         worker,
-                         from,
-                         split);
-                  } else {
-                     fetch_task_id = Fetch(
-                         worker,
-                         from,
-                         split,
-                         &t->args,
-                         task_id);
-                  }
+                  ::uint64_t fetch_task_id = Fetch(
+                      worker,
+                      from,
+                      split);
                   //LOG_DEBUG("Split %s of Composite Array creation is not on Worker %15s. It is will be fetched from Worker %15s", split, server_to_string(worker->server).c_str(), server_to_string(from->server).c_str());
 #ifdef PROFILING
                   fprintf(profiling_output_,

@@ -100,8 +100,7 @@ static void dispatch_task(WorkerInfo *wi, TaskArg *t,
  */
 static void dispatch_fetch(WorkerInfo *to, const ServerInfo &from,
                            const string &name, size_t size, 
-                           const std::vector<Arg>* task_args,
-                           ::uint64_t id, ::uint64_t uid, ::uint64_t parentid) {
+                           ::uint64_t id, ::uint64_t uid) {
   FetchRequest req;
   req.set_name(name);
   req.mutable_location()->CopyFrom(from);
@@ -109,28 +108,6 @@ static void dispatch_fetch(WorkerInfo *to, const ServerInfo &from,
   req.set_id(id);
   req.set_uid(uid);
 
-  if(task_args != NULL && DATASTORE == RINSTANCE) {
-    for (int i = 0; i < task_args->size(); i++) {
-      if ((*task_args)[i].arrays_size() == 1 || (*task_args)[i].is_list()) {
-        NewArg arg;
-        arg.set_varname((*task_args)[i].name());
-        if((*task_args)[i].is_list()){
-            for(int j = 0; j < (*task_args)[i].arrays_size(); j ++){
-              arg.add_list_arraynames((*task_args)[i].arrays(j).name());
-            }
-            arg.set_arrayname("list_type...");
-        }else{
-            arg.set_arrayname((*task_args)[i].arrays(0).name());
-        }
-        req.add_task_args()->CopyFrom(arg);
-      }
-    }
-  } else {
-    LOG_ERROR("Task args is NULL for DATASTORE as RINSTANCE");
-  }
-  req.set_parenttaskid(parentid);  
-
-  LOG_INFO("Dispatching Fetch %d", req.policy());
   to->Fetch(req);
   LOG_DEBUG("FETCH TaskID %16d - Sent to Worker %s", static_cast<int>(uid), to->hostname().c_str());
 }
@@ -831,9 +808,7 @@ void Scheduler::DeleteSplit(const string& split_name) {
   return id;
 }
 
-::uint64_t Scheduler::Fetch(Worker *to, Worker *from, Split *split, 
-                            const std::vector<Arg> *task_args,
-                            int64_t parentid) {
+::uint64_t Scheduler::Fetch(Worker *to, Worker *from, Split *split) {
   WorkerInfo *w = to->workerinfo;
   ServerInfo s = from->server;
   ::uint64_t id = GetNewTaskID();
@@ -855,7 +830,7 @@ void Scheduler::DeleteSplit(const string& split_name) {
   from->sendtasks.insert(fetchtask);
   lock.unlock();
 
-  dispatch_fetch(w, s, split->name, split->size, task_args, 000, id, parentid);
+  dispatch_fetch(w, s, split->name, split->size, 000, id);
   return id;
 }
 

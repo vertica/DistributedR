@@ -765,12 +765,10 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
     // deal with the data frame!!
     vector<pair<std::int64_t, std::int64_t> > offsets;
     for (int i = 0; i<req.cargs_size(); i++) {
-       ArrayData *ad = ParseShm(req.cargs(i).arrayname());
        offsets.push_back(make_pair(req.offsets(i).val(0), req.offsets(i).val(1)));
        composite->offsets.push_back(offsets.back());
-       composite->dims.push_back(ad->GetDims());
+       composite->dims.push_back(std::pair<std::int64_t, std::int64_t>(0,0));  //dummy dimensions
        composite->splitnames.push_back(req.cargs(i).arrayname());
-       delete ad;
     }
     composite->dobjecttype = DFRAME;
 
@@ -789,12 +787,10 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
     //Create Composite Array for lists
     vector<pair<std::int64_t, std::int64_t> > offsets;
     for (int i = 0; i<req.cargs_size(); i++) {
-       ArrayData* ad = ParseShm(req.cargs(i).arrayname());
        offsets.push_back(make_pair(req.offsets(i).val(0), req.offsets(i).val(1)));
        composite->offsets.push_back(offsets.back());
-       composite->dims.push_back(ad->GetDims());
-       composite->splitnames.push_back(req.cargs(i).arrayname());
-       delete ad;
+       composite->dims.push_back(std::pair<std::int64_t, std::int64_t>(0,0));  //dummy dimensions
+       composite->splitnames.push_back(req.cargs(i).arrayname()); 
     }
     composite->dobjecttype = DLIST;
 
@@ -1081,12 +1077,10 @@ void PrestoWorker::HandleRequests(int type) {
         case WorkerRequest::FETCH:
           { 
             LOG_DEBUG("New FETCH TaskID %16zu - Received from Master", worker_req.fetch().uid());
-
             string store;
             if (worker_req.fetch().has_store()) {
               store = worker_req.fetch().store();
             }
-
             fetch(worker_req.fetch().name(),
                   worker_req.fetch().location(),
                   worker_req.fetch().size(),

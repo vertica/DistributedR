@@ -440,17 +440,20 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
     if (progress) {
       printf("\rprogress: 100%%\n");
     }
+    LOG_DEBUG("All tasks complete");
 
     //wait for master metadata update
     for(volatile int i = 0; i < calls; i++) {
       sema.wait();
     }
+    LOG_DEBUG("Master metadata updated");
 
     if(DATASTORE == RINSTANCE) {
       //wait for worker metadata update
       for(int i = 0; i < pm->NumClients(); i++) {
         sema.wait();
       }
+      LOG_DEBUG("Worker metadata updated");
     }
   }
   signal(SIGINT, r_sigint_handler);  // revert to default

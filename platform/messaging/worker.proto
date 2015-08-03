@@ -115,9 +115,7 @@ message FetchRequest {
   optional string store = 4;
   optional int64 id = 5;
   optional int64 uid = 6;
-  repeated NewArg task_args = 7;
-  optional int64 parenttaskid = 8;
-  optional Policy policy = 9 [default = WORKER_CONN];
+  optional Policy policy = 7 [default = WORKER_CONN];
 }
 
 message NewExecuteRRequest {

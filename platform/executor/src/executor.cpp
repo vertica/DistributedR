@@ -223,14 +223,6 @@ ExecutorEvent Executor::GetNextEvent() {
     // Save the new value.
     char cmd[CMD_BUF_SIZE];
     snprintf(cmd, CMD_BUF_SIZE, ".tmp.shmname <- deparse(substitute(`%s`)); print(.tmp.shmname); assign(.tmp.shmname, `%s`, .GlobalEnv); ", new_dobj_name.c_str(), varname.c_str());
-    //LOG_INFO("command executed is %s", cmd);
-    RR.parseEvalQ(cmd);
-
-    snprintf(cmd, CMD_BUF_SIZE, "print(`%s`)", varname.c_str());
-    LOG_INFO("Printing variable. cmd is %s", cmd);
-    RR.parseEvalQ(cmd);
-    snprintf(cmd, CMD_BUF_SIZE, "print(`%s`)", new_dobj_name.c_str());
-    LOG_INFO("Printing new partition. cmd is %s", cmd);
     RR.parseEvalQ(cmd);
   }
 
@@ -299,9 +291,7 @@ int Executor::ReadSplitArgs() {  // NOLINT
         //create a name for this array to store in v2a for deletion
         char num[10];
         sprintf(num,"%d",m);
-        strcat(new_name,num);  //eg a5
-
-        LOG_INFO("Processing partitions %s", splitname);
+        strcat(new_name,num);
 
         // add to v2a a fake name so it's cleaned up later. Load split from Executor or Worker
         if(in_memory_partitions.find(splitname) != in_memory_partitions.end()) {
@@ -332,9 +322,6 @@ int Executor::ReadSplitArgs() {  // NOLINT
       
       var_to_list_type[varname] = composite;
     } else {
-
-      LOG_INFO("Processing partitions %s", splitname);
-
       // Check if executor contains the partitions.
       if(in_memory_partitions.find(splitname) != in_memory_partitions.end()) {
         LOG_INFO("Partition %s is on Executor. Loading..", splitname);
@@ -494,7 +481,7 @@ int Executor::ReadCompositeArgs() {
       snprintf(cmd, CMD_BUF_SIZE, ".tmp.varname <- deparse(substitute(`%s`)); print(.tmp.varname); assign(.tmp.varname, `%s`, .GlobalEnv); ", varname, compositename);
       RR.parseEvalQ(cmd);
     } else {
-      LOG_INFO("Partition %s is on Worker. Loading..", compositename);
+      LOG_INFO("Composite Dobject %s is on Worker. Loading..", compositename);
 
       ArrayData* split = ParseShm(compositename);
       split->LoadInR(RR, varname);
@@ -596,7 +583,7 @@ int Executor::Execute(set<tuple<string, bool, vector<pair<int64_t,int64_t>>>> co
     const string &name = get<0>(*i);   // name of variable in R-session
     bool empty = get<1>(*i);
     std::vector<std::pair<int64_t,int64_t>> dimensions = get<2>(*i);
-    LOG_INFO("name: %s, empty: %d, dim: %d %d", name.c_str(), empty, dimensions.at(0).first, dimensions.at(0).second);
+    //LOG_INFO("name: %s, empty: %d, dim: %d %d", name.c_str(), empty, dimensions.at(0).first, dimensions.at(0).second);
 
     if (contains_key(var_to_Composite, name)) {
       // updating composite
