@@ -335,7 +335,7 @@ void Scheduler::UpdateWorkerMetadata(bool success) {
     req.set_uid(taskid);
 
     wi->MetadataUpdate(req);
-    LOG_INFO("METADATAUPDATE Request TaskID %12d - Sent to Worker %s", taskid, wi->hostname().c_str());
+    LOG_INFO("METADATAUPDATE TaskID %7d - Sent to Worker %s", taskid, wi->hostname().c_str());
   }
 }
 

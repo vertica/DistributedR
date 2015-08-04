@@ -74,14 +74,14 @@ class TaskScheduler {
   ~TaskScheduler();
 
   void ForeachComplete(uint64_t id, uint64_t uid, bool status);
-  void StageUpdatedPartition(const std::string& split_name, size_t size, int executor_id);
+  void StageUpdatedPartition(const std::string& split_name, size_t size, int executor_id, uint64_t exec_taskid);
   int32_t ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
-  int64_t AddParentTask(const std::vector<NewArg>& task_args, int64_t parenttaskid, int taskid=-99);
+  int64_t AddParentTask(const std::vector<NewArg>& task_args, uint64_t parenttaskid, uint64_t taskid);
   void DeleteSplit(const std::string& splitname);
   void PersistDone(uint64_t taskid, int executor_id); 
 
 protected:
-  int64_t GetBestExecutor(const std::vector<NewArg>& partitions, int taskid);
+  int64_t GetBestExecutor(const std::vector<NewArg>& partitions, uint64_t taskid);
   int64_t ExecutorToPersistFrom(const std::string& split_name);
   bool IsSplitAvailable(const std::string& split_name, int executor_id=-1); //If executor_id is -1, then persist to worker.
   bool IsBeingPersisted(const std::string& split_name);

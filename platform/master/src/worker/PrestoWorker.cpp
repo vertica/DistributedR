@@ -488,7 +488,7 @@ void PrestoWorker::clear(ClearRequest req) {
 
 void PrestoWorker::prepare_persist(const std::string& name, int executor, uint64_t taskid) {
 
-  LOG_DEBUG("prepare_persist: Received persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
+  LOG_DEBUG("prepare_persist: Received persist task(%s, %d) for main Task %zu", name.c_str(), executor, taskid);
 
   shmem_arrays_mutex_.lock();
   shmem_arrays_.insert(name);
@@ -513,8 +513,6 @@ void PrestoWorker::prepare_persist(const std::string& name, int executor, uint64
   if (notify)
     requests_queue_empty_[PERSISTSPLIT].notify_all();
   lock.unlock();
-    
-  LOG_DEBUG("prepare_persist: Notified Persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
 }
 
 /* Create and send Execute Task to Worker to create
@@ -1068,7 +1066,7 @@ void PrestoWorker::HandleRequests(int type) {
             }
             
             if(DATASTORE == RINSTANCE) {
-              uint64_t taskid =  worker_req.fetch().uid();
+              uint64_t taskid = worker_req.fetch().uid();
 
               NewArg arg;
               arg.set_arrayname(worker_req.fetch().name());
@@ -1077,7 +1075,8 @@ void PrestoWorker::HandleRequests(int type) {
               transfer_arg.push_back(arg);
 
               //Persist to worker if not already on worker.
-              int32_t num_persisted = executorscheduler_->ValidatePartitions(transfer_arg, -1, taskid);
+              executorscheduler_->ValidatePartitions(transfer_arg, -1, taskid);
+              LOG_INFO("NEWTRANSFER TaskID %14zu - Split %s validated", taskid, worker_req.fetch().name().c_str());
             }
 
             newtransfer(worker_req.fetch().name(),
@@ -1124,15 +1123,15 @@ void PrestoWorker::HandleRequests(int type) {
 
               //int64_t executor_id = executorscheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());
               executorscheduler_->ValidatePartitions(cc_args, -1, taskid);
+              LOG_INFO("CREATECOMPOSITE TaskID %10zu - All required splits to create composite dobject validated", taskid);
 
-              LOG_INFO("CREATECOMPOSITE %d : All partitions validated.", worker_req.createcomposite().uid());
               createcomposite(worker_req.createcomposite());
             }
           }
           break;
         case WorkerRequest::METADATAUPDATE:
           {
-            LOG_INFO("New METADATAUPDATE TaskID %6zu - Received from Master", worker_req.metadataupdate().uid());
+            LOG_INFO("New METADATAUPDATE TaskID %7zu - Received from Master", worker_req.metadataupdate().uid());
             executorpool_->reset_executors();
             executorscheduler_->ForeachComplete(worker_req.metadataupdate().id(), 
                                         worker_req.metadataupdate().uid(), 
@@ -1197,10 +1196,11 @@ void PrestoWorker::HandleRequests(int type) {
               uint64_t parenttaskid = worker_req.newexecr().parenttaskid();
 
               int64_t executor_id = executorscheduler_->AddParentTask(new_args, parenttaskid, taskid);
+              LOG_DEBUG("EXECUTE TaskID %18zu - Assigned to Executor Id %d. Validating input splits.", taskid, executor_id);
               executorscheduler_->ValidatePartitions(new_args, executor_id, taskid);
               //TODO: Add validation for CC newargs as well.
+              LOG_INFO("EXECUTE TaskID %18zu - All input splits validated. Sending to Executor Id %d for execution", taskid, executor_id);
 
-              LOG_INFO("EXECUTE %d : All partitions validated, sent to executor(%d)", taskid, executor_id);
               executorpool_->execute(func, new_args, raw_args, composite_args,
                                      worker_req.newexecr().id(),
                                      worker_req.newexecr().uid(),

@@ -230,12 +230,11 @@ void ExecutorPool::execute(std::vector<std::string> func,
                            std::vector<NewArg> composite_args,
                            ::uint64_t id, ::uint64_t uid, 
                            Response* res, int executor_id ) {
-  LOG_DEBUG("ExecutorPool EXECUTE: New task of type EXECR received for executor(%d)", executor_id);
-
   int target_executor = executor_id;
 
+  LOG_DEBUG("EXECUTE TaskID %18zu - Waiting for the Executor Id %d to be available", uid, target_executor);
+
   unique_lock<mutex> lock(executors[target_executor].executor_mutex);
-  LOG_DEBUG("ExecutorPool EXECUTE: Waiting for the executor to be available(%d)", target_executor);
   while(executors[target_executor].ready==false) { executors[target_executor].sync.wait(lock);}
   executors[target_executor].ready = false;
   lock.unlock();
@@ -391,7 +390,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
      } 
 
      string name(cname);  // the name of a split after task completion
-     worker->GetScheduler()->StageUpdatedPartition(name, size, target_executor);
+     worker->GetScheduler()->StageUpdatedPartition(name, size, target_executor, uid);
      req.add_update_names(name);
      req.add_update_sizes(size);
      req.add_update_empties(empty);
@@ -679,11 +678,9 @@ void ExecutorPool::execute(std::vector<std::string> func,
 
 
 void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
-
-  LOG_DEBUG("ExecutorPool CLEAR: New task of type CLEAR for #%d number of splits received for executor(%d)", splits.size(), executor);
+  LOG_DEBUG("CLEAR Task                     - Waiting for the Executor Id %d to clear %zu splits", executor, splits.size());
 
   unique_lock<mutex> lock(executors[executor].executor_mutex);
-  LOG_DEBUG("ExecutorPool CLEAR: Waiting for the executor to be available(%d)", executor);
   while(executors[executor].ready==false) { executors[executor].sync.wait(lock); }
   executors[executor].ready = false;
   lock.unlock();
@@ -694,7 +691,7 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
      fprintf(executors[executor].send, "%s\n", splits[i].c_str());
   }
   fflush(executors[executor].send);
-  LOG_INFO("ExecutorPool CLEAR: Sent CLEAR task to executor(%d). No wait.", executor);
+  LOG_INFO("CLEAR Task                        - Sent CLEAR task to Executor Id %d. No wait.", executor);
 
   /*char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
@@ -734,11 +731,9 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
 
 
 void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid) {
-
-  LOG_DEBUG("ExecutorPool PERSIST: New task of type PERSIST received for split(%s) and executor(%d)", split_name.c_str(), executor);
+  LOG_DEBUG("PERSIST Task                   - Waiting for the Executor Id %d to persist split %s", executor, split_name.c_str());
 
   unique_lock<mutex> lock(executors[executor].executor_mutex);
-  LOG_DEBUG("ExecutorPool PRESIST: Waiting for the executor to be available(%d)", executor);
   while(executors[executor].ready==false) { executors[executor].sync.wait(lock); }
   executors[executor].ready = false;
   lock.unlock();
@@ -746,7 +741,7 @@ void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid
   fprintf(executors[executor].send, "%d\n", PERSIST); 
   fprintf(executors[executor].send, "%s\n", split_name.c_str());
   fflush(executors[executor].send);
-  LOG_INFO("ExecutorPool PERSIST: Sent split(%s) to executor(%d)", split_name.c_str(), executor);
+  LOG_INFO("PERSIST Task                      - Sent split %s to Executor Id %d to persist", split_name.c_str(), executor);
 
   char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
@@ -768,12 +763,12 @@ void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid
 
     if (strncmp(cname, "&", 100) == 0) {
        // we are using size field to indicate the task result
-       LOG_INFO("ExecutorPool PERSIST: Task complete for split(%s)", split_name.c_str());
        if (size==TASK_EXCEPTION){
           ostringstream msg;
           msg << "TASK_EXCEPTION : Persist task execution failed at Executor " << executor << " with message: " << task_msg;
           LOG_ERROR(msg.str());
-       }
+       } else
+         LOG_INFO("PERSIST Task                      - Split %s persisted successfully", split_name.c_str());
        break;
     }
   }
