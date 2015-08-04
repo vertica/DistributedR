@@ -93,12 +93,7 @@ protected:
   boost::unordered_map<std::string, ExecSplit*> executor_splits; //map<name, split_info>
   boost::unordered_map<uint64_t, int> parent_tasks;   //map<parent_task, exec_id>//to keep track of executor on which execution will happen.
   boost::unordered_map<int, ExecStat*> executor_stat;  //which executor has how much memory
-
   boost::unordered_set<std::string> *shmem_arrays;
-
-  // Metadata for fetch/newtransfer
-  //boost::unordered_set<std::string> fetched_partitions_; //All Partitions fetched into a worker from another worker
-  //boost::unordered_set<std::string> persisted_partitions_; //All Partitions persisted on worker
 
   //Stage metadata
   boost::unordered_set<SplitUpdate*> updated_splits;

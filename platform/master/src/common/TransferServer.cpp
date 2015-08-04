@@ -53,8 +53,6 @@ std::pair<void*, int64_t> TransferServer::transfer_blob(const string &name, Work
   //this->dest_ = addr;
   //this->size_ = size;
   this->name_ = name;
-
-  LOG_INFO("Source(%d) and destination(%d)", source_, destination_);
   
   bytes_fetched_ = 0;
   error_in_transfer_thread= false;
@@ -62,7 +60,7 @@ std::pair<void*, int64_t> TransferServer::transfer_blob(const string &name, Work
   // when it is ready
   sem_init(&server_ready, 0, 0);
 
-  // Setup a receicing thread.
+  // Setup a receiving thread.
   // Later, we will send a Fetch request,
   // and the data will arrive to this thread
   pthread_t server_thread;
@@ -122,7 +120,7 @@ std::pair<void*, int64_t> TransferServer::transfer_blob(const string &name, Work
 //   }
 }
 
-/** A thread that actually recevices data from remote worker.
+/** A thread that actually receives data from remote worker.
  * @return If the action succeed, it will return 0. Otherwise, socket descriptor.
  */
 void* TransferServer::worker_transfer_server(void) {
@@ -187,13 +185,13 @@ void* TransferServer::worker_transfer_server(void) {
     atomicio(read, new_fd, dest_, size_);
     dest_ = NULL;
 
-    LOG_INFO("worker_transfer_server: Transfered to a Shared memory file %s(%zu)", name_.c_str(), size_);
+    LOG_DEBUG("worker_transfer_server: Transfered to a Shared memory file %s(%zu)", name_.c_str(), size_);
   } else {
     if(dest_ == NULL) {
       dest_ = malloc(size_);
     }
 
-    LOG_INFO("worker_transfer_server: Transferred to buffer(%zu)", size_);
+    LOG_DEBUG("worker_transfer_server: Transferred to temporary buffer(%zu)", size_);
     bytes_fetched_ += (size_);
     atomicio(read, new_fd, dest_, size_);
   }
@@ -260,7 +258,6 @@ void* TransferServer::R_transfer_server(void) {
   char split_size[128];
   memset(split_size, 0x00, 128);
   int rbytes = read(new_fd, split_size, sizeof(split_size)-1);
-  //LOG_INFO("Read Size is %s. Replacing the passed size %zu", split_size, size_);
   size_ = (size_t)(atoi(split_size));
   LOG_INFO("R_transfer_server: Size of split transferred(%zu)", size_);
 
@@ -276,10 +273,8 @@ void* TransferServer::R_transfer_server(void) {
 
   int64_t type = BINARY;
   memcpy(dest_, &type, sizeof(int64_t));
-  //LOG_INFO("Really written %d", *reinterpret_cast<int64_t*>(dest_));
   size_t bytes_read;
   while((bytes_read = atomicio(read, new_fd, ((char*)dest_) + sizeof(int64_t), (size_- sizeof(int64_t)))) > 0) {
-    LOG_INFO("R_transfer_server: Data bytes read %d, split size is %zu", bytes_read, size_);
     bytes_fetched_ += bytes_read;
     if (bytes_fetched_ <= size_) 
       break;

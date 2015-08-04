@@ -43,6 +43,9 @@
 #include <boost/thread/condition_variable.hpp>
 #include <boost/thread/locks.hpp>
 
+#ifdef PERF_TRACE
+#include <ztracer.hpp>
+#endif
 
 //using namespace boost;
 using namespace std;

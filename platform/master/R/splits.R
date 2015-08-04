@@ -136,7 +136,7 @@ setMethod("getpartition", signature("darray", "missing", "missing"),
                                       Dim=as.integer(c(0,0))))
     		}else{ return (array(dim=c(0,0)))}
 	    }
-            foreach(i, 1:1, function(comp = splits(x)) { }, progress=FALSE)
+            foreach(i, 1:1, function(comp = splits(x)) {}, progress=FALSE)
             tryCatch({
               pm <- get_pm_object()
               output <- .Call("DistributedObject_Get", pm, splits(x))
@@ -287,7 +287,7 @@ setMethod("rcall", signature("character", "list", "list", "list", "list"),
   })
 
 # foreach generic definition 
-foreach <- function(index, range, func, progress=TRUE, scheduler=0, inputs=integer(0)) {
+foreach <- function(index, range, func, progress=TRUE, scheduler=0, inputs=integer(0), perf_trace=FALSE) {
   options(error=dump.frames) #for debugging
 
   if (class(range) != "numeric" && class(range) != "integer") {
@@ -454,6 +454,7 @@ else{
         as.integer(scheduler),
         as.integer(inputs),
         progress,
+        perf_trace,
         DUP=FALSE)
   },error = handle_presto_exception)
 

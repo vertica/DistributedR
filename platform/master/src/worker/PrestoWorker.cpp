@@ -59,6 +59,10 @@
 
 #include "RequestLogger.h"
 
+#ifdef PERF_TRACE
+#include <ztracer.hpp>
+#endif
+
 using namespace std;
 using namespace boost;
 
@@ -291,13 +295,6 @@ void PrestoWorker::fetch(string name, ServerInfo location,
   try {
     req.set_task_result(TASK_SUCCEED);
     req.set_task_message("Succeed");
-    /*SharedMemoryObject shm(
-      boost::interprocess::open_or_create, name.c_str(),
-      boost::interprocess::read_write);  // create shared memory region to write
-    shm.truncate(size);  // allocate region
-    boost::interprocess::mapped_region region(shm,
-      boost::interprocess::read_write);
-    void *addr = region.get_address(); */ // address where the data will be written
 
     shmem_arrays_mutex_.lock();
     shmem_arrays_.insert(name);
@@ -311,10 +308,6 @@ void PrestoWorker::fetch(string name, ServerInfo location,
     std::pair<void*, size_t> ret = tw.transfer_blob(name, getClient(location),
                      my_location_.name(), store, uid);
     size_t split_size = ret.second;
-    
-    /*ArrayData *ad = ParseShm(name);  // read the memory segment
-    ad->Decompress();  // decompress it if it is compressed
-    delete ad;*/
 
     t.stop();
     LOG_DEBUG("FETCH TaskID %20zu - Split %10s (size %zu) fetched to Worker %15s.",
@@ -341,70 +334,10 @@ void PrestoWorker::fetch(string name, ServerInfo location,
   LOG_DEBUG("FETCH TaskID %20zu - Sent TASKDONE message to Master", uid);
 }
 
-/* Read splits from remote workers and keep them in the shared memory region
-* @param name the name of a split to fetch from a remote worker
-* @param location information about a worer from where we will fetch a split
-* @param size the size of a split to fetch
-* @param id id of a task
-* @param uid uid of a task
-* @param store a location to keep the split (not memory)
-* @return NULL
-void PrestoWorker::fetchtoR(string name, ServerInfo location,
-                            ::uint64_t id, ::uint64_t uid,
-                            string store) {
-  master_last_contacted_.start();
-  TaskDoneRequest req;
-  try {
-    req.set_task_result(TASK_SUCCEED);
-    req.set_task_message("Succeed");
-    int port_number = -1;
-    int32_t serverfd;
-    try {
-      serverfd = CreateBindedSocket(start_port_range_, end_port_range_, &port_number);
-    } catch (...) {
-      LOG_ERROR("FetchToR: Error creating socket %d", serverfd);
-      port_number = -1;
-      // leeky: isn't it better to return here if there's an error
-    }
-
-    int executor_id = 0;
-    LOG_INFO("Port number and socket fd is %s %d", port_number, serverfd);
-    executorpool_->fetch(name, serverfd, port_number, executor_id);
-    LOG_INFO("Created listening thread in executor %d", executor_id); 
-    
-    //Create NewTransfer task
-    ServerInfo server_location;
-    server_location.set_name(my_location_.name());
-    server_location.set_presto_port(port_number);
-    FetchRequest req;
-    req.mutable_location()->CopyFrom(server_location);
-    req.set_name(name);
-    if (!store.empty()) {
-      req.set_store(store);
-    }
-    req.set_policy(FetchRequest::R_CONN);
-    getClient(location)->NewTransfer(req);
-
-  } catch(std::exception& ex) {
-    req.set_task_result(TASK_EXCEPTION);
-    ostringstream msg;
-    msg << "Fetch error from " << server_to_string(my_location_)
-      << check_out_of_memory(executorpool_->GetExecutorPids()) << endl << FILE_DESCRIPTOR_ERR_MSG;
-    LOG_ERROR("FETCH TaskID %20zu error : %s", uid, msg.str().c_str());
-    req.set_task_message(msg.str());
-  }
-  
-  req.set_id(id);
-  req.set_uid(uid);
-  req.mutable_location()->CopyFrom(my_location_);
-  master_->TaskDone(req);  // send task done message
-  LOG_DEBUG("FETCH TaskID %20zu - Sent TASKDONE message to Master", uid);
-
-}*/
 
 /** Handle fetch request from remote workers. This reads splits from shared memory and send them to a requester
  * @param name name of a split that is requested
- * @param location the reuqester information (hostname and port)
+ * @param location the requester information (hostname and port)
  * @param size size of the requested split
  * @param store the location of store (external storage except memory)
  * @return NULL
@@ -532,7 +465,7 @@ void PrestoWorker::clear(ClearRequest req) {
     array_stores_[req.store()]->Delete(req.name());
 #endif
   } else {
-    LOG_INFO("CLEAR Task                     - Clearing %s from Shared memory", req.name().c_str());
+    LOG_DEBUG("CLEAR Task                     - Clearing %s from Shared memory", req.name().c_str());
     SharedMemoryObject::remove(req.name().c_str());
 
     //clear from executors
@@ -555,7 +488,8 @@ void PrestoWorker::clear(ClearRequest req) {
 
 void PrestoWorker::prepare_persist(const std::string& name, int executor, uint64_t taskid) {
 
-  LOG_INFO("prepare_persist: Received persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
+  LOG_DEBUG("prepare_persist: Received persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
+
   shmem_arrays_mutex_.lock();
   shmem_arrays_.insert(name);
   shmem_arrays_mutex_.unlock();
@@ -580,7 +514,7 @@ void PrestoWorker::prepare_persist(const std::string& name, int executor, uint64
     requests_queue_empty_[PERSISTSPLIT].notify_all();
   lock.unlock();
     
-  LOG_INFO("prepare_persist: Notified Persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
+  LOG_DEBUG("prepare_persist: Notified Persist task(%s, %d) for main task %d", name.c_str(), executor, taskid);
 }
 
 /* Create and send Execute Task to Worker to create
@@ -778,6 +712,13 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
     composite->dobjecttype = DFRAME;
 
     WorkerRequest* wrk_req = CreateDfCcTask(req);
+#ifdef PERF_TRACE
+      struct blkin_trace_info info;
+      worker_trace->get_trace_info(&info);
+      wrk_req->set_parent_span_id(info.parent_span_id);
+      wrk_req->set_span_id(info.span_id);
+      wrk_req->set_trace_id(info.trace_id);
+#endif
     unique_lock<mutex> lock(requests_queue_mutex_[EXECUTE]);
     bool notify = requests_queue_[EXECUTE].empty();
     // keep a request at the appropriate queue
@@ -800,6 +741,13 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
     composite->dobjecttype = DLIST;
 
     WorkerRequest* wrk_req = CreateListCcTask(req);
+#ifdef PERF_TRACE
+      struct blkin_trace_info info;
+      worker_trace->get_trace_info(&info);
+      wrk_req->set_parent_span_id(info.parent_span_id);
+      wrk_req->set_span_id(info.span_id);
+      wrk_req->set_trace_id(info.trace_id);
+#endif
     unique_lock<mutex> lock(requests_queue_mutex_[EXECUTE]);
     bool notify = requests_queue_[EXECUTE].empty();
     requests_queue_[EXECUTE].push_back(wrk_req);
@@ -889,6 +837,7 @@ PrestoWorker::PrestoWorker(
                                              DEFAULT_SPILL_DIR);
   }
   LOG_INFO("Creating Executors in Worker");
+
   executorpool_ = new ExecutorPool(this, num_executors_,
                                    &my_location_,
                                    master_.get(),
@@ -901,7 +850,7 @@ PrestoWorker::PrestoWorker(
   if(DATASTORE == WORKER) {
     executorscheduler_ = NULL;
   } else {
-    LOG_INFO("Creating scheduler");
+    LOG_INFO("Creating Task Scheduler");
     executorscheduler_ = new TaskScheduler(this, executorpool_, 
                                            &shmem_arrays_,
                                            &shmem_arrays_mutex_,
@@ -1013,9 +962,9 @@ void PrestoWorker::HandleRequests(int type) {
   vector<string> func;  // string expression of function
   vector<Arg> args;  // a class that wraps all arguments (split/raw/composite)
   vector<RawArg> raw_args;  // arguments not related to splits
-  vector< ::int64_t> offset_dims;  // offset dimentsions
+  vector< ::int64_t> offset_dims;  // offset dimensions
 
-  vector<NewArg> new_args;  // argument related to shplits
+  vector<NewArg> new_args;  // argument related to splits
   vector<NewArg> composite_args;  // argument about composite array
 
   mutex &requests_queue_mutex_ = this->requests_queue_mutex_[type];
@@ -1475,10 +1424,10 @@ void PrestoWorker::hello(ServerInfo master_location,
 
 
     LOG_INFO("Worker opened connection to Master at %s:%d", master_location.name().c_str(), master_location.presto_port());
-    // enable to send message to master dirctly from executor pool
+    // enable to send message to master directly from executor pool
     executorpool_->master = master_.get();
     cmd_to_master = master_.get();
-    // set its own infromation
+    // set its own information
     my_location_.CopyFrom(worker_location);
     master_location_.CopyFrom(master_location);
     // When a master is registered, start a master monitor
@@ -1487,7 +1436,7 @@ void PrestoWorker::hello(ServerInfo master_location,
     thr.detach();
     master_last_contacted_.start();
   } else {
-    LOG_INFO("===> Heartbeat hello %d", num_workers);
+    //LOG_INFO("===> Heartbeat hello %d", num_workers);
     num_workers_ = num_workers;
   }
 
@@ -1630,7 +1579,6 @@ void PrestoWorker::shutdown() {
     }
   } catch(...) {}
 
-  //TODO:Remove worker metadata
   LOG_INFO("Worker shutdown - Removing shared memory segments");
   try {
     bool ret = shmem_arrays_mutex_.timed_lock(boost::get_system_time()+boost::posix_time::milliseconds(2000));
@@ -1639,7 +1587,7 @@ void PrestoWorker::shutdown() {
         i != shmem_arrays_.end(); i++) {
         if (i->c_str() != NULL) {
           LOG_DEBUG("Removing shared memory object: %s", i->c_str());
-          //SharedMemoryObject::remove(i->c_str());
+          SharedMemoryObject::remove(i->c_str());
         }
       }
       shmem_arrays_.clear();
@@ -2046,7 +1994,7 @@ int main(int argc, char **argv) {
   // l: log level (0:error, 1: warning, 2: info, 3: debug)
   // a: address of master node. If this value is given, a worker initiates connection to a master.
   // b: the port of master node
-  // w: worker address identifed from user input
+  // w: worker address identified from user input
   //     Otherwise, a master initiates connection to a worker.
   // c: flag indicating where system needs to start with resource limitations or not
   // o: memory limit for the distributedR process.

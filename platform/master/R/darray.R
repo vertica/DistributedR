@@ -84,7 +84,6 @@ darray <- function(dim = NA, blocks = NA, sparse=FALSE, data=0, npartitions=NA, 
   	                dhs <- matrix(data=as.numeric(val), nrow=dim[1], ncol=dim[2])
               }
               update(dhs)
-              print(dhs)
             }, progress=FALSE)
   } else {
     success <- foreach(i,1:npartitions(d),

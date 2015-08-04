@@ -198,18 +198,13 @@ static SEXP DeserializeList(void *data) {
 
 static SEXP DeserializeBinary(void *data, size_t size) {
   SEXP raw_data;  
-  LOG_INFO("GetSplitToMaster: Bytes fetched %d", size);
-  //int64_t type = *reinterpret_cast<int64_t*>(addr);
-  //LOG_INFO("GetSplitTOMaster: type %d", type);
   PROTECT(raw_data = Rf_allocVector(RAWSXP, size));
   memcpy(RAW(raw_data), 
          reinterpret_cast<unsigned char*>(data)+sizeof(int64_t), 
          size);
-  LOG_INFO("Calling unserialize");
   Rcpp::Language unserialize_call("unserialize", raw_data);
   SEXP RObj;
   PROTECT(RObj = Rf_eval(unserialize_call, R_GlobalEnv));
-  LOG_INFO("done unserialize");
   UNPROTECT(2);
   return RObj;
 }
@@ -221,7 +216,7 @@ static SEXP DeserializeBinary(void *data, size_t size) {
  */
 SEXP Deserialize(void *data, size_t size) {
   int64_t type = *reinterpret_cast<int64_t*>(data);  
-  LOG_INFO("Deserialize: Type (%d)", type);
+
   if (RSymbol_dim == NULL)
     RSymbol_dim = R_DimSymbol;
   INSTALL_SYMBOL(Dim);

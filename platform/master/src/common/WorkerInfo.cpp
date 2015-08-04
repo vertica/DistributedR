@@ -24,9 +24,12 @@
 #include "WorkerInfo.h"
 #include "PrestoException.h"
 
+#ifdef PERF_TRACE
+#include "dLogger.h"
+#endif
+
 using namespace boost;
 namespace presto {
-
 /** This function sends a message (or task) in a queue to a worker. This is called from a master side
  * @return NULL
  */
@@ -176,6 +179,14 @@ void WorkerInfo::NewExecuteR(const NewExecuteRRequest& newexecr) {
   WorkerRequest req;
   req.set_type(WorkerRequest::NEWEXECR);
   req.mutable_newexecr()->CopyFrom(newexecr);
+  
+#ifdef PERF_TRACE
+  struct blkin_trace_info info;
+  master_trace->get_trace_info(&info);
+  req.set_parent_span_id(info.parent_span_id);
+  req.set_span_id(info.span_id);
+  req.set_trace_id(info.trace_id);
+#endif
   SendZMQMessagePush(req);
 }
 
@@ -209,6 +220,13 @@ void WorkerInfo::Fetch(const FetchRequest& fetch) {
   WorkerRequest req;
   req.set_type(WorkerRequest::FETCH);
   req.mutable_fetch()->CopyFrom(fetch);
+#ifdef PERF_TRACE
+  struct blkin_trace_info info;
+  master_trace->get_trace_info(&info);
+  req.set_parent_span_id(info.parent_span_id);
+  req.set_span_id(info.span_id);
+  req.set_trace_id(info.trace_id);
+#endif
   //  SendZMQMessage(req, res);
   SendZMQMessagePush(req);
 }
@@ -221,6 +239,18 @@ void WorkerInfo::NewTransfer(const FetchRequest& fetch) {
   WorkerRequest req;  // Create a request to worker
   req.set_type(WorkerRequest::NEWTRANSFER);
   req.mutable_fetch()->CopyFrom(fetch);
+#ifdef PERF_TRACE
+  struct blkin_trace_info info;
+  if(worker_trace.get()){
+  worker_trace->get_trace_info(&info);
+  }else{
+      info.trace_id = 1337;
+  }
+  req.set_parent_span_id(info.parent_span_id);
+  req.set_span_id(info.span_id);
+  req.set_trace_id(info.trace_id);
+#endif
+  
   //  SendZMQMessage(req, res);
   SendZMQMessagePush(req);  // send message
 }
@@ -246,6 +276,14 @@ void WorkerInfo::CreateComposite(
   WorkerRequest req;
   req.set_type(WorkerRequest::CREATECOMPOSITE);
   req.mutable_createcomposite()->CopyFrom(createcomposite);
+
+#ifdef PERF_TRACE
+  struct blkin_trace_info info;
+  master_trace->get_trace_info(&info);
+  req.set_parent_span_id(info.parent_span_id);
+  req.set_span_id(info.span_id);
+  req.set_trace_id(info.trace_id);
+#endif
   SendZMQMessagePush(req);
 }
 

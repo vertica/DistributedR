@@ -68,7 +68,6 @@ ExecutorPool::ExecutorPool(PrestoWorker* worker_, int n_, ServerInfo *my_locatio
   exec_index = 0;
   
   for (int i = 0; i < num_executors; i++) {
-    //ExecutorData* executor = new ExecutorData;
 
     child_proc_ids_.push_back(0);  // initialize the child process ID
     int sendpipe[2];  // to send commands to executor
@@ -143,22 +142,12 @@ ExecutorPool::ExecutorPool(PrestoWorker* worker_, int n_, ServerInfo *my_locatio
       if (executors[i].send != NULL && executors[i].recv != NULL) {
         executors[i].ready = true;
       }
-      /*executor->process_id = pid;
-      executor->send = fdopen(sendpipe[1], "w");  // prepare for pipes
-      executor->recv = fdopen(recvpipe[0], "r");
-      close(sendpipe[0]);
-      close(recvpipe[1]);
-      if (executor->send != NULL && executor->recv != NULL) {
-        executor->ready = true;
-      }
-      executor->id = i;
-      executors[i] = executor;*/
 
 #ifdef PERF_TRACE
       fprintf(executors[i].send, "%d \n", i);
 #endif
 
-      LOG_INFO("Created new Executor with ID %d Process ID %jd", i+1,(::intmax_t)pid);
+      LOG_INFO("Created new Executor %d Process ID %jd", i,(::intmax_t)pid);
     }
   }
 
@@ -202,22 +191,6 @@ ExecutorPool::~ExecutorPool() {
     delete[] executors;
     executors = NULL;
   }
-  /*boost::unordered_map<int, ExecutorData*>::iterator eit = executors.begin();
-  for(; eit != executors.end(); ++eit) {
-     if (eit->second->send != NULL) {
-        fclose(eit->second->send);
-        eit->second->send = NULL;
-     }
-     if (eit->second->recv != NULL) {
-        fclose(eit->second->recv);
-        eit->second->recv = NULL;
-     }
-     eit->second->clear_tasks.clear();
-     eit->second->send_tasks.clear();
-     eit->second->load_tasks.clear();
-     eit->second->exec_tasks.clear();
-     delete eit->second;
-  }*/
  
   LOG_DEBUG("Executorpool destructor: Closing semaphores");
   if (sema != NULL) {
@@ -237,7 +210,6 @@ int ExecutorPool::GetExecutorInRndRobin() {
     unique_lock<mutex> lock(exec_mutex);
     int idx = exec_index%num_executors;
     exec_index++;
-    LOG_INFO("GetExecutorInRndRobin: %d", idx);
     return idx;
     lock.unlock();
 }
@@ -258,13 +230,13 @@ void ExecutorPool::execute(std::vector<std::string> func,
                            std::vector<NewArg> composite_args,
                            ::uint64_t id, ::uint64_t uid, 
                            Response* res, int executor_id ) {
-  LOG_INFO("ExecutorPool: New Request of type EXECR executor(%d)", executor_id);
+  LOG_DEBUG("ExecutorPool EXECUTE: New task of type EXECR received for executor(%d)", executor_id);
 
   int target_executor = executor_id;
 
   unique_lock<mutex> lock(executors[target_executor].executor_mutex);
-  LOG_INFO("ExecutorPool: Waiting for the executor to be available(%d)", target_executor);
-  while(executors[target_executor].ready==false) { executors[target_executor].sync.wait(lock);} //LOG_INFO("ExecutorPool: In loop(%d)", target_executor);}
+  LOG_DEBUG("ExecutorPool EXECUTE: Waiting for the executor to be available(%d)", target_executor);
+  while(executors[target_executor].ready==false) { executors[target_executor].sync.wait(lock);}
   executors[target_executor].ready = false;
   lock.unlock();
   
@@ -377,16 +349,6 @@ void ExecutorPool::execute(std::vector<std::string> func,
   fflush(executors[target_executor].send);
   LOG_INFO("EXECUTE TaskID %18zu - Executing Function sent to Executor Id %d", uid, target_executor);
 
-  // wait until executor is ready
-  // boost::interprocess::scoped_lock<
-  //   boost::interprocess::interprocess_mutex> executor_lock(
-  //     executors[i].iss->executor_mutex);
-  // executor_lock.unlock();
-  // // notify executor to start
-  // executors[i].iss->executor_condition.notify_one();
-
-  //timer.start();
-
   TaskDoneRequest req;
 
   bool first = true;
@@ -442,8 +404,6 @@ void ExecutorPool::execute(std::vector<std::string> func,
      }
   }
 
-  
-  //unique_lock<mutex> lock(executors[target_executor].executor_mutex);
   lock.lock();
   executors[target_executor].ready = true;
   executors[target_executor].sync.notify_one();
@@ -720,22 +680,21 @@ void ExecutorPool::execute(std::vector<std::string> func,
 
 void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
 
-  LOG_INFO("ExecutorPool CLEAR: New Request of type CLEAR #splits(%d), executor(%d)", splits.size(), executor);
+  LOG_DEBUG("ExecutorPool CLEAR: New task of type CLEAR for #%d number of splits received for executor(%d)", splits.size(), executor);
 
   unique_lock<mutex> lock(executors[executor].executor_mutex);
-  LOG_INFO("ExecutorPool CLEAR: Waiting for the executor to be available(%d)", executor);
-  while(executors[executor].ready==false) { executors[executor].sync.wait(lock); } //LOG_INFO("ExecutorPool: In loop(%d)", target_executor);}
+  LOG_DEBUG("ExecutorPool CLEAR: Waiting for the executor to be available(%d)", executor);
+  while(executors[executor].ready==false) { executors[executor].sync.wait(lock); }
   executors[executor].ready = false;
   lock.unlock();
 
   fprintf(executors[executor].send, "%d\n", CLEAR);
   fprintf(executors[executor].send, "%zu\n", splits.size());
   for (int i = 0; i < splits.size(); i++) {
-     LOG_INFO("ExecutorPool CLEAR: Sending partition %s to executor %d", splits[i].c_str(), executor);
      fprintf(executors[executor].send, "%s\n", splits[i].c_str());
   }
   fflush(executors[executor].send);
-  LOG_INFO("ExecutorPool CLEAR: Sent CLEAR executor(%d). No wait.", executor);
+  LOG_INFO("ExecutorPool CLEAR: Sent CLEAR task to executor(%d). No wait.", executor);
 
   /*char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
@@ -776,18 +735,18 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
 
 void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid) {
 
-  LOG_INFO("ExecutorPool PERSIST: New Request of type PERSIST split(%s), executor(%d)", split_name.c_str(), executor);
+  LOG_DEBUG("ExecutorPool PERSIST: New task of type PERSIST received for split(%s) and executor(%d)", split_name.c_str(), executor);
 
   unique_lock<mutex> lock(executors[executor].executor_mutex);
-  LOG_INFO("ExecutorPool PRESIST: Waiting for the executor to be available(%d)", executor);
-  while(executors[executor].ready==false) { executors[executor].sync.wait(lock); } //LOG_INFO("ExecutorPool: In loop(%d)", target_executor);}
+  LOG_DEBUG("ExecutorPool PRESIST: Waiting for the executor to be available(%d)", executor);
+  while(executors[executor].ready==false) { executors[executor].sync.wait(lock); }
   executors[executor].ready = false;
   lock.unlock();
 
   fprintf(executors[executor].send, "%d\n", PERSIST); 
   fprintf(executors[executor].send, "%s\n", split_name.c_str());
   fflush(executors[executor].send);
-  LOG_INFO("ExecutorPool PERSIST: Sent split(%s), executor(%d)", split_name.c_str(), executor);
+  LOG_INFO("ExecutorPool PERSIST: Sent split(%s) to executor(%d)", split_name.c_str(), executor);
 
   char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
@@ -809,7 +768,7 @@ void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid
 
     if (strncmp(cname, "&", 100) == 0) {
        // we are using size field to indicate the task result
-       LOG_INFO("ExecutorPool PERSIST: Task complete.");
+       LOG_INFO("ExecutorPool PERSIST: Task complete for split(%s)", split_name.c_str());
        if (size==TASK_EXCEPTION){
           ostringstream msg;
           msg << "TASK_EXCEPTION : Persist task execution failed at Executor " << executor << " with message: " << task_msg;
@@ -840,60 +799,5 @@ int ExecutorPool::GetExecutorID(pid_t pid) {
   }
   return 0;
 }
-
-
-/*void ExecutorPool::newtransfer(std::string split_name, std::string server_name, int port_number, int executor_id) {
-
-  LOG_INFO("New Request of type NEWTRANSFER to be sent to Executor");
-  sema->wait();  // the semaphore is posted when a task is done
-
-  unique_lock<mutex> lock(poolmutex);
-  // Wait till the executor is ready
-  while(executors[executor_id]->ready==false) {};
-
-  executors[executor_id]->ready = false;
-  lock.unlock();
-
-  ExecutorData* executor = executors[executor_id];
-
-  LOG_INFO("Sending cmd for NEWTRANSFER to the executor for partition name %s", split_name.c_str());
-  fprintf(executor->send, "%d\n", 4); 
-
-  fprintf(executor->send, "%s %s %d\n", split_name.c_str(), server_name.c_str(), port_number);
-  fflush(executor->send);
-  
-  char task_msg[EXCEPTION_MSG_SIZE];
-  while (true) {   // waiting for a result from executors 
-    char cname[100];  // to keep a resultant split name
-    size_t size;
-    size_t rdim, cdim;
-    int empty;
-    memset(task_msg, 0x00, sizeof(task_msg));
-
-    // This function blocks as it is waiting for fscanf from executor.
-    int32_t ret = ParseUpdateLine(executor->recv, cname, &size,
-                                  &empty, &rdim, &cdim, task_msg);
-    if (ret != 5) {
-        ostringstream msg;
-        msg << "Error from worker " << server_to_string(*my_location) << ": Message(" << task_msg<< "). Ret("<< ret << ")"
-            << check_out_of_memory(child_proc_ids_) << endl << "Failed to parse function execution result from executor";
-        LOG_ERROR(msg.str());
-        break;
-    }
-    
-    if (strncmp(cname, "&", 100) == 0) {
-       LOG_INFO("NewTransfer Task complete for (%S).", split_name.c_str());
-       if (size==TASK_EXCEPTION){
-          ostringstream msg;
-          msg << "TASK_EXCEPTION : NewTransfer task execution failed at Executor " << executor_id << " with message: " << task_msg;
-          LOG_ERROR(msg.str());
-       }
-       break;
-    }
-  }
-
-  executors[executor_id]->ready = true;
-  sema->post();
-}*/
 
 }  // namespace presto

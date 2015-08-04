@@ -163,13 +163,11 @@ static void dispatch_createcomposite(WorkerInfo *wi,
   req.mutable_dims()->CopyFrom(carg.dim());
 
   if(task_args !=NULL && DATASTORE == RINSTANCE) {
-    LOG_INFO("Task_arg size in scheduler %zu", task_args->size());
 
     for (int i = 0; i < task_args->size(); i++) {
       if ((*task_args)[i].arrays_size() == 1 || (*task_args)[i].is_list()) {
         NewArg arg;
         arg.set_varname((*task_args)[i].name());
-        LOG_INFO("varname %s", (*task_args)[i].name().c_str());
         if((*task_args)[i].is_list()){
             for(int j = 0; j < (*task_args)[i].arrays_size(); j ++){
               arg.add_list_arraynames((*task_args)[i].arrays(j).name());
@@ -177,7 +175,6 @@ static void dispatch_createcomposite(WorkerInfo *wi,
             arg.set_arrayname("list_type...");
         }else{
             arg.set_arrayname((*task_args)[i].arrays(0).name());
-            LOG_INFO("argname %s", (*task_args)[i].name().c_str());
         }
         req.add_task_args()->CopyFrom(arg);
       }
@@ -382,7 +379,7 @@ bool Scheduler::Done(TaskDoneRequest* req) {
     task = reinterpret_cast<void*>(exectask);
     type = EXEC;
   } else if (fetchtasks.find(taskid) != fetchtasks.end()) {
-    // This is a fecth task done message
+    // This is a fetch task done message
     LOG_DEBUG("FETCH TaskID %16d - Received TASKDONE from Worker", static_cast<int>(taskid));
     FetchTask *fetchtask = fetchtasks[taskid];
     if (fetchtask == NULL) {
@@ -563,7 +560,7 @@ bool Scheduler::Done(TaskDoneRequest* req) {
     type = NONE;
   }
 
-  // check if memory of worker becoms PRESTO_GC_THRESHOLD full.
+  // check if memory of worker becomes PRESTO_GC_THRESHOLD full.
   // If it is, perform GarbageCollection
   if (type == EXEC || type == FETCH || type == LOAD || type == MOVETODRAM ||
       type == CREATECOMPOSITE) {
@@ -813,7 +810,7 @@ void Scheduler::DeleteSplit(const string& split_name) {
   ServerInfo s = from->server;
   ::uint64_t id = GetNewTaskID();
 
-  LOG_DEBUG("FETCH TaskID %16d - Will Fetch Split %s from Worker %s to Worker %s",
+  LOG_INFO("FETCH TaskID %16d - Will Fetch Split %s from Worker %s to Worker %s",
       static_cast<int>(id), split->name.c_str(),
       server_to_string(from->server).c_str(),
       server_to_string(to->server).c_str());
@@ -955,7 +952,6 @@ void Scheduler::DeleteSplit(const string& split_name) {
 ::uint64_t Scheduler::Delete(Split *split, Worker *worker,
                            bool delete_in_worker,
                            bool metadata_already_erased) {
-  LOG_INFO("Delete_in_worker is %d", delete_in_worker);
   LOG("delete from mem task %zu: %s on %s\n",
       id,
       split->name.c_str(),
@@ -1078,7 +1074,6 @@ void Scheduler::DeleteSplit(Split *split, Worker* current_worker) {
         delete_in_worker = (*i == current_worker) ? false : true;
       }
 
-      LOG_INFO("Final delete_in_worker(%d)", delete_in_worker); 
       Delete(split, *i, delete_in_worker);
     }
 
@@ -1141,22 +1136,17 @@ string Scheduler::GetSplitLocation(const string &split_name) {
 SEXP Scheduler::GetSplitToMaster(const string &name) {
   // TODO(erik): handle case when split is in a store
   unique_lock<recursive_mutex> lock(metadata_mutex);
-  LOG_INFO("GetSplitToMaster: Split_name(%s)", name.c_str());
   Split *split = splits[name];
   WorkerInfo *wi = (*split->workers.begin())->workerinfo;
   lock.unlock();
 
   std::string store;
   pair<int, int> port_range = presto_master_->GetMasterPortRange(); 
-  StorageLayer source = WORKER;
 
-  TransferServer tw(source, RINSTANCE, port_range.first, port_range.second);
+  TransferServer tw(WORKER, RINSTANCE, port_range.first, port_range.second);
   pair<void*, int64_t> ret = tw.transfer_blob(name, wi, hostname_, store);
-  LOG_INFO("GetSplitToMaster: Split size received (%zu)", ret.second);
 
   SEXP data = Deserialize(ret.first, ret.second);
-  LOG_INFO("Deserialized. Returning to R");
-
   //free(ret.first);
   return data;
 }

@@ -46,6 +46,10 @@
 #include "dLogger.h"
 #include "DataLoaderManager.h"
 
+#ifdef PERF_TRACE
+#include <ztracer.hpp>
+#endif
+
 //using namespace boost;
 using namespace Rcpp;
 using namespace std;

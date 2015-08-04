@@ -579,7 +579,6 @@ DenseArrayData::DenseArrayData(const string &name, StorageLayer store, size_t r_
     }
     memcpy(data, (val_type==REALSXP ? (void*)REAL(sexp_from) : (void*)INTEGER(sexp_from)), data_size);
   } else {
-    LOG_INFO("Dims are %d %d", x, y);
     header = new dense_header_t;
     header->type = type;
     header->dims[0] = x;

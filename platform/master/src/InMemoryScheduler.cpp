@@ -47,7 +47,7 @@ namespace presto {
 /** A task is done, and the InMemoryScheduler needs to perform further processing
  * @param taskid ID of a task that is completed
  * @param task a pointer of task information
- * @param type a tpye of a task to process
+ * @param type a type of a task to process
  */
 void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) {
   unique_lock<recursive_mutex> lock(mutex_);
@@ -211,7 +211,7 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
       tasks_[dep_task_id].num_dependencies--;
       TaskData taskdata = tasks_[dep_task_id];
 
-      // A dependent Execution task has all necessrary splits to Execute.
+      // A dependent Execution task has all necessary splits to Execute.
       if (taskdata.inited &&
           taskdata.num_dependencies == 0) {
         // launch task
@@ -499,7 +499,6 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
           }
       } else {  // composite
         string name = CompositeName(arg);
-        LOG_INFO("CompositeName is %s", name.c_str());
 
         if (task_cnt==1)
             LOG_INFO("Foreach argument '%s' (Internal name: %s) is a Composite array. Composite Array will be created before execution.", arg.name().c_str(), name.c_str());
@@ -555,7 +554,6 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
             cc.inited = false;
             cc.arg = &arg;
             cc.task_args = &t->args;
-            LOG_INFO("TaskArg size in master is %zu", t->args.size());
             for (int32_t j = 0; j < arg.arrays_size(); j++) {
               unique_lock<recursive_mutex> lock(mutex_);
               // we need the metadata lock because
@@ -593,7 +591,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
                   lock.unlock();
                 } else {
                   // if the split is being fetched,
-                  // add cc_id to get notificatoon
+                  // add cc_id to get notification
                   dependencies_[beingfetched].insert(cc_id);
                   lock.unlock();
                 }

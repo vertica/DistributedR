@@ -50,9 +50,6 @@ public:
     
   char err_msg[EXCEPTION_MSG_SIZE];
 
-  //void ReadRemotePartition(std::string split, int32_t serverfd, int port_number);
-  //int NewTransfer();
-
  private:
 
   // reference of the R instance passed through constructor

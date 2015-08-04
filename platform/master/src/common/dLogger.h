@@ -30,6 +30,11 @@
 #include <boost/log/attributes/timer.hpp>
 #include <boost/log/sources/logger.hpp>
 
+#ifdef PERF_TRACE
+#include <ztracer.hpp>
+#include <boost/thread.hpp>
+#endif
+
 using namespace std;
 using boost::shared_ptr;
 //using namespace boost;
@@ -46,6 +51,22 @@ namespace fmt = boost::log::formatters;
 namespace flt = boost::log::filters;
 
 namespace presto {
+
+#ifdef PERF_TRACE   
+  extern bool trace_master;
+  
+  extern ZTracer::ZTraceEndpointRef ztrace_insts; 
+
+  extern bool is_master;
+  
+  extern ZTracer::ZTraceRef master_trace;
+  
+  extern boost::thread_specific_ptr<bool> trace_worker;
+  extern boost::thread_specific_ptr<ZTracer::ZTrace> worker_trace;
+  
+  extern bool trace_executor;
+  extern ZTracer::ZTraceRef executor_trace;
+#endif    
 
 typedef enum {
 DEBUG, INFO, WARN, ERROR 
@@ -164,12 +185,50 @@ static void LOG_DEBUG(const char* msg, ...){
     va_start(argptr, msg);
     vsprintf(out_msg, msg, argptr);
     va_end(argptr);
+    
+#ifdef PERF_TRACE
+    //is master 
+    if(is_master){
+        if(trace_master){
+            master_trace->event(out_msg);
+        }
+    }else if(worker_trace.get()){ // is worker
+        if(*(trace_worker.get())) {
+            worker_trace->event(out_msg);
+        }
+        }
+    else{ // is executor
+        if(trace_executor){
+            executor_trace->event(out_msg);
+        }
+    }
+    
+#endif
 
     src::severity_logger<severity_level>& lg = logger::get();
     BOOST_LOG_SEV(lg, DEBUG) << out_msg;    
 }
 
 static void LOG_DEBUG(string msg){
+        
+#ifdef PERF_TRACE
+    //is master
+    if(is_master){
+        if(trace_master){
+            master_trace->event(msg);
+        }
+    }else if(worker_trace.get()){ // is worker
+        if(*(trace_worker.get())) {
+            worker_trace->event(msg);
+        }
+        }
+    else{ // is executor
+        if(trace_executor){
+            executor_trace->event(msg);
+        }
+    }
+     
+#endif  
     src::severity_logger<severity_level>& lg = logger::get();
     BOOST_LOG_SEV(lg, DEBUG) << msg;
 }
@@ -183,11 +242,48 @@ static void LOG_INFO(const char* msg, ...){
     vsprintf(out_msg, msg, argptr);
     va_end(argptr);
 
+#ifdef PERF_TRACE
+    //is master 
+    if(is_master){
+        if(trace_master){
+            master_trace->event(out_msg);
+        }
+    }else if(worker_trace.get()){ // is worker
+        if(*(trace_worker.get())) {
+            worker_trace->event(out_msg);
+        }
+        }
+    else{ // is executor
+        if(trace_executor){
+            executor_trace->event(out_msg);
+        }
+    }
+#endif 
+
     src::severity_logger<severity_level>& lg = logger::get();
     BOOST_LOG_SEV(lg, INFO) << out_msg;    
 }
 
 static void LOG_INFO(string msg){
+    
+#ifdef PERF_TRACE
+    //is master
+    if(is_master){
+        if(trace_master){
+            master_trace->event(msg);
+        }
+    }else if(worker_trace.get()){ // is worker
+        if(*(trace_worker.get())) {
+            worker_trace->event(msg);
+        }
+        }
+    else{ // is executor
+        if(trace_executor){
+            executor_trace->event(msg);
+        }
+    }
+     
+#endif 
     src::severity_logger<severity_level>& lg = logger::get();
     BOOST_LOG_SEV(lg, INFO) << msg;
 }

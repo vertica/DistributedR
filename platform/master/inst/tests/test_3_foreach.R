@@ -149,7 +149,7 @@ test_that("Dense darrays: works", {
   expect_that(distributedR_status(), is_a('data.frame'))
 
   #Multiple updates
-  expect_error(foreach(i, 1:npartitions(da1), function(a=splits(da1,i), b=splits(dl1,i)) {  ##Shreya !!!!
+  expect_error(foreach(i, 1:npartitions(da1), function(a=splits(da1,i), b=splits(dl1,i)) {
   a <- matrix(6,5,5)
   update(a)
   b <- list("a")

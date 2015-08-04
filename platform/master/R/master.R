@@ -256,7 +256,7 @@ distributedR_start <- function(inst=0, mem=0,
     ret<-FALSE
     stop(excpt$message)})
   cat(paste("Master address:port - ", pm$get_master_addr(),":",pm$get_master_port(),"\n",sep=""))
-  ret#<-ret && (check_dr_version_compatibility())
+  ret<-ret && (check_dr_version_compatibility())
 }
 
 conf2df <- function(cluster_conf) {

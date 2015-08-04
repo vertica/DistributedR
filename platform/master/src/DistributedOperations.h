@@ -38,7 +38,8 @@ namespace presto {
                                          SEXP wait_exp,
 					 SEXP scheduler_policy_exp,		
 					 SEXP inputs_sexp,
-                                         SEXP progress_sexp);
+                                         SEXP progress_sexp,
+                                         SEXP trace_sexp);
 
   RcppExport SEXP DistributedObject_Get(SEXP presto_master_exp,
                                        SEXP split);

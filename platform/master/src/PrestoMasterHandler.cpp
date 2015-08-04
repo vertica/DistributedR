@@ -303,7 +303,7 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
        }
     }
   } else {
-    //For non-exec tasks we check if there was an error and propogate it up. Note that if there is an error
+    //For non-exec tasks we check if there was an error and propagate it up. Note that if there is an error
     //session shutdown will be enforced. Shutdown is not required if there is an error in foreach 
     //(above case of calling scheduler->done
     success = scheduler_->Done(task_done);
