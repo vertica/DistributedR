@@ -572,7 +572,7 @@ setMethod("as.darray", signature(input="dsCMatrix", blocks="missing"),
     as.darray(input, blocks)
 })
 
-setMethod("as.darray", signature(input="dgsMatrix", blocks="numeric"),
+setMethod("as.darray", signature(input="dsCMatrix", blocks="numeric"),
   function(input, blocks) {
     mdim <- dim(input)
     out_dobject <- darray(mdim, blocks, sparse=TRUE)
