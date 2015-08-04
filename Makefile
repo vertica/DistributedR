@@ -24,6 +24,22 @@
 
 .PHONY: test docs manual tutorial faq
 
+## === Build targets
+
+install:
+	R CMD INSTALL platform/executor
+	R CMD INSTALL platform/master
+
+uninstall:
+	R CMD REMOVE distributedR
+	R CMD REMOVE Executor
+
+clean:
+	cd platform/master/src; make -f Makevars clean; cd ../../../
+
+dist-clean:
+	cd platform/master/src; make -f Makevars clean-third-party; cd ../../../
+
 ## === Test targets
 TEST_OUTPUT_FILES=$(PWD)/test_platform.out
 
@@ -83,20 +99,3 @@ algorithm_docs:
 	R CMD Rd2pdf --no-preview --force --output=$(DOC_DIR_ALGORITHMS)/HPdgraph/HPdgraph-Manual.pdf $(PWD)/algorithms/HPdgraph
 	mkdir -p $(DOC_DIR_ALGORITHMS)/HPdata
 	R CMD Rd2pdf --no-preview --force --output=$(DOC_DIR_ALGORITHMS)/HPdata/HPdata-Manual.pdf $(PWD)/algorithms/HPdata
-
-install:
-	R CMD INSTALL platform/executor
-	R CMD INSTALL platform/master
-	R CMD INSTALL platform/matrix_helper
-
-uninstall:
-	R CMD REMOVE platform/executor
-	R CMD REMOVE platform/master
-	R CMD REMOVE platform/matrix_helper
-
-clean:
-	cd platform/master/src; make -f Makevars clean; cd ../../../
-
-dist-clean:
-	cd platform/master/src; make -f Makevars clean-third-party; cd ../../../
-
