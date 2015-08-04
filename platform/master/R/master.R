@@ -446,11 +446,11 @@ check_dr_version_compatibility<-function(){
 dload <- function(x, trace = FALSE){
 
   number_of_executors <- sum(distributedR_status()$Inst)
-  y <- lapply(x, dloadHelper, trace=trace, num_of_Exec = number_of_executors)
+  y <- lapply(x, .loadLibrary , trace=trace, num_of_Exec = number_of_executors)
 
 }
 
-dloadHelper <- function(x, trace = FALSE, num_of_Exec) {
+.loadLibrary <- function(x, trace = FALSE, num_of_Exec) {
   if(!is.character(x)){
     stop("x must be of type character")
   }
@@ -463,11 +463,11 @@ dloadHelper <- function(x, trace = FALSE, num_of_Exec) {
 dunload <- function(x, trace = FALSE){
 
   number_of_executors <- sum(distributedR_status()$Inst)
-  y <- lapply(x, dunloadHelper, trace=trace, num_of_Exec = number_of_executors)
+  y <- lapply(x, .unloadLibrary, trace=trace, num_of_Exec = number_of_executors)
 
 }
 
-dunloadHelper <- function(x, trace = FALSE, num_of_Exec) {
+.unloadLibrary <- function(x, trace = FALSE, num_of_Exec) {
   if(!is.character(x)){
     stop("x must be of type character")
   }
