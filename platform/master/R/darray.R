@@ -42,7 +42,7 @@ darray <- function(dim = NA, blocks = NA, sparse=FALSE, data=0, npartitions=NA, 
    if(length(data)>1) stop("Argument 'data' should be a number, character, or logical value.")
    if(is.na(data) || data!=0){
       #For empty arrays, data does not make sense.
-      if(!all(is.na(npartitions)) || empty) stop("Argument 'data' cannot be used with 'npartitions' or 'empty'.")
+      if(!all(is.na(npartitions)) || empty) stop("Non-zero 'data' cannot be used with 'npartitions' or 'empty'.")
       #For sparse matrices we always initialize with 0 as they don't take space.
       if(sparse) stop("Initializing a sparse matrix with all non-zero elements makes it dense. Set 'data=0'.")
    }

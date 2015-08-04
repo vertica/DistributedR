@@ -48,7 +48,6 @@ You can also get a Virtual Machine with everything installed [here](http://www.v
 
         $ cd platform/
         $ R CMD INSTALL executor
-        $ R CMD INSTALL matrix_helper
         $ R CMD INSTALL master
 
 5. Open R and run an example:
