@@ -642,7 +642,7 @@ int main(int argc, char *argv[]) {
 #endif
   LOG_DEBUG("Loading libraries");
   // load packages
-  R.parseEvalQ("tryCatch({library(Matrix);library(MatrixHelper);library(Executor);gc.time()}, error=function(ex){Sys.sleep(2);library(Matrix);library(MatrixHelper);library(Executor);gc.time()})");
+  R.parseEvalQ("tryCatch({library(Matrix);library(Executor);gc.time()}, error=function(ex){Sys.sleep(2);library(Matrix);library(Executor);gc.time()})");
   
   updatesptr = new set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>>;
   set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>> &updates = *updatesptr;
