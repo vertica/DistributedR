@@ -27,24 +27,24 @@ distributedR_read <- function(url, ...) {
             func <- function(dhs = splits(d,i),
                              url = url,
                              config = plan$configs[[i]]) {
-                library(ddc)
+                library(hdfsconnector)
                 if (config$file_type == "csv") {
-                    dhs <- ddc_read(config$url,
-                                    schema=config$schema,
-                                    chunkStart=config$chunk_start,
-                                    chunkEnd=config$chunk_end,
-                                    hdfsConfigurationFile=paste(system.file(package='ddc'),
-                                                                '/conf/hdfs.json',
-                                                                sep=''))
-                    update(dhs)
+                    dhs <- hdfs_read(config$url,
+                                     schema=config$schema,
+                                     chunkStart=config$chunk_start,
+                                     chunkEnd=config$chunk_end,
+                                     hdfsConfigurationFile=paste(system.file(package='ddc'),
+                                                                 '/conf/hdfs.json',
+                                                                 sep=''))
+                     update(dhs)
                 }
                 else if (config$file_type == "orc") {
-                    dhs <- ddc_read(url,
-                                    selectedStripes=config$selected_stripes,
-                                    hdfsConfigurationFile=paste(system.file(package='ddc'),
-                                                                '/conf/hdfs.json',
-                                                                sep=''))
-                    update(dhs)
+                    dhs <- hdfs_read(url,
+                                     selectedStripes=config$selected_stripes,
+                                     hdfsConfigurationFile=paste(system.file(package='ddc'),
+                                                                 '/conf/hdfs.json',
+                                                                 sep=''))
+                     update(dhs)
                 }
                 else {
                     stop("Unsupported file type")
