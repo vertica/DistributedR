@@ -873,11 +873,11 @@ extern "C"
     PROTECT(forest = allocVector(VECSXP,ntree+1));
     SET_VECTOR_ELT(forest,0,VECTOR_ELT(VECTOR_ELT(forest_parts,0),0));
     for(int i = 0; i < length(forest_parts); i++)
-      {
+      {							
 	SEXP curr_forest = VECTOR_ELT(forest_parts,i);
-	for(int j = 0; j < length(curr_forest); j++)
+	for(int j = 1; j < length(curr_forest); j++)
 	  if(VECTOR_ELT(curr_forest,j) != R_NilValue)
-	    SET_VECTOR_ELT(forest,1+ntree--,VECTOR_ELT(curr_forest,j));
+	    SET_VECTOR_ELT(forest,ntree--,VECTOR_ELT(curr_forest,j));
       }
     UNPROTECT(1);
     return forest;

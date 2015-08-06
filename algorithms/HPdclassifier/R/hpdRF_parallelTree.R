@@ -364,7 +364,9 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	}
 
 	model$call = match.call()
-	model$ntree = attr(model$forest$trees,"ntree")
+	model$ntree = ntree
+	if(!is.null(attr(model$forest$trees,"ntree")))
+		model$ntree = attr(model$forest$trees,"ntree")
 	attr(model$forest$trees,"ntree") <- NULL
 	model$mtry = mtry
 	model$test = list()
@@ -657,7 +659,8 @@ deploy.hpdRF_parallelTree <- function(model)
 	if(is.null(cutoff))
 		cutoff = rep(1/length(model$classes),length(model$classes))
 
-	new_trees = .Call("unserializeForest", model$forest$trees)
+	new_trees <- .gatherDistributedForest(model$forest$trees)
+	new_trees = .Call("unserializeForest", new_trees)
 	new_trees = .Call("reformatForest",new_trees)
 	max_nodes = new_trees[[6]]
 	ntree = new_trees[[7]]

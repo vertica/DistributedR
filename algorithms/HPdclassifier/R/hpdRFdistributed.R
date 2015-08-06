@@ -497,7 +497,8 @@
 			max_nodes = as.integer(max_nodes),
 			tree_ids = as.integer(tree_ids), 
 			max_nodes_per_iteration = max_nodes_per_iteration,
-			min_split = min_split, max_depth = max_depth)
+			min_split = min_split, max_depth = max_depth,
+			random_seed = random_seed)
 
 		
 		dforest = list(.Call("serializeForest",forest))
@@ -544,7 +545,7 @@
 	class_count = darray(npartitions = npartitions(observations))
 
 	dforest = forest
-	votes = darray(npartitions = c(npartitions(dforest),npartitions(observations)))
+	votes = darray(npartitions =c(npartitions(dforest),npartitions(observations)))
 	foreach(i,0:(npartitions(votes)-1), 
 		function(predictions=splits(votes,i+1),
 			observations=splits(observations,
@@ -555,7 +556,7 @@
 			        floor(i / npartitions(observations)) + 1))
 	{
 		library(HPdclassifier)
-		tree_ids = which(sapply(forest,function(x) !is.null(x)))
+		tree_ids = which(!sapply(forest,is.null))
 		tree_ids = tree_ids[-1]
 		forest = .Call("unserializeForest",forest, 
 		       	    PACKAGE = "HPdclassifier")  
@@ -586,10 +587,10 @@
 			      	ncol = nrow(observations),
 				length(tree_ids))
 		tree_ids = tree_ids - 1
-
-		temp_predictions = lapply(tree_ids,
-		function(tree_id)
+		temp_predictions = lapply(1:length(tree_ids),
+		function(tree_id_index)
 		{
+			tree_id = tree_ids[tree_id_index]
 			tree_oob_indices = oob_indices[[tree_id]]
 			tree_predictions = sapply(tree_oob_indices,
 				function(obs)
@@ -598,7 +599,7 @@
 				observations, 
 				as.integer(obs),
 				PACKAGE = "HPdclassifier"))
-			return(cbind(rep(tree_id,
+			return(cbind(rep(tree_id_index,
 				length(tree_oob_indices)),
 				tree_oob_indices,as.numeric(tree_predictions)))
 		})
@@ -606,7 +607,6 @@
 		{
 		for(i in 1:length(temp_predictions))
 		{
-		      temp_predictions[[i]][,1]=temp_predictions[[i]][,1]-min(tree_ids)+1
 		      predictions[temp_predictions[[i]][,c(1,2)]] = 
 		      		temp_predictions[[i]][,3]
 		}
@@ -614,7 +614,6 @@
 		.Call("garbageCollectForest",forest)
 		update(predictions)
 	},progress = trace)
-
 
 
 	if(trace)
@@ -987,8 +986,10 @@
       features_min = NULL, features_max = NULL, max_nodes = Inf,
       tree_ids = NULL, max_nodes_per_iteration = .Machine$integer.max, 
       max_time = -1, cp = 0, max_depth = 10000, min_split = 1,
-      trace = TRUE)
+      trace = TRUE, random_seed = NULL)
 {
+	if(!is.null(random_seed))
+	set.seed(random_seed)
 	nrow = nrow(observations)
 	ncol = ncol(observations)
 	if(is.null(weights))
@@ -1020,13 +1021,14 @@
 	tree_ids = as.integer(tree_ids)
 	node_size = as.integer(node_size)
 	max_time  = as.integer(max_time)
+	random_seed = sample.int(10000,1)
 	forest = .Call("hpdRF_local",observations, responses, ntree, bin_max,
 			features_cardinality, response_cardinality,
 			features_num, node_size, weights, observation_indices,
 			features_min, features_max, max_nodes, tree_ids, 
 			max_nodes_per_iteration, trace, scale, max_time, 
 			as.numeric(cp), as.integer(max_depth), 
-			as.integer(min_split))
+			as.integer(min_split),as.integer(random_seed))
 
 	return(forest)
 }

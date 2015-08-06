@@ -35,8 +35,10 @@ extern "C"
 		   SEXP features_min, SEXP features_max,
 		   SEXP max_nodes, SEXP tree_ids, SEXP max_nodes_per_iteration,
 		   SEXP trace, SEXP scale, SEXP max_time, 
-		   SEXP R_cp, SEXP R_max_depth, SEXP R_min_count)
+		   SEXP R_cp, SEXP R_max_depth, SEXP R_min_count,
+		   SEXP R_random_seed)
   {
+    srand(INTEGER(R_random_seed)[0]);
     SEXP R_forest;
     printf("initializing forest\n");
     PROTECT(R_forest=initializeForest(observations, responses, ntree, bin_max,

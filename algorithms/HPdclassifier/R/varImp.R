@@ -67,7 +67,8 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 	{
 		shuffled_data <- shuffle_column(xtest, var)
 		shuffled_predictions <- predict(model, shuffled_data)
-		distance_metric(ytest, shuffled_predictions)[1]
+		var_imp = distance_metric(ytest, shuffled_predictions)[1]
+		return(var_imp)
 	})
 
 	names(importance) <- colnames(xtest)
