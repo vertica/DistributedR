@@ -1,12 +1,12 @@
-\name{dunload}
-\alias{dunload}
-\title{dunload}
+\name{ddyn.unload}
+\alias{ddyn.unload}
+\title{ddyn.unload}
 
 \description{Unload C++ library from all Executors}
 
 \usage{
-    dunload(x)
-    dunload(c("library1","library2",...))
+    ddyn.unload(x)
+    ddyn.unload(c("library1","library2",...))
 }
 
 \arguments{
@@ -31,13 +31,13 @@
 }
 
 \seealso{
-\code{\link{dload}}
+\code{\link{ddyn.load}}
 }
 
 \examples{
 \dontrun{
 library(distributedR)
 distributedR_start()
-dunload(c("distributedR"))
+ddyn.unload(c("distributedR"))
 }
 }

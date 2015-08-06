@@ -443,7 +443,7 @@ check_dr_version_compatibility<-function(){
   return (TRUE)
 }
 
-dload <- function(x, trace = FALSE){
+ddyn.load <- function(x, trace = FALSE){
 
   number_of_executors <- sum(distributedR_status()$Inst)
   y <- lapply(x, .loadLibrary , trace=trace, num_of_Exec = number_of_executors)
@@ -460,7 +460,7 @@ dload <- function(x, trace = FALSE){
     dyn.load(thePath)
   })
 }
-dunload <- function(x, trace = FALSE){
+ddyn.unload <- function(x, trace = FALSE){
 
   number_of_executors <- sum(distributedR_status()$Inst)
   y <- lapply(x, .unloadLibrary, trace=trace, num_of_Exec = number_of_executors)
