@@ -541,48 +541,9 @@
 	L0 = darray(npartitions = npartitions(observations))
 	L1 = darray(npartitions = npartitions(observations))
 	L2 = darray(npartitions = npartitions(observations))
-
-	temp_forest = .Call("serializeForest",forest,PACKAGE="HPdclassifier")
 	class_count = darray(npartitions = npartitions(observations))
 
-	ntree = length(temp_forest) - 1
-	dforest = dlist(npartition = min(ntree,sum(distributedR_status()$Inst)))
-	trees_per_partition <- floor(ntree/npartitions(dforest))
-	leftover = ntree - trees_per_partition*npartitions(dforest)
-	trees = sapply(1:npartitions(dforest), function(i) 
-	{
-	      if(i <= leftover) return(trees_per_partition+1)
-	      return(trees_per_partition)
-	})
-	tree_ids = c(0,cumsum(trees))+1
-	tree_ids = lapply(1:(length(tree_ids)-1), function(i) 
-	{
-		ids = (tree_ids[i]+1):tree_ids[i+1]
-		if(tree_ids[i] >= tree_ids[i+1])
-			ids = integer(0)
-		return(ids)
-
-	})
-	trees = lapply(tree_ids, function(ids) 
-	{
-		if(length(ids) == trees_per_partition)
-		return(c(temp_forest[ids],NA))
-		return(temp_forest[ids])
-	})
-
-	foreach(i,1:npartitions(dforest), function(forest = splits(dforest,i), 
-		      forest_header = temp_forest[[1]], 
-		      tree_ids = tree_ids[[i]],
-		      trees = trees[[i]], 
-		      ntree = ntree)
-	{
-		forest =  vector(mode = "list", length = ntree+1)
-		forest[[1]] <- forest_header
-		if(length(tree_ids)>0)
-			forest[tree_ids] <- trees
-		update(forest)
-	},progress = trace)
-
+	dforest = forest
 	votes = darray(npartitions = c(npartitions(dforest),npartitions(observations)))
 	foreach(i,0:(npartitions(votes)-1), 
 		function(predictions=splits(votes,i+1),
@@ -590,10 +551,12 @@
 				floor(i%%npartitions(observations))+1),
 			oob_indices = splits(oob_indices,
 				floor(i%%npartitions(observations))+1),
-			forest = splits(dforest,floor(i / npartitions(observations)) + 1),
-			tree_ids = tree_ids[[floor(i / npartitions(observations)) + 1]])
+			forest = splits(dforest,
+			        floor(i / npartitions(observations)) + 1))
 	{
 		library(HPdclassifier)
+		tree_ids = which(sapply(forest,function(x) !is.null(x)))
+		tree_ids = tree_ids[-1]
 		forest = .Call("unserializeForest",forest, 
 		       	    PACKAGE = "HPdclassifier")  
 
@@ -654,7 +617,6 @@
 
 
 
-
 	if(trace)
 	print("reducing model")
 	timing_info <- Sys.time() 
@@ -663,8 +625,11 @@
 		 cutoff = cutoff,classes = classes, reduceModel = reduceModel)
 	new_treeIDs <- reducedModel$subsetForest
 	votes <- reducedModel$new_votes
-	.Call("eliminateTreesFromModel",
-		forest,as.integer(sort(new_treeIDs)))
+	new_treeIDs = list(new_treeIDs)
+	if(reduceModel)
+		dforest <- .redistributeForest(dforest,new_treeIDs)
+	attr(dforest,"ntree") <- length(unlist(new_treeIDs))
+
 	gc()
 	timing_info <- Sys.time() - timing_info
 	if(trace)
@@ -751,14 +716,8 @@
 	mse = sse/L0
 	rsq = 1 - mse/var_response
 
-
-#	timing_info <- Sys.time() - timing_info
-#	if(trace)
-#	print(timing_info)
-
-
 	return(list(oob_predictions = oob_predictions, 
-		err.rate = err.rate, rsq = rsq, mse = mse))
+		err.rate = err.rate, rsq = rsq, mse = mse, dforest = dforest))
 }
 
 .reduceModel <- function(separated_votes, responses, cutoff, classes, 
@@ -1081,61 +1040,67 @@
 	if(trace)
 	print("predicting observations")
 
-	if(is.null(dforest))
-	{
-	dforest = dlist(npartitions = 1)
-	oob_dobject<- function(forest = splits(dforest,1))
-	{
-		forest = list()
-		for(i in 1:get("forest_chunks"))
-	      	      forest[[i]] <- get(paste("forest",i,"_temp",sep="")) 
-		update(forest)
-	}
-	formals(oob_dobject)[["forest_chunks"]] = length(forest$trees)
-	for(i in 1:length(forest$trees))
-	      formals(oob_dobject)[[paste("forest",i,"_temp",sep="")]] = forest$trees[[i]]
-	foreach(i,1,oob_dobject,progress = trace)
-	}
+	dforest = forest$trees
+	votes = darray(npartitions = c(npartitions(dforest),npartitions(new_observations)))
+	foreach(i,0:(npartitions(votes)-1), 
+		function(predictions=splits(votes,i+1),
+			new_observations=splits(new_observations,
+				floor(i%%npartitions(new_observations))+1),
+			forest = splits(dforest,
+			        floor(i / npartitions(new_observations)) + 1))
+		{
+			library(HPdclassifier)
+			tree_ids = which(sapply(forest,function(x) !is.null(x)))
+			tree_ids = tree_ids[-1]-1
 
-	foreach(i,1:npartitions(new_observations), function( 
-		forest = splits(dforest),
-		new_observations = splits(new_observations,i),
-		predictions = splits(predictions,i),
-		cutoff = cutoff, classes = classes)
-	{
-		library(HPdclassifier)
-		forest = .Call("unserializeForest",forest)
-		forestparam=.Call("getForestParameters", forest)
-		response_cardinality = forestparam[[2]]
-		ntree = forestparam[[7]]
+			forest = .Call("unserializeForest",forest, 
+		       	    PACKAGE = "HPdclassifier") 
 
-		predictions = sapply(1:nrow(new_observations), function(index)
-			sapply(1:ntree, function(tree_id)
-			       as.numeric(.Call("specificTreePredictObservation",
+			forestparam=.Call("getForestParameters", forest)
+			response_cardinality = forestparam[[2]]
+			print(forestparam)
+			ntree = forestparam[[7]]
+			predictions = sapply(1:nrow(new_observations), function(index)
+			       sapply(tree_ids, function(tree_id)
+			            as.numeric(.Call("specificTreePredictObservation",
 					forest, as.integer(tree_id), 
 			      	      	new_observations, 
 			      		as.integer(index),
 		     			PACKAGE = "HPdclassifier"))))
+			update(predictions)
+			.Call("garbageCollectForest",forest)
+		},progress = trace)
 
-		if(is.na(response_cardinality))
+	response_cardinality = length(classes)
+	if(length(classes) == 0)
+	response_cardinality = NA
+	nparts = npartitions(dforest)
+	foreach(i,1:npartitions(predictions), 
+		function(predictions = splits(predictions,i),
+			votes = splits(votes,
+			      as.list((1:nparts - 1)*npartitions(predictions)+i)),
+			cutoff = cutoff, classes = classes, 
+			response_cardinality = response_cardinality)
 		{
-			predictions = data.frame(apply(predictions,2,mean))
-		}
-		if(!is.na(response_cardinality))
-		{
-			k = as.integer(response_cardinality)
-			if(is.na(cutoff))
-				cutoff = rep(1/k,k)
-			cutoff = as.numeric(cutoff)
-			predictions = .Call("combineVotesClassification",
-				 predictions, cutoff, k,
-				 PACKAGE = "HPdclassifier")
-			predictions = data.frame(factor(classes[predictions], 
-				    levels = classes))
-		}
-		update(predictions)
-		.Call("garbageCollectForest",forest)
-	}, progress = trace)
+			predictions = do.call(rbind,votes)
+			if(is.na(response_cardinality))
+			{
+				predictions = data.frame(apply(predictions,2,mean))
+			}
+			if(!is.na(response_cardinality))
+			{
+				k = as.integer(response_cardinality)
+				if(is.na(cutoff))
+					cutoff = rep(1/k,k)
+				cutoff = as.numeric(cutoff)
+				predictions = .Call("combineVotesClassification",
+					predictions, cutoff, k,
+					PACKAGE = "HPdclassifier")
+				predictions = data.frame(factor(classes[predictions], 
+					levels = classes))
+			}
+			update(predictions)
+		},progress = trace)
 
 	return(list(predictions=predictions,dforest = dforest))
 }

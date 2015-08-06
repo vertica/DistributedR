@@ -24,8 +24,10 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 		shuffle_column <- .shuffle_column_dframe
 		#if the input was a dframe first randomize data then set shuffle function
 		permutation <- sample.int(nrow(xtest))
+		suppressWarnings({
 		xtest <- .shuffle_dframe(xtest,permutation)
 		ytest <- .shuffle_dframe(ytest,permutation)
+		})
 	}
 
 	#determine if the output is categorical or not

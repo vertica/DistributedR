@@ -288,7 +288,8 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		trace = do.trace, 
 		features_min = NULL, features_max = NULL,
 		scale = as.integer(1)))
-	forest = model$forest
+
+	forest = .distributeForest(model$forest)
 	oob_indices = model$oob_indices
 	curr_ntree = as.integer(ntree - max_trees_per_iteration)
 	features_min = model$features_min
@@ -322,7 +323,8 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			update(new)
 		},progress = FALSE)
 		oob_indices = new_oob_indices
-		.Call("mergeCompletedForest",forest,model$forest)
+		temp_forest = .distributeForest(model$forest)
+		forest <- .combineDistributedForests(forest,temp_forest)
 		curr_ntree = as.integer(curr_ntree - min(ntree,max_trees_per_iteration))
 		rm(model)
 		gc()
@@ -333,10 +335,10 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		tryCatch({
 		if(do.trace)
 			print("computing oob statistics")
-
 		oob_predictions = .predictOOB(forest, observations, 
 			responses, oob_indices, cutoff, classes, 
 			reduceModel = reduceModel,do.trace)
+			forest = oob_predictions$dforest
 			},error = function(e)
 			{
 				print(paste("aborting oob computations. received error:", e))
@@ -356,13 +358,14 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	class(model) = c("hpdRF_parallelTree", "hpdrandomForest")
 	if(keep.forest)
 	{
-		model$forest$trees = .Call("serializeForest",forest)
+		model$forest$trees = forest
 		model$forest$cutoff = cutoff
 		model$forest$xlevels = xlevels
 	}
 
 	model$call = match.call()
-	model$ntree = length(model$forest$trees)-1
+	model$ntree = attr(model$forest$trees,"ntree")
+	attr(model$forest$trees,"ntree") <- NULL
 	model$mtry = mtry
 	model$test = list()
 	model$terms = variables$terms

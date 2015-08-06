@@ -382,8 +382,6 @@ extern "C"
     *(buffer++) = forest->nfeature;
     *(buffer++) = forest->nrow;
     *(buffer++) = forest->nleaves;
-    for(int i = 0; i < forest->ntree; i++)
-      *(buffer++) = forest->max_nodes[i];
 
     for(int i = 0; i < forest->nfeature; i++)
       *(buffer++) = forest->bin_num[i];
@@ -397,7 +395,9 @@ extern "C"
     for(int i = 0; i < forest->nfeature; i++)
       *(temp++) = forest->features_max[i];
     buffer = (int *) temp;
-    
+    for(int i = 0; i < forest->ntree; i++)
+      *(buffer++) = forest->max_nodes[i];
+
     UNPROTECT(1);
     return R_buffer;
   }
@@ -415,10 +415,6 @@ extern "C"
     forest->nrow = *(buffer++);
     forest->nleaves = *(buffer++);
 
-    forest->max_nodes = (int *)malloc(sizeof(int)*forest->ntree);
-    for(int i = 0; i < forest->ntree; i++)
-      forest->max_nodes[i] = *(buffer++); 
-
     forest->bin_num = (int *)malloc(sizeof(int)*forest->nfeature);
     for(int i = 0; i < forest->nfeature; i++)
       forest->bin_num[i] = *(buffer++);
@@ -435,6 +431,13 @@ extern "C"
     for(int i = 0; i < forest->nfeature; i++)
       forest->features_max[i] = *(temp++);
     buffer = (int *) temp;
+
+    SEXP header = VECTOR_ELT(R_buffer,0);
+    forest->max_nodes = (int *)malloc(sizeof(int)*forest->ntree);
+    memset(forest->max_nodes,0,sizeof(int)*forest->ntree);
+    for(int i = 0; i < forest->ntree && 
+	  buffer-INTEGER(header)< length(header); i++)
+      forest->max_nodes[i] = *(buffer++); 
 
     forest->trees = 
       (hpdRFnode **) malloc(sizeof(hpdRFnode *)*(forest->ntree));
@@ -861,6 +864,23 @@ extern "C"
     UNPROTECT(length(model)+1);
     return model;
     
+  }
+
+  SEXP gatherForest(SEXP forest_parts)
+  {
+    int ntree = INTEGER(VECTOR_ELT(VECTOR_ELT(forest_parts,0),0))[0];
+    SEXP forest;
+    PROTECT(forest = allocVector(VECSXP,ntree+1));
+    SET_VECTOR_ELT(forest,0,VECTOR_ELT(VECTOR_ELT(forest_parts,0),0));
+    for(int i = 0; i < length(forest_parts); i++)
+      {
+	SEXP curr_forest = VECTOR_ELT(forest_parts,i);
+	for(int j = 0; j < length(curr_forest); j++)
+	  if(VECTOR_ELT(curr_forest,j) != R_NilValue)
+	    SET_VECTOR_ELT(forest,1+ntree--,VECTOR_ELT(curr_forest,j));
+      }
+    UNPROTECT(1);
+    return forest;
   }
   
 }
