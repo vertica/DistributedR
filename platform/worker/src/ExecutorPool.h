@@ -52,7 +52,7 @@ class ExecutorPool {
                boost::timed_mutex *shmem_arrays_mutex,
                boost::unordered_set<std::string> *shmem_arrays,
                const std::string &spill_dir, int log_level,
-               string master_ip, int master_port);
+               string master_ip, int master_port, const std::vector<std::string>&);
   // Execute task on first available executor (blocks until execution is done!)
   void execute(std::vector<std::string> func,
                std::vector<NewArg> args, std::vector<RawArg> raw_args,
@@ -84,6 +84,7 @@ class ExecutorPool {
   boost::unordered_set<std::string> *shmem_arrays_;
   std::string spill_dir_;
   std::vector<pid_t> child_proc_ids_;
+  std::vector<std::string> custom_env_;
 };
 
 }  // namespace presto

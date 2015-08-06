@@ -303,6 +303,8 @@ void PrestoWorker::fetch(string name, ServerInfo location,
 
     shmem_arrays_mutex_.lock();
     shmem_arrays_.insert(name);
+    total_bytes_in_shm += size;
+    LOG_INFO("\tFETCH %zu bytes to shm", size);
     shmem_arrays_mutex_.unlock();
 
     Timer t;
@@ -466,6 +468,7 @@ void PrestoWorker::clear(ClearRequest req) {
   } else {
     LOG_DEBUG("CLEAR Task                     - Clearing %s from Shared memory", req.name().c_str());
     SharedMemoryObject::remove(req.name().c_str());
+
   }
 
  end:
@@ -781,7 +784,8 @@ PrestoWorker::PrestoWorker(
     const boost::unordered_map<string, ArrayStore*> &array_stores,
     int log_level,
     string master_ip, int master_port,
-    int start_port, int end_port)
+    int start_port, int end_port,
+    const std::vector<std::string>& custom_env)
     : zmq_ctx_(zmq_ctx),
       shm_total_(shared_memory),
       num_executors_(executors),
@@ -804,7 +808,8 @@ PrestoWorker::PrestoWorker(
                                    &shmem_arrays_,
                                    array_stores_.begin()->first,
                                    log_level_,
-                                   master_ip, master_port);
+                                   master_ip, master_port,
+                                   custom_env);
   // Create multiple HandleRequest threads
   for (int i = 0; i < NUM_THREADPOOLS; i++) {
     NUM_THREADS[i] = NUM_THREADS[i] <= 0 ? num_executors_ : NUM_THREADS[i];
@@ -915,6 +920,11 @@ void PrestoWorker::HandleRequests(int type) {
   // Response worker_resp;
   try{
     while (true) {
+      size_t shm_size = get_used_shm_size();
+      LOG_INFO("SHM USED: %zu\n", shm_size);
+      // print_shm_status();
+      
+
       boost::this_thread::interruption_point();
       unique_lock<mutex> lock(requests_queue_mutex_);
       while (requests_queue_.empty()) {
@@ -1801,6 +1811,7 @@ int main(int argc, char **argv) {
   // check if PrestoWorker is running under a same user.
   // if it is, we terminate
   set<int> distRIds = check_if_worker_running();
+  std::vector<std::string> custom_env;
   clean_garbage_presto_shm(distRIds);
   presto::has_R_instance = false;
 
@@ -1898,6 +1909,9 @@ int main(int argc, char **argv) {
       case 'd':
         distr_cpu_mode = std::string(optarg);
         break;
+      case 'v':
+        custom_env.push_back(std::string(optarg));
+        break;
       default:
         continue;
     }
@@ -1948,7 +1962,8 @@ int main(int argc, char **argv) {
                                  array_stores,
                                  log_level,
                                  master_addr, master_port,
-                                 start_port, end_port);
+                                 start_port, end_port,
+                                 custom_env);
 
     LOG_INFO("Worker %s:(%d~%d) with %d executors and %llu Shared Memory. Master - %s:%d",
       hostname, start_port, end_port, executors, shared_memory, master_addr.c_str(), master_port);

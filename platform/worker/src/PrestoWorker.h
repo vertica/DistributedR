@@ -117,7 +117,8 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
                ArrayStore*> &array_stores,
                int log_level,
                string master_ip, int master_port,
-               int start_port, int end_port);
+               int start_port, int end_port,
+               const std::vector<std::string>& custom_env);
   ~PrestoWorker();
   void Run(string master_ip, int master_port, string worker_addr);
 
@@ -218,6 +219,9 @@ protected:
   // profiling
   size_t total_bytes_fetched_;
   size_t total_bytes_sent_;
+
+  size_t total_bytes_in_shm;
+
   uint64_t total_fetch_time_;
   uint64_t total_send_time_;
   uint64_t total_exec_time_;

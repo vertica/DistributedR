@@ -167,6 +167,11 @@ size_t get_total_memory() {
   return total_mem;
 }
 
+void print_shm_status() {
+  std::string exec_msg = presto_exec("df -k /dev/shm");
+  LOG_INFO("%s", exec_msg.c_str());
+}
+
 /** get used memory size of the system
  * @return used memory size (this contains chached memory size also)
  */

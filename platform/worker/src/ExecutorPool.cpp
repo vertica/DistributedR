@@ -37,8 +37,17 @@
 #define MAX_LOG_NAME_SIZE 200
 
 using namespace boost;
+extern char** environ;
 
 namespace presto {
+
+static std::vector<const char*> get_env_vector(){
+  std::vector<const char*> ret;
+  for (size_t i = 0; environ[i] != nullptr; i++){
+    ret.push_back(environ[i]);
+  }
+  return ret;
+}
 
 // TODO(erik): master is not actually inited at this point; nicest solution is
 // probably to move executorpool creation into hello in workerclient.cpp
@@ -56,11 +65,12 @@ ExecutorPool::ExecutorPool(int n_, ServerInfo *my_location_,
                            boost::unordered_set<string> *shmem_arrays,
                            const string &spill_dir,
                            int log_level,
-                           string master_ip, int master_port)
+                           string master_ip, int master_port, const std::vector<std::string>& custom_env)
     : num_executors(n_), my_location(my_location_), master(master_),
       shmem_arrays_mutex_(shmem_arrays_mutex),
       shmem_arrays_(shmem_arrays),
-      spill_dir_(spill_dir) {
+      spill_dir_(spill_dir),
+      custom_env_(custom_env) {
   
   int unique_worker_id = static_cast<int>(getpid());  // determine worker pid
 
@@ -124,11 +134,31 @@ ExecutorPool::ExecutorPool(int n_, ServerInfo *my_location_,
       }
       char log_level_[10];
       sprintf(log_level_, "%d", log_level);
-      execl(fname.c_str(), fname.c_str(),
-            int_to_string(recvpipe[1]).c_str(),
-            spill_dir_.c_str(), logname,
-            log_level_,
-            reinterpret_cast<char*>(NULL));
+      // execl(fname.c_str(), fname.c_str(),
+      //       int_to_string(recvpipe[1]).c_str(),
+      //       spill_dir_.c_str(), logname,
+      //       log_level_,
+      //       reinterpret_cast<char*>(NULL));
+      
+      std::vector<const char*> env = get_env_vector();
+      for (auto it = custom_env_.begin(); it != custom_env_.end(); it++){
+        std::string key = it->substr(0, it->find(":"));
+        std::string value = it->substr(it->find(":") + 1);
+        if (key == "EXECUTOR_PRELOAD"){
+          key = "LD_PRELOAD";
+        }
+        *it = key + "=" + value;
+        LOG_INFO("Custom environment variable: %s\n", it->c_str());
+        env.push_back(it->c_str());
+      }
+      env.push_back(nullptr);
+
+      execle(fname.c_str(), fname.c_str(),
+              int_to_string(recvpipe[1]).c_str(),
+              spill_dir_.c_str(), logname,
+              log_level_,
+              reinterpret_cast<char*>(NULL),
+              &env[0]);
     } else {
       // keep child process id to kill child process upon exit
       child_proc_ids_[i] = pid;

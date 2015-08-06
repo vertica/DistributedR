@@ -322,6 +322,20 @@ static string get_presto_shm_prefix() {
   return shm_prefix;
 }
 
+void print_shm_status();
+
+static size_t get_used_shm_size() {
+  size_t shm_size = 0;
+  struct statvfs* buff = (struct statvfs *)malloc(sizeof(struct statvfs));
+  if(buff != NULL) {
+    if (statvfs(SHM_FOLDER, buff) == 0) {
+      shm_size = buff->f_blocks * buff->f_frsize - buff->f_bavail * buff->f_bsize;  //get free size for unprivileged users
+    }
+    free(buff);
+  }
+  return shm_size;
+}
+
 static size_t get_free_shm_size() {
   size_t shm_size = 0;
   struct statvfs* buff = (struct statvfs *)malloc(sizeof(struct statvfs));
