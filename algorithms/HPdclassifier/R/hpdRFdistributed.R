@@ -1058,7 +1058,6 @@
 
 			forestparam=.Call("getForestParameters", forest)
 			response_cardinality = forestparam[[2]]
-			print(forestparam)
 			ntree = forestparam[[7]]
 			predictions = sapply(1:nrow(new_observations), function(index)
 			       sapply(tree_ids, function(tree_id)
