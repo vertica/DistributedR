@@ -2,7 +2,7 @@ distributedR_read <- function(url, ...) {
     options = list(...)
     if(!("hdfsConfigurationFile" %in% options)) {
         # set default hdfsConfigurationFile
-        options["hdfsConfigurationFile"] = paste(system.file(package='ddc'),'/conf/hdfs.json',sep='')
+        options["hdfsConfigurationFile"] = paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')
     }
     pm <- get_pm_object()
     # 1. Schedule file across workers. Handles globbing also.
@@ -33,7 +33,7 @@ distributedR_read <- function(url, ...) {
                                      schema=config$schema,
                                      chunkStart=config$chunk_start,
                                      chunkEnd=config$chunk_end,
-                                     hdfsConfigurationFile=paste(system.file(package='ddc'),
+                                     hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),
                                                                  '/conf/hdfs.json',
                                                                  sep=''))
                      update(dhs)
@@ -41,7 +41,7 @@ distributedR_read <- function(url, ...) {
                 else if (config$file_type == "orc") {
                     dhs <- hdfs_read(url,
                                      selectedStripes=config$selected_stripes,
-                                     hdfsConfigurationFile=paste(system.file(package='ddc'),
+                                     hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),
                                                                  '/conf/hdfs.json',
                                                                  sep=''))
                      update(dhs)
