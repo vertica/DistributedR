@@ -443,3 +443,37 @@ check_dr_version_compatibility<-function(){
   return (TRUE)
 }
 
+ddyn.load <- function(x, trace = FALSE){
+
+  number_of_executors <- sum(distributedR_status()$Inst)
+  y <- lapply(x, .loadLibrary , trace=trace, num_of_Exec = number_of_executors)
+
+}
+
+.loadLibrary <- function(x, trace = FALSE, num_of_Exec) {
+  if(!is.character(x)){
+    stop("x must be of type character")
+  }
+
+  foreach(i, 1:num_of_Exec, progress=trace, function(x=x) {
+    thePath = paste(find.package(x), "/libs/", x, ".so", sep="")
+    dyn.load(thePath)
+  })
+}
+ddyn.unload <- function(x, trace = FALSE){
+
+  number_of_executors <- sum(distributedR_status()$Inst)
+  y <- lapply(x, .unloadLibrary, trace=trace, num_of_Exec = number_of_executors)
+
+}
+
+.unloadLibrary <- function(x, trace = FALSE, num_of_Exec) {
+  if(!is.character(x)){
+    stop("x must be of type character")
+  }
+
+  foreach(i, 1:num_of_Exec, progress=trace, function(x=x) {
+    thePath = paste(find.package(x), "/libs/", x, ".so", sep="")
+    dyn.unload(thePath)
+  })
+}
