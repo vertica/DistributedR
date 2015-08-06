@@ -29,10 +29,8 @@
 install:
 	R CMD INSTALL platform/executor
 	R CMD INSTALL platform/master
-	R CMD INSTALL platform/matrix_helper
 
 uninstall:
-	R CMD REMOVE MatrixHelper
 	R CMD REMOVE distributedR
 	R CMD REMOVE Executor
 
@@ -101,4 +99,3 @@ algorithm_docs:
 	R CMD Rd2pdf --no-preview --force --output=$(DOC_DIR_ALGORITHMS)/HPdgraph/HPdgraph-Manual.pdf $(PWD)/algorithms/HPdgraph
 	mkdir -p $(DOC_DIR_ALGORITHMS)/HPdata
 	R CMD Rd2pdf --no-preview --force --output=$(DOC_DIR_ALGORITHMS)/HPdata/HPdata-Manual.pdf $(PWD)/algorithms/HPdata
-

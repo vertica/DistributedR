@@ -471,6 +471,20 @@ get_sub_matrix <- function(in_mat, b_size, index){
 }
 
 
+get_sub_sparse_matrix <- function(in_mat, b_size, index){
+  nrow = dim(in_mat)[1] #number of rows
+  ncol = dim(in_mat)[2]
+  nb_per_r = ceiling(ncol/b_size[2]) #number of blocks in a row
+  if(index>nb_per_r*(ceiling(nrow/b_size[1]))){
+    stop("index out of range")
+  }
+  b_row_idx = 1+(b_size[1])*(floor((index-1)/nb_per_r)) #begin row index of submatrix
+  b_col_idx = 1+(b_size[2])*((index-1)%%nb_per_r)  #begin column index of submatrix
+  e_row_idx = ifelse(b_row_idx+b_size[1]-1<nrow, b_row_idx+b_size[1]-1, nrow)
+  e_col_idx = ifelse(b_col_idx+b_size[2]-1<ncol, b_col_idx+b_size[2]-1, ncol)
+  return (as(matrix(in_mat[b_row_idx:e_row_idx, b_col_idx:e_col_idx], nrow=(e_row_idx-b_row_idx+1), ncol=(e_col_idx-b_col_idx+1)),"sparseMatrix"))
+}
+
 # input: an input matrix that will be filled into the darray
 # blocks: block dimension of a created darray. if missing, block dim is calculated so that the darray is striped across executors
 
@@ -518,3 +532,67 @@ setMethod("as.darray", signature(input="matrix", blocks="numeric"),
     return (out_dobject)
 })
 
+setMethod("as.darray", signature(input="dgCMatrix", blocks="missing"),
+  function(input, blocks) {
+    ninst<-sum(distributedR_status()$Inst)
+    blocks<-dim(input)
+    blocks[1]<-ceiling(blocks[1]/ninst)
+    as.darray(input, blocks)
+})
+
+setMethod("as.darray", signature(input="dgCMatrix", blocks="numeric"),
+  function(input, blocks) {
+    mdim <- dim(input)
+    out_dobject <- darray(mdim, blocks, sparse=TRUE)
+
+    if (! is.null(out_dobject)) {
+      da_blocks = out_dobject@dim
+      bdim = out_dobject@blocks
+      if(bdim[1]>mdim[1] || bdim[2]>mdim[2] || da_blocks[1]!=mdim[1] || da_blocks[2]!=mdim[2]){
+        ## check if input block dimension is larger than input matrix
+        ## check if input darray dimension is same as input matrix dimension
+        stop("input darray and matrix dimensions do not conform")
+      }
+      foreach(i, 1:numSplits(out_dobject), function(mtx=get_sub_sparse_matrix(input, out_dobject@blocks, i),ds=splits(out_dobject,i)){
+        ds <- mtx
+        update(ds)
+      }, progress=FALSE)
+
+      if(is.null(dimnames(input)) == FALSE)
+        dimnames(out_dobject) <- dimnames(input)
+    }
+
+    return (out_dobject)
+})
+setMethod("as.darray", signature(input="dsCMatrix", blocks="missing"),
+  function(input, blocks) {
+    ninst<-sum(distributedR_status()$Inst)
+    blocks<-dim(input)
+    blocks[1]<-ceiling(blocks[1]/ninst)
+    as.darray(input, blocks)
+})
+
+setMethod("as.darray", signature(input="dsCMatrix", blocks="numeric"),
+  function(input, blocks) {
+    mdim <- dim(input)
+    out_dobject <- darray(mdim, blocks, sparse=TRUE)
+
+    if (! is.null(out_dobject)) {
+      da_blocks = out_dobject@dim
+      bdim = out_dobject@blocks
+      if(bdim[1]>mdim[1] || bdim[2]>mdim[2] || da_blocks[1]!=mdim[1] || da_blocks[2]!=mdim[2]){
+        ## check if input block dimension is larger than input matrix
+        ## check if input darray dimension is same as input matrix dimension
+        stop("input darray and matrix dimensions do not conform")
+      }
+      foreach(i, 1:numSplits(out_dobject), function(mtx=get_sub_sparse_matrix(input, out_dobject@blocks, i),ds=splits(out_dobject,i)){
+        ds <- mtx
+        update(ds)
+      }, progress=FALSE)
+
+      if(is.null(dimnames(input)) == FALSE)
+        dimnames(out_dobject) <- dimnames(input)
+    }
+
+    return (out_dobject)
+})
