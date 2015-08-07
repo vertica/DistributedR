@@ -1,0 +1,4 @@
+*.o
+*.so
+test_access_performance
+test_random_action

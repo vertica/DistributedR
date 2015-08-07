@@ -1,0 +1,10 @@
+Package: ooclibrary
+Type: Package
+Title: a out-of-core execution library for R
+Version: 0.1
+Date: 2015-05-18
+Author: Che Zheng (HP Vertica)
+Maintainer: Che Zheng <che.zheng@hp.com>
+Description: This package provide a R based out of core computation solution through two allocator library, under new_allocator and old_allocator folders.
+Depends: Rcpp
+Imports: Rcpp

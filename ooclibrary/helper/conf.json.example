@@ -1,0 +1,38 @@
+[
+	{
+		"group" : "mem-limit-4096-infswap",
+		"script": "l-rf.R",
+		"params": [2000000, 4000000, 6000000, 8000000, 10000000]
+	},
+
+	{
+		"group" : "mem-limit-4096-infswap",
+		"script": "m-rf.R",
+		"params": [2000000, 4000000, 6000000, 8000000, 10000000]
+	},
+
+	{
+		"group" : "mem-limit-4096-infswap",
+		"script": "l-rf.R",
+		"params": [12000000, 14000000]
+	},
+
+	{
+		"group" : "mem-limit-4096-infswap",
+		"script": "m-rf.R",
+		"params": [12000000, 14000000]
+	},
+
+	{
+		"group" : "mem-limit-4096-infswap",
+		"script": "l-rf.R",
+		"params": [16000000, 18000000]
+	},
+
+	{
+		"group" : "mem-limit-4096-infswap",
+		"script": "m-rf.R",
+		"params": [16000000, 18000000]
+	}
+]
+

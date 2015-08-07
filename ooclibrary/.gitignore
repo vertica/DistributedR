@@ -1,0 +1,6 @@
+src/*.o
+test/*.o
+new_allocator/test_basic_in_place
+new_allocator/test_basic_out_place
+new_allocator/test_gprintf
+new_allocator/test_meta_allocator

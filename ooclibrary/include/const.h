@@ -1,0 +1,14 @@
+#ifndef __CONST_H_
+#define __CONST_H_
+
+#define PATH_MAX (256U)
+#define FILE_HANDLE_PATH_MAX PATH_MAX
+#define DEFAULT_LARGE_THRESHOLD (4UL * 1024UL * 1024UL) // 4MB
+#define UUID_LENGTH (32)
+#define USE_MADVISE
+#define TRACE_MEM
+#define DEFAULT_DISK_PATH "/tmp/R/"
+#define M (1024UL * 1024UL)
+#define ENV_ALLOCATOR_LOG_LOCATION "ALLOCATOR_LOG_LOCATION"
+
+#endif

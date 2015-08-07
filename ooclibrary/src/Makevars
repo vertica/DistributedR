@@ -1,0 +1,21 @@
+RCPPFLAGS := 		$(shell $(R_HOME)/bin/R CMD config --cppflags)
+
+RCPPINCL := 		$(shell echo 'Rcpp:::CxxFlags()' | $(R_HOME)/bin/R --vanilla --slave)
+RCPPLIBS := 		$(shell echo 'Rcpp:::LdFlags()'  | $(R_HOME)/bin/R --vanilla --slave)
+
+RINSIDEINCL := 		$(shell echo 'RInside:::CxxFlags()' | $(R_HOME)/bin/R --vanilla --slave)
+RINSIDELIBS := 		$(shell echo 'RInside:::LdFlags()'  | $(R_HOME)/bin/R --vanilla --slave)
+
+INCL := -I../include
+
+LIBS=-luuid -ldl -lpthread
+LDLIBS := $(LIBS) $(RCPPLIBS) $(RINSIDELIBS)
+
+PKG_CFLAGS=-g $(INCL) -fPIC
+PKG_CXXFLAGS=-g $(INCL) -fPIC $(RCPPFLAGS) $(RCPPINCL) $(RINSIDEINCL)
+
+PKG_CPPFLAGS=-g -Wall -fPIC -dPIC
+
+PKG_LIBS=$(LDLIBS)
+
+

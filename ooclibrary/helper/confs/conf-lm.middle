@@ -1,0 +1,22 @@
+[
+	{
+		"group" : "mem-limit-4096-infswap",
+		"script": "l-rf.R",
+		"params": [12000000]
+	},
+	{
+		"group" : "mem-limit-4096-infswap",
+		"script": "l-gbm.R",
+		"params": [1000000, 2000000, 3000000, 4000000, 5000000]
+	},
+	{
+		"group" : "mem-limit-4096-infswap",
+		"script": "m-rf.R",
+		"params": [12000000]
+	},
+	{
+		"group" : "mem-limit-4096-infswap",
+		"script": "m-gbm.R",
+		"params": [1000000, 2000000, 3000000, 4000000, 5000000]
+	}
+]

@@ -1,0 +1,7 @@
+Modern machine learning tasks in R may introduce great memory pressure, thus we may rely on out of core (OOC) computation to handle data set cannot be put inside physical memory. Some examples of existing R OOC packages are ff, bigmemory. But these packages basically requires algorithms to be rewritten to use there data structure and interface. This package focus on OOC solutions fully compatible with existing R codes, including binary extensions.
+
+Generally, fully compatible requires the solution to be at memory layer rather than intercepting R function calls, since binary extension may bypass R interpreter layer.
+
+Under old_allocator is a mmap based allocation library to approximate the effect of bigmemory package without losing compatibility with exisiting R codes, through hacking memory map under vanilla R objects upon allocation. However, this does not achieve the same performance as bigmemory, since bigmemory use reference type where as R use value type. Moreover, the overhead introduced by mmap again make the performance worse.
+
+Under new_allocator is a pure user space custom swap library, whose target is to solve the inefficiency mentioned in old_allocator library, by avoiding mmap based swapping and use direct IO for disk operation, and use non-LRU eviction policy like FIFO which may be more suitable for certain machine learning tasks. This work is inspired by Princenton SSDAlloc works.

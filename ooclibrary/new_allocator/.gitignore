@@ -1,0 +1,13 @@
+*.o
+*.so
+*.out
+test_all
+test_basic
+test_basic32
+test_basic64
+test_basic_original
+test_seq
+test_seq_original
+profile_signal
+profile_timer
+data/*

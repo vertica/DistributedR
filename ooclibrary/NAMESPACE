@@ -1,0 +1,4 @@
+import(Rcpp)
+exportPattern("^[^\\.]")
+export(mmapexecute)
+useDynLib(ooclibrary)
