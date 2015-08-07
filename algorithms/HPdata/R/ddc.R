@@ -1,5 +1,16 @@
-distributedR_read <- function(url, ...) {
+csv2dframe <- function(url, ...) {
     options = list(...)
+    options['fileType'] = 'csv'
+    .ddc_read(url, options)
+}
+
+orc2dframe <- function(url, ...) {
+    options = list(...)
+    options['fileType'] = 'orc'
+    .ddc_read(url, options)
+}
+
+.ddc_read <- function(url, options) {
     if(!("hdfsConfigurationFile" %in% options)) {
         # set default hdfsConfigurationFile
         options["hdfsConfigurationFile"] = paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')
@@ -7,7 +18,7 @@ distributedR_read <- function(url, ...) {
     pm <- get_pm_object()
     # 1. Schedule file across workers. Handles globbing also.
     plan <- pm$ddc_schedule(url, options)
-#    print(plan)
+    #print(plan)
 
     #
     # plan$num_partitions
