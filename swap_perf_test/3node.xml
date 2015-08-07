@@ -1,0 +1,70 @@
+<!--
+A scalable and high-performance platform for R.
+Copyright (C) [2013] Hewlett-Packard Development Company, L.P.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or (at
+your option) any later version.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+General Public License for more details.  You should have received a
+copy of the GNU General Public License along with this program; if
+not, write to the Free Software Foundation, Inc., 59 Temple Place,
+Suite 330, Boston, MA 02111-1307 USA
+-->
+
+<!--
+     Cluster configuration file
+     ServerInfo contains the IP address(hostname) and port number of master.
+     StartPortRange and EndPortRange specifies the port number range that will be used by a master.
+     The run-time will select a random open port within the range.
+     If there is not an available port in the range, an exception is thrown.
+     In a master node, the port number range has to contain at least two open ports (mandatory)
+
+     Within Workers field, multiple worker information can be filled.
+     Worker field contains Hostname/IP address and port range, and they are mandatory.
+     StartPortRange and EndPortRange specifies the port number range that will be used by a worker.
+     The port number range of a worker has to contain at least 2*(number of workers)+1 open ports (mandatory)
+     In a multi-worker cluster, loop-back address (either 127.0.0.1 or localhost)
+     should not be used as it prohibits inter-node communication.
+     Executors set the number of R instances. If the value is 0, runtime will determine
+     automatically as (the number of cores in the machine).
+     SharedMemory element contains information about the darray quota in MB. If this is 0,
+     runtime will automatically determine by considering the size of mounted shared memory region.
+     Executors and SharedMemory fileds are optional - if they are missing either default value (0) or argument value will be used.
+-->
+<MasterConfig>
+  <ServerInfo>
+    <Hostname>124-1.bfc.labs.hpecorp.net</Hostname>
+    <StartPortRange>50000</StartPortRange>
+    <EndPortRange>50100</EndPortRange>
+    <isColocatedWithVertica>FALSE</isColocatedWithVertica>
+    <VerticaDSN>NULL</VerticaDSN>
+  </ServerInfo>
+  <Workers>
+    <Worker>
+      <Hostname>124-1.bfc.labs.hpecorp.net</Hostname>
+      <StartPortRange>50000</StartPortRange>
+      <EndPortRange>50100</EndPortRange>
+      <Executors>16</Executors>
+      <SharedMemory>0</SharedMemory>
+    </Worker>
+    <Worker>
+      <Hostname>125-1.bfc.labs.hpecorp.net</Hostname>
+      <StartPortRange>50000</StartPortRange>
+      <EndPortRange>50100</EndPortRange>
+      <Executors>16</Executors>
+      <SharedMemory>0</SharedMemory>
+    </Worker>
+    <Worker>
+      <Hostname>126-1.bfc.labs.hpecorp.net</Hostname>
+      <StartPortRange>50000</StartPortRange>
+      <EndPortRange>50100</EndPortRange>
+      <Executors>16</Executors>
+      <SharedMemory>0</SharedMemory>
+    </Worker>
+  </Workers>
+</MasterConfig>
