@@ -92,7 +92,7 @@ stop_workers <- function(bin_name="R-worker-bin") {
 }
 
 .pass_env_var <- function() {
-  env_list <- c("ODBCINI", "VERTICAINI", "EXECUTOR_PRELOAD")
+  env_list <- c("ODBCINI", "VERTICAINI", "EXECUTOR_PRELOAD", "MMAP_FOLDER", "MMAP_MEMORY_LIMIT")
   ret_str <- ""
   for (el in env_list) {
     ev <- Sys.getenv(el)

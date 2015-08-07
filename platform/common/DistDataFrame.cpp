@@ -86,6 +86,9 @@ pair<std::int64_t, std::int64_t> DistDataFrame::GetDims() const {
 void DistDataFrame::LoadInR(RInside &R, const std::string &varname){
   // create an array in R-session
   SEXP arr = PrestoCreateVector(RAWSXP, header->size);
+
+  LOG_DEBUG("LoadInR called\n");
+
   if (Rf_isNull(arr)) {
     throw PrestoWarningException("DistDataFrame::LoadInR: array is NULL");
   }
@@ -93,6 +96,7 @@ void DistDataFrame::LoadInR(RInside &R, const std::string &varname){
   if (freemap->find(arr) != freemap->end()) {
     // R used malloc and we intercepted.
     // Overwrite the array pointer in R-session.
+    LOG_DEBUG("LoadInR hooked successfully\n");
     createmapping(*shm, mapped_size(sizeof(*header)), header->size, RAW(arr));
   } else {
     // R didn't use malloc
