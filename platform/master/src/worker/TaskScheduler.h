@@ -78,7 +78,7 @@ class TaskScheduler {
   int32_t ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
   int64_t AddParentTask(const std::vector<NewArg>& task_args, uint64_t parenttaskid, uint64_t taskid);
   void DeleteSplit(const std::string& splitname);
-  void PersistDone(uint64_t taskid, int executor_id); 
+  void PersistDone(std::string splitname, int executor_id); 
 
 protected:
   int64_t GetBestExecutor(const std::vector<NewArg>& partitions, uint64_t taskid);
@@ -100,6 +100,7 @@ protected:
 
   //persist_sync
   boost::unordered_map<uint64_t, boost::interprocess::interprocess_semaphore*> sync_persist;
+  boost::unordered_map<std::string, boost::unordered_set<uint64_t>> persist_tasks;
   boost::recursive_mutex persist_mutex;
 
   //Process Communication

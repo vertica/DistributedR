@@ -470,6 +470,11 @@ void PrestoWorker::clear(ClearRequest req) {
 
     //clear from executors
     if(DATASTORE == RINSTANCE) {
+      /*shmem_arrays_mutex_.lock();
+      if(shmem_arrays_.find(req.name()) != shmem_arrays_.end())
+        shmem_arrays_.remove(req.name());
+      shmem_arrays_mutex_.unlock();*/
+
       executorscheduler_->DeleteSplit(req.name());
     }
   }
@@ -489,10 +494,6 @@ void PrestoWorker::clear(ClearRequest req) {
 void PrestoWorker::prepare_persist(const std::string& name, int executor, uint64_t taskid) {
 
   LOG_DEBUG("prepare_persist: Received persist task(%s, %d) for main Task %zu", name.c_str(), executor, taskid);
-
-  shmem_arrays_mutex_.lock();
-  shmem_arrays_.insert(name);
-  shmem_arrays_mutex_.unlock();
 
   PersistRequest persist_req;
   persist_req.set_id(000);
@@ -1088,9 +1089,6 @@ void PrestoWorker::HandleRequests(int type) {
         case WorkerRequest::PERSIST:
           {
             LOG_INFO("New PERSIST Task - Received from Worker");
-            shmem_arrays_mutex_.lock();
-            shmem_arrays_.insert(worker_req.persist().split_name());
-            shmem_arrays_mutex_.unlock();
             executorpool_->persist(worker_req.persist().split_name(),
                                    worker_req.persist().executor(),
                                    worker_req.persist().parenttaskid());
@@ -1104,6 +1102,7 @@ void PrestoWorker::HandleRequests(int type) {
               createcomposite(worker_req.createcomposite());
             } else {
               uint64_t taskid = worker_req.createcomposite().uid();
+              //Commented for future use
               /*vector<NewArg> task_args;
               task_args.clear();
               uint64_t taskid = worker_req.createcomposite().uid();
@@ -1112,7 +1111,8 @@ void PrestoWorker::HandleRequests(int type) {
               get_vector_from_repeated_field
                 <RepeatedPtrField<NewArg>::const_iterator,
                  NewArg>(worker_req.createcomposite().task_args().begin(),
-                       worker_req.createcomposite().task_args_size(), &task_args);*/
+                       worker_req.createcomposite().task_args_size(), &task_args);
+              int64_t executor_id = executorscheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());*/
 
               vector<NewArg> cc_args;
               cc_args.clear();
@@ -1121,7 +1121,6 @@ void PrestoWorker::HandleRequests(int type) {
                 NewArg>(worker_req.createcomposite().cargs().begin(),
                        worker_req.createcomposite().cargs_size(), &cc_args);
 
-              //int64_t executor_id = executorscheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());
               executorscheduler_->ValidatePartitions(cc_args, -1, taskid);
               LOG_INFO("CREATECOMPOSITE TaskID %10zu - All required splits to create composite dobject validated", taskid);
 

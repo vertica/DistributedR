@@ -35,6 +35,10 @@ using namespace boost;
 
 namespace presto {
 
+/**
+  * TaskScheduler destructor
+  *
+  **/
 TaskScheduler::~TaskScheduler() {
   sync_persist.clear();
   parent_tasks.clear();
@@ -59,6 +63,10 @@ TaskScheduler::~TaskScheduler() {
   LOG_INFO("Deleted Executor Scheduler");
 }
 
+/**
+  * Initialize Executor statistics map
+  *
+  */
 void TaskScheduler::AddExecutor(int id) {
   ExecStat* stat = new ExecStat;
   stat->mem_used = 0;
@@ -68,6 +76,11 @@ void TaskScheduler::AddExecutor(int id) {
   executor_stat[id] = stat;
 }
 
+/**
+  * Clears a split from Worker metadata
+  * Sends CLEAR command to executors which contains the split
+  *
+  */
 void TaskScheduler::DeleteSplit(const std::string& splitname) {
   boost::unordered_set<int> executors;
   bool exists = false;
@@ -93,8 +106,15 @@ void TaskScheduler::DeleteSplit(const std::string& splitname) {
   LOG_DEBUG("Executor Scheduler: Cleared split %s from executors", splitname.c_str()); 
 }
 
-/**************************************  AddParent Task *************************************/
-
+/**
+  * Helper function for AddParent()
+  * Used only for dobject initialization foreach
+  *
+  * Calculate specific (rather than random) Executor Id for a split (or task containing split) 
+  * based on its split id.
+  * Allows deterministic allocation of splits to executors.
+  *
+  **/
 int TaskScheduler::GetDeterministicExecutor(int32_t split_id) {
   int exec_idx = 0;
   std::pair<int, int> cluster_info = worker->GetClusterInfo(); 
@@ -113,45 +133,64 @@ int TaskScheduler::GetDeterministicExecutor(int32_t split_id) {
 }
 
 
-// Possibility to add policy
-int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& args, uint64_t taskid) {
+/**
+  * Helper function for AddParent()
+  * 
+  * Evaluates and assigns best executor to a task based on input task arguments
+  *
+  **/
+int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& task_args, uint64_t taskid) {
     int target_executor = -1;
 
-    //Check if its 1st dobject initialization
-    if(args.size() == 1) {
+    // Extract all splits in the task
+    std::vector<std::string> task_splits;
+    for(int i=0; i<task_args.size(); i++) {
+      if(task_args[i].arrayname() == "list_type...") {
+        for(int j=0; j<task_args[i].list_arraynames_size(); j++)
+           task_splits.push_back(task_args[i].list_arraynames(j));
+      } else
+        task_splits.push_back(task_args[i].arrayname());
+    } 
+
+    // Check if this is for dobject initialization foreach/task
+    if(task_args.size() == 1) {
       int32_t split_id;
       string split_name;
       int32_t version;
-      ParseVersionNumber(args[0].arrayname(), &version);
-      ParseSplitName(args[0].arrayname(), &split_name, &split_id);
+      ParseVersionNumber(task_splits[0], &version);
+      ParseSplitName(task_splits[0], &split_name, &split_id);
 
-      if(version == 0) { // Dobject initialization foreach
+      // It is Dobject initialization foreach
+      // Calculate Deterministic Executor for the task
+      if(version == 0) {
         target_executor = GetDeterministicExecutor(split_id);
-        LOG_DEBUG("Executor Scheduler: Task %zu - Dobject partition initialization assigned split %s to Executor Id %d", taskid, args[0].arrayname().c_str(), target_executor);
+        LOG_DEBUG("Executor Scheduler: Task %zu - Dobject partition initialization assigned split %s to Executor Id %d", taskid, task_splits[0].c_str(), target_executor);
         return target_executor;
       }
     }
 
-    // Get the executors of all splits.
+    // Get available Executors of all input splits in the task
     map<int, size_t> available;
-    for(int32_t i = 0; i < args.size(); i++) {
+    for(int32_t i = 0; i < task_splits.size(); i++) {
        unique_lock<recursive_mutex> metalock(metadata_mutex);
-       if(executor_splits.find(args[i].arrayname()) != executor_splits.end()) {
-         ExecSplit *partition = executor_splits[args[i].arrayname()];
+       if(executor_splits.find(task_splits[i]) != executor_splits.end()) {
+         ExecSplit *partition = executor_splits[task_splits[i]];
          boost::unordered_set<int> execs = partition->executors;
 
          for(boost::unordered_set<int>::iterator itr = execs.begin();
              itr != execs.end(); ++itr) {
            available[*itr] += partition->size;
           }
-       }  //else dont do anything
+       }
        metalock.unlock();
     }
 
+
+    // If multiple available Executors, pich one which has maximum cumulative split size.
+    // Else, pick the 1st one.
     if(available.size() > 0) {
        map<int, size_t>::iterator best = available.begin();
-       if(args.size() > 1) {
-         //get one with most splits (max split size)
+       if(task_splits.size() > 1) {
          for (map<int, size_t>::iterator itr = available.begin();
             itr != available.end(); itr++) {
             if (best->second < itr->second) {
@@ -162,7 +201,8 @@ int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& args, uint64_t
       target_executor = best->first;
     }
 
-    if (target_executor == -1) {// No executor assigned yet. Choose one in round robin fashion
+    // If no Executor assigned yet, choose one in round robin fashion
+    if (target_executor == -1) {
        target_executor = executorpool->GetExecutorInRndRobin();
        LOG_DEBUG("Executor Scheduler: Task %zu - Assigned to Executor Id %d in round robin", taskid, target_executor);
     } else
@@ -172,7 +212,12 @@ int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& args, uint64_t
 }
 
 
-
+/**
+  * Called for tasks - NEWEXECR
+  * 
+  * Fetch or assign an executor to the task
+  *
+  **/
 int64_t TaskScheduler::AddParentTask(const std::vector<NewArg>& task_args, uint64_t parenttaskid, uint64_t taskid) {
   ::uint64_t executor_id = -1;
   unique_lock<mutex> parentlock(parent_mutex);
@@ -182,48 +227,91 @@ int64_t TaskScheduler::AddParentTask(const std::vector<NewArg>& task_args, uint6
   } else {
     executor_id = GetBestExecutor(task_args, taskid);
     parent_tasks[parenttaskid] = executor_id;
-    //LOG_DEBUG("Executor Scheduler: Task %zu - Assigned to Executor Id %d", taskid, executor_id);
   }
   parentlock.unlock();
   return executor_id;
 }
 
-/************************************** Validate Partitions ****************************************************************/
+/**
+  * Helper function for ValidatePartitions()
+  *
+  * Function to update metadata and post waiting semaphores
+  * once a split has been persisted successfully.
+  *
+  **/
+void TaskScheduler::PersistDone(std::string splitname, int executor_id) {
+  unique_lock<recursive_mutex> persistlock(metadata_mutex);
+  shmem_arrays_mutex->lock();
+  shmem_arrays->insert(splitname);
+  shmem_arrays_mutex->unlock();
 
-void TaskScheduler::PersistDone(uint64_t taskid, int executor_id) {
   unique_lock<recursive_mutex> metalock(metadata_mutex);
   executor_stat[executor_id]->persist_load--;
   metalock.unlock();
-  sync_persist[taskid]->post();
+
+  boost::unordered_set<uint64_t>::iterator itr = persist_tasks[splitname].begin();
+  for(; itr != persist_tasks[splitname].end(); ++itr) {
+    uint64_t taskid = *itr;
+    sync_persist[taskid]->post();
+  }
+  persist_tasks.erase(splitname);
+  persistlock.unlock();
 }
 
 
+/**
+  * Helper function for ValidatePartitions()
+  *
+  * Check if a split is available either in Worker or Executor
+  * Used for checking if Persist is needed for a split
+  *
+  **/
 bool TaskScheduler::IsSplitAvailable(const std::string& split_name, int executor_id) {
    bool onExec = true;
+   bool onWorker = true;
 
-   if(executor_id != -1) {// Check for executor as well.
+   shmem_arrays_mutex->lock();
+   onWorker = (shmem_arrays->find(split_name) != shmem_arrays->end());
+   shmem_arrays_mutex->unlock();
+
+   // If executor_id is -1, force persist on Worker
+   if(executor_id != -1) {
      unique_lock<recursive_mutex> metalock(metadata_mutex);
      if(executor_splits.find(split_name) != executor_splits.end()) {
        if(executor_splits[split_name]->executors.find(executor_id) == executor_splits[split_name]->executors.end())
          onExec = false;
      }   
      metalock.unlock();
-   } else  // force persist
+   } else
      onExec = false;
 
-   return onExec;
+   LOG_DEBUG("Check Split Availability: %s -  On Worker(%d), On Executor(%d)", split_name.c_str(), onWorker, onExec);
+
+   return (onWorker || onExec);
 }
 
 
+/**
+  * Helper function for ValidatePartitions()
+  *
+  * Check if a PERSIST task has already been spawned for the split
+  *
+  **/
 bool TaskScheduler::IsBeingPersisted(const std::string& split_name) {
    bool ret;
-   shmem_arrays_mutex->lock();
-   ret = (shmem_arrays->find(split_name) != shmem_arrays->end());
-   shmem_arrays_mutex->unlock();
+   unique_lock<recursive_mutex> lock(persist_mutex); 
+   ret = (persist_tasks.find(split_name) != persist_tasks.end());
+   lock.unlock();
    return ret;
 }
 
-
+/**
+  *
+  * Helper function for ValidatePartitions()
+  *
+  * Assign an executor from which a split should be persisted
+  *
+  **/
 int64_t TaskScheduler::ExecutorToPersistFrom(const std::string& split_name) {
    int executor_id = -1; 
    unique_lock<recursive_mutex> metalock(metadata_mutex);
@@ -235,6 +323,7 @@ int64_t TaskScheduler::ExecutorToPersistFrom(const std::string& split_name) {
    ExecSplit* partition = executor_splits[split_name];
    boost::unordered_set<int>::iterator it = partition->executors.begin();
    executor_id = *it;
+   // Assign an executor based on load
    for (it++; it != partition->executors.end(); it++) {
       if (executor_stat[executor_id]->persist_load > executor_stat[*it]->persist_load) {
         executor_id = *it;
@@ -249,10 +338,15 @@ int64_t TaskScheduler::ExecutorToPersistFrom(const std::string& split_name) {
 }
 
 
-//Check if all partitions are on the same executor.
-//If not persist to Worker
+/**
+  * Called for tasks - NEWEXEC, NEWTRANSFER, CREATECOMPOSITE
+  *
+  * Validate if all input split arguments are available
+  * Launch PERSIST tasks if it needs to be persisted from another Executor on the Worker
+  *
+  **/
 int32_t TaskScheduler::ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid) {
-   int num_persisted = 0;
+   int needs_persisted = 0;
    std::vector<std::string> all_partitions;
 
    for(int i=0; i<task_args.size(); i++) {
@@ -270,36 +364,46 @@ int32_t TaskScheduler::ValidatePartitions(const std::vector<NewArg>& task_args, 
 
    for(int i=0; i<all_partitions.size(); i++) {
 
-      //bool persist = false;
+      bool launch_persist = false;
+      int target_executor = -1;
       unique_lock<recursive_mutex> metalock(metadata_mutex);
       if(!IsSplitAvailable(all_partitions[i], executor_id)) {
         if (!IsBeingPersisted(all_partitions[i])) {
-           //persist = true;
-           int target_executor = ExecutorToPersistFrom(all_partitions[i]);
+           launch_persist = true;
+           target_executor = ExecutorToPersistFrom(all_partitions[i]);
            LOG_DEBUG("Executor Scheduler: Task %zu - Split %s will be persisted from Executor Id %d", taskid, all_partitions[i].c_str(), target_executor);
-           worker->prepare_persist(all_partitions[i], target_executor, taskid);
-           num_persisted++;
+        } else {
+          LOG_DEBUG("Executor Scheduler: Task %zu - Split %s is already being persisted. Wait for it to complete", taskid, all_partitions[i].c_str());
         }
+
+        // Update metadata and launch persists
+        lock.lock();
+        persist_tasks[all_partitions[i]].insert(taskid);
+        lock.unlock();
+        needs_persisted++;
+
+        if(launch_persist) worker->prepare_persist(all_partitions[i], target_executor, taskid);
       } else
         LOG_DEBUG("Executor Scheduler: Task %zu - Split %s doesnt need to be persisted", taskid, all_partitions[i].c_str());
 
       metalock.unlock();
    }
 
-   //Wait for persist tasks to complete
-   for(int i=0; i< num_persisted; i++) {
+   for(int i=0; i< needs_persisted; i++) {
      sync_persist[taskid]->wait();
    }
 
-   LOG_DEBUG("Executor Scheduler: Task %zu - Dependent PERSIST tasks(#%d) complete", taskid, num_persisted);
+   LOG_DEBUG("Executor Scheduler: Task %zu - Dependent PERSIST tasks(#%d) complete", taskid, needs_persisted);
    lock.lock();
    sync_persist.erase(taskid);
    lock.unlock();
 
-   return num_persisted;
+   return needs_persisted;
 }
 
 /**
+  * Called after EXECUTE is complete.
+  *
   * Stage Updated partitions (for fault tolerance)
   *
   */
@@ -318,15 +422,19 @@ void TaskScheduler::StageUpdatedPartition(const std::string &name, size_t size, 
 
 
 /**
-  * Merge Staged metadata to main metadata or clear old partitions.
+  * Called for tasks - METADATAUPDATE
+  *
+  * If foreach is successful, merge Staged metadata to main Worker metadata and clear old splits
+  * If foreach is unsuccessful, clear newly created splits
   *
   */
 void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
   boost::unordered_map<int, std::vector<std::string>> clear_map;
 
   unique_lock<recursive_mutex> metalock(metadata_mutex);
+  
   if(status) {
-    // if foreach is successful. make it live
+    // Foreach is successful.
     LOG_INFO("METADATAUPDATE Task               - Foreach is successful");
 
     unique_lock<mutex> stagelock(stage_mutex);
@@ -334,7 +442,7 @@ void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
     for(it = updated_splits.begin(); it != updated_splits.end(); ++it) {
         SplitUpdate* split = *it;
 
-       //Add to main metadata
+       //Add to Worker metadata
        if(executor_splits.find(split->name) != executor_splits.end()) {
           ExecSplit *partition = executor_splits[split->name];
           partition->executors.insert(split->executor);
@@ -350,14 +458,14 @@ void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
 
        //TODO:Update executor size info
 
-       // Populate clear_map for batch clean
+       // Prepare map for batched clear
        int32_t split_id;
        string darray_name;
        int32_t version;
        ParseVersionNumber(split->name, &version);
        ParseSplitName(split->name, &darray_name, &split_id);
 
-      if(version > 1) {  // Version 0 does not exist.
+      if(version > 1) {
         string parent = darray_name + "_" +
         int_to_string(split_id) + "_" +
         int_to_string(version - GC_DEFAULT_GEN);
@@ -374,16 +482,21 @@ void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
         }
 
         SharedMemoryObject::remove(parent.c_str());
-        //erase from metadata
+        
+        /*shmem_arrays_mutex->lock();
+        if(shmem_arrays->find(parent) != shmem_arrays.end())
+          shmem_arrays->remove(parent);
+        shmem_arrays_mutex->unlock();*/
         delete executor_splits[parent];
         executor_splits.erase(parent);
       }
     }
     stagelock.unlock();
   } else {
-    // Discard changes and cleanup executors.
+    // Foreach has failed
     LOG_INFO("METADATAUPDATE Task               - Foreach failed");
-    // Populate clear_map for batch clean
+    
+    // Prepare map for batched clear
     unique_lock<mutex> stagelock(stage_mutex);
     boost::unordered_set<SplitUpdate*>::iterator it;
     for(it = updated_splits.begin(); it != updated_splits.end(); ++it) {
@@ -394,7 +507,6 @@ void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
     stagelock.unlock();
   }
 
-  //Cleanup Staged metadata
   boost::unordered_set<SplitUpdate*>::iterator it;
   for(it = updated_splits.begin(); it != updated_splits.end(); ++it) {
     delete *it;

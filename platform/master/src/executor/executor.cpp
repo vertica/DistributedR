@@ -186,7 +186,6 @@ ExecutorEvent Executor::GetNextEvent() {
  */
 int Executor::ReadSplitArgs() {  // NOLINT
 
-  RR.parseEvalQ("print('Printing ls'); print(ls())");
   int vars;
   char splitname[100], varname[100];
   std::string list_string("list_type...");
@@ -247,7 +246,7 @@ int Executor::ReadSplitArgs() {  // NOLINT
           LOG_DEBUG("Partition %s is on Executor. Loading..", splitname);
 
           char cmd[CMD_BUF_SIZE];
-          snprintf(cmd, CMD_BUF_SIZE, ".tmp.varname <- deparse(substitute(`%s`)); print(.tmp.varname); assign(.tmp.varname, `%s`, .GlobalEnv); ", varname, splitname);
+          snprintf(cmd, CMD_BUF_SIZE, ".tmp.varname <- deparse(substitute(`%s`)); assign(.tmp.varname, `%s`, .GlobalEnv); ", varname, splitname);
           RR.parseEvalQ(cmd);
         } else {  //Load from Worker
           LOG_DEBUG("Partition %s is on Worker. Loading..", splitname);
@@ -849,7 +848,7 @@ int main(int argc, char *argv[]) {
 
   LOG_DEBUG("Loading libraries");
   // load packages
-  R.parseEvalQ("tryCatch({library(Matrix);library(Executor);gc.time()}, error=function(ex){Sys.sleep(2);library(Matrix);library(Executor);gc.time()})");
+  R.parseEvalQ("tryCatch({library(Matrix);library(MatrixHelper);library(Executor);gc.time()}, error=function(ex){Sys.sleep(2);library(Matrix);library(MatrixHelper);library(Executor);gc.time()})");
   
   updatesptr = new set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>>;
   set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>> &updates = *updatesptr;
@@ -898,6 +897,7 @@ int main(int argc, char *argv[]) {
       executor_trace = ZTracer::create_ZTrace("Executor", executor_ztrace_inst, &info, true);
 #endif
 
+      R.parseEvalQ("print(ls())");
       LOG_INFO("*** No Task under execution. Waiting from Task from Worker **");
       R.parseEvalQ("print('Printing ls'); print(ls())");
 
@@ -910,7 +910,7 @@ int main(int argc, char *argv[]) {
         break;
       }
 
-      LOG_INFO("====> New Event received of type %d", next);
+      LOG_INFO("*** New Event received of type %d (1 - EXECUTE, 2 - CLEAR, 3 - PERSIST) **", next);
 
       switch(next) {
         case EXECR:

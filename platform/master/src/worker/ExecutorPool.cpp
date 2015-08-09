@@ -773,7 +773,7 @@ void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid
     }
   }
 
-  worker->GetScheduler()->PersistDone(taskid, executor);
+  worker->GetScheduler()->PersistDone(split_name, executor);
   lock.lock();
   executors[executor].ready = true;
   executors[executor].sync.notify_one();

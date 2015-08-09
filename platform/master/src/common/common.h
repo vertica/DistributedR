@@ -110,9 +110,9 @@ enum StorageLayer {
 };
 
 enum ExecutorEvent {
-  PERSIST = 1,
-  EXECR,
-  CLEAR
+  EXECR = 1,
+  CLEAR,
+  PERSIST
 };
 
 /** This enum indicates a bit index of each attribute
