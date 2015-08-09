@@ -650,32 +650,30 @@ int32_t PrestoMaster::ParseXMLConfig(const string& config,
 
   return workers->size();
 }
-
-ddc::scheduler::ChunkScheduler& PrestoMaster::ddc_chunk_scheduler()
+ddc::WorkerSelector PrestoMaster::worker_selector() const
 {
-    return ddc_chunk_scheduler_;
+    return worker_selector_;
 }
 
-List PrestoMaster::DdcSchedule(const string &url, const List &options) {
-    std::string extension = base::utils::getExtension(url);
-    std::string protocol = base::utils::getProtocol(url);
-
-    base::ConfigurationMap conf;
-
+/**
+ * Create a worker map. This map includes information about the workers
+ * (hostname, port and number of executors).
+ */
+Rcpp::List PrestoMaster::WorkerMap() {
     std::map<std::string, std::vector<size_t> > workerExtraInfo = GetWorkerStatus();
 
-    /**
-     * Create a worker map. This map includes information about the workers
-     * (hostname, port and number of executors).
-     */
-    ddc::scheduler::WorkerMap workerMap;
     typedef map<int, boost::shared_ptr<WorkerInfo> >::iterator it_type;
+
+    Rcpp::List workerMap;
     for(it_type it = worker_infos.begin(); it != worker_infos.end(); ++it) {
         ::uint64_t numExecutors = 1;  // default to 1 executor per worker
         std::string fullWorkerId = "";
         fullWorkerId += (it->second)->hostname();
         fullWorkerId += ":";
-        fullWorkerId += base::utils::to_string((it->second)->port());
+        std::ostringstream os ;
+        os << (it->second)->port();
+        std::string portStr = os.str() ;
+        fullWorkerId += portStr;
         std::map<std::string, std::vector<size_t> >::iterator it2 = workerExtraInfo.find(fullWorkerId);
         if (it2 != workerExtraInfo.end()) {
             std::vector<size_t> v = it2->second;
@@ -684,113 +682,16 @@ List PrestoMaster::DdcSchedule(const string &url, const List &options) {
             }
         }
 
-        boost::shared_ptr<ddc::scheduler::WorkerInfo> w(
-                    new ddc::scheduler::WorkerInfo((it->second)->hostname(),
-                                                   (it->second)->port(),
-                                                   numExecutors));
-        workerMap[it->first] = w;
+        Rcpp::List w;
+        w["hostname"] = (it->second)->hostname();
+        w["port"] = (it->second)->port();
+        w["num_executors"] = numExecutors;
+        std::ostringstream os2;
+        os2 << it->first;
+        workerMap[os2.str()] = w;
     }
-
-    /**
-     * Put together the configuration needed by the chunk scheduler.
-     */
-    conf["workerMap"] = workerMap;
-    conf["fileUrl"] = url;
-    conf["hdfsBlockLocator"] = ddc::hdfsutils::HdfsBlockLocatorPtr(new ddc::hdfsutils::HdfsBlockLocator());
-
-    base::ConfigurationMap conf2;
-    std::string schema = "";
-    try {
-        schema =  Rcpp::as<std::string>(options["schema"]);
-        conf2["schema"] = schema;
-    }
-    catch(...) {
-        //PASS
-    }
-
-    conf["options"] = conf2;
-
-    try {
-        std::string hdfsConfigurationFile = options["hdfsConfigurationFile"];
-        conf["hdfsConfigurationFile"] = hdfsConfigurationFile;
-    }
-    catch(...) {
-        //PASS
-        if (protocol == "http" ||
-            protocol == "hdfs" ||
-            protocol == "webhdfs") {
-            throw std::runtime_error("Need to specify hdfsConfigurationFile in options");
-        }
-    }
-
-    try {
-        std::string fileType = options["fileType"];
-        conf["fileType"] = fileType;
-        extension = fileType;
-    }
-    catch(...) {
-        //PASS
-        // If user doesn't specify filetype we deduce it from the file extension
-    }
-
-    std::string delimiter = ",";
-    try {
-        delimiter = Rcpp::as<std::string>(options["delimiter"]);
-    }
-    catch(...) {
-        //PASS
-    }
-
-    ddc_chunk_scheduler_.configure(conf);
-
-    /**
-     * Create a plan that contains information on how to schedule the file
-     * load across executors.
-     */
-    ddc::scheduler::Plan plan = ddc_chunk_scheduler_.schedule();
-
-    /**
-     * Prepare output object (res) with all the relevant info.
-     */
-    Rcpp::List res;
-    res["num_partitions"] = plan.numSplits;
-
-    Rcpp::List configs;
-    for(int i = 0; i < plan.configurations.size(); ++i) {
-        base::ConfigurationMap planconf = plan.configurations[i];
-        Rcpp::List rconf;
-        if(extension == "csv") {
-            try {
-                rconf["chunk_start"] = boost::any_cast<unsigned long>(planconf["chunkStart"]);
-                rconf["chunk_end"] = boost::any_cast<unsigned long>(planconf["chunkEnd"]);
-                rconf["schema"] = boost::any_cast<std::string>(planconf["schema"]);
-                rconf["file_type"] = std::string("csv");
-                rconf["delimiter"] = delimiter;
-                rconf["url"] = boost::any_cast<std::string>(planconf["url"]);
-            }
-            catch(...) {
-                throw std::runtime_error("Plan doesn't contain all required information");
-            }
-        }
-        else if(extension == "orc") {
-            try {
-                rconf["selected_stripes"] = boost::any_cast<std::string>(planconf["selectedStripes"]);
-                rconf["file_type"] = std::string("orc");
-                rconf["url"] = boost::any_cast<std::string>(planconf["url"]);
-            }
-            catch(...) {
-                throw std::runtime_error("Plan doesn't contain all required information");
-            }
-        }
-        else {
-            throw std::runtime_error("Unsupported file format or cannot detect extension");
-        }
-        configs.push_back(rconf);
-    }
-    res["configs"] = configs;
-    return res;
+    return workerMap;
 }
-
 
 /** Check if a master handler thead is running
  * @return return True if a handler is running. Otherwise, false
@@ -992,7 +893,8 @@ RCPP_MODULE(master_module) {
     .method("running", &presto::PrestoMaster::IsRunning)
     .method("start_dataloader", &presto::PrestoMaster::StartDataLoader)
     .method("stop_dataloader", &presto::PrestoMaster::StopDataLoader)
-    .method("ddc_schedule", &presto::PrestoMaster::DdcSchedule)
+    .method("worker_map", &presto::PrestoMaster::WorkerMap)
+    .method("ddc_set_chunk_worker_map", &presto::PrestoMaster::DdcSetChunkWorkerMap)
       ;  // NOLINT(whitespace/semicolon)
 }
 

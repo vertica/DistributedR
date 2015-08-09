@@ -17,8 +17,12 @@ orc2dframe <- function(url, ...) {
     }
     pm <- get_pm_object()
     # 1. Schedule file across workers. Handles globbing also.
-    plan <- pm$ddc_schedule(url, options)
-    #print(plan)
+    library(hdfsconnector)
+    plan <- create_plan(url, options, pm$worker_map())
+    #print(plan)  # for debugging
+
+    # set chunk_worker_map in master so dframe partitions are created on the right workers
+    pm$ddc_set_chunk_worker_map(plan$chunk_worker_map)
 
     #
     # plan$num_partitions
@@ -40,22 +44,22 @@ orc2dframe <- function(url, ...) {
                              config = plan$configs[[i]]) {
                 library(hdfsconnector)
                 if (config$file_type == "csv") {
-                    dhs <- hdfs_read(config$url,
-                                     schema=config$schema,
-                                     chunkStart=config$chunk_start,
-                                     chunkEnd=config$chunk_end,
-                                     hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),
-                                                                 '/conf/hdfs.json',
-                                                                 sep=''))
-                     update(dhs)
+                    dhs <- csv2dataframe(config$url,
+                                         schema=config$schema,
+                                         chunkStart=config$chunk_start,
+                                         chunkEnd=config$chunk_end,
+                                         hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),
+                                                                     '/conf/hdfs.json',
+                                                                     sep=''))
+                    update(dhs)
                 }
                 else if (config$file_type == "orc") {
-                    dhs <- hdfs_read(url,
-                                     selectedStripes=config$selected_stripes,
-                                     hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),
-                                                                 '/conf/hdfs.json',
-                                                                 sep=''))
-                     update(dhs)
+                    dhs <- orc2dataframe(url,
+                                         selectedStripes=config$selected_stripes,
+                                         hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),
+                                                                     '/conf/hdfs.json',
+                                                                     sep=''))
+                    update(dhs)
                 }
                 else {
                     stop("Unsupported file type")

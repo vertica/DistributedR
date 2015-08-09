@@ -50,9 +50,7 @@
 #include <ztracer.hpp>
 #endif
 
-#include "ddc/base/configurationmap.h"
-#include "ddc/hdfsutils/hdfsblocklocator.h"
-#include "ddc/scheduler/chunkscheduler.h"
+#include "DdcWorkerSelector.h"
 
 //using namespace boost;
 using namespace Rcpp;
@@ -180,21 +178,19 @@ Release WorkerInfo resources to enable garbage-collection
   void SetResMgrInterrupt(volatile bool*);
   void SetLargeChunkServerThread(boost::thread* ptr) {lrg_chunk_trnfr_thr_ptr = ptr;}
 
-  /**
-   * @brief ddc_chunk_scheduler Get the chunk scheduler object.
-   * @return
-   */
-  ddc::scheduler::ChunkScheduler& ddc_chunk_scheduler();
+  void DdcSetChunkWorkerMap(const Rcpp::List& chunkWorkerMap) {
+      ddc::ChunkWorkerMap chunkWorkerMapCpp;
+      for (uint64_t i = 0; i < chunkWorkerMap.size(); ++i) {
+          chunkWorkerMapCpp[i] = chunkWorkerMap[i];
+      }
+      worker_selector_.setChunkWorkerMap(chunkWorkerMapCpp);
+  }
 
-  /**
-   * @brief DdcSchedule Schedule a file load across all the available executors.
-   * @param url
-   * @param options
-   * @return The scheduling plan. @see ddc.R for more info.
-   */
-  Rcpp::List DdcSchedule(const std::string& url, const Rcpp::List& options);
+  ddc::WorkerSelector worker_selector() const;
 
- private:
+  Rcpp::List WorkerMap();
+
+private:
   void InitProtoThread();
   void ConnectWorkers(const vector<ServerInfo>& workers);
   bool CheckMasterWorkerAddrSanity();
@@ -231,10 +227,7 @@ Release WorkerInfo resources to enable garbage-collection
   volatile bool* res_manager_interrupted;
   boost::thread* lrg_chunk_trnfr_thr_ptr;
 
-  /**
-   * Object that schedules a file load across all the available executors.
-   */
-  ddc::scheduler::ChunkScheduler ddc_chunk_scheduler_;
+  ddc::WorkerSelector worker_selector_;
 
 };
 }  // namespace presto

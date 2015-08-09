@@ -107,7 +107,7 @@ int DistributedObject::NextWorkerIdx(bool initialize) {
       break;
     }
     case DDC: {
-           info->worker_client_idx = pm_->ddc_chunk_scheduler().getNextWorker();
+           info->worker_client_idx = pm_->worker_selector().getNextWorker();
            break;
     }
     default : {
@@ -141,7 +141,7 @@ int DistributedObject::NextWorkerIdx(bool initialize) {
       break;   
     }
     case DDC: {
-      info->worker_client_idx = pm_->ddc_chunk_scheduler().getNextWorker();
+      info->worker_client_idx = pm_->worker_selector().getNextWorker();
       break;
     }
 
