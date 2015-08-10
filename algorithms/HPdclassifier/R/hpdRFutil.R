@@ -39,12 +39,28 @@
 
 .combineDistributedForests <- function(forest1,forest2)
 {
-	forest = dlist(npartitions = npartitions(forest1))
+	nparts = max(npartitions(forest1),npartitions(forest2))
+	forest = dlist(npartitions = nparts)
+	valid_index <- function(i,dobj)
+	{
+		if(i <= npartitions(dobj))
+		     	return(list(i))
+		else
+			return(list())
+	}
 	foreach(i,1:npartitions(forest),
-		function(forest1 = splits(forest1,i),
-			forest2 = splits(forest2,i),
+		function(forest1 = splits(forest1,valid_index(i,forest1)),
+			forest2 = splits(forest2,valid_index(i,forest2)),
 			forest = splits(forest,i))
 		{
+			if(length(forest1) == 0 | length(forest2) == 0)
+			{
+				forest = forest1[[1]]
+				update(forest)
+				return()
+			}
+			forest1 = forest1[[1]]
+			forest2 = forest2[[1]]
 			forest = c(forest1,forest2[-1])
 			forest[[1]][[1]] <- 
 				as.integer(length(forest1)+length(forest2)-2)
@@ -77,21 +93,31 @@
 			update(temp_dforest)
 		},progress = FALSE)
 
+	start_ids = sapply(tree_ids, function(x) length(x))
+	start_ids = c(0,cumsum(start_ids))
+	end_ids = start_ids[-1]
+	start_ids = start_ids[-length(start_ids)]+1
+	
 
 	foreach(i,1:new, 
 		function(temp_dforest = splits(temp_dforest,
 			as.list((1:old-1)*new + i)),
 			new_dforest = splits(new_dforest,i),
-			ntree = length(unlist(tree_ids)))
+			ntree = length(unlist(tree_ids)),
+			start = start_ids[i]+1,
+			end = end_ids[i]+1)
 		{
 			header = temp_dforest[[1]][[1]]
 			for(i in 1:length(temp_dforest))
 			      temp_dforest[[i]][[1]] = NULL
-			new_dforest = do.call(c,temp_dforest)
-			new_dforest = new_dforest[!sapply(new_dforest,is.null)]
-			new_dforest = c(list(header),new_dforest)
+			temp_dforest = do.call(c,temp_dforest)
+			temp_dforest=temp_dforest[!sapply(temp_dforest,is.null)]
+			new_dforest = vector(mode = "list", length = ntree+1)
+			new_dforest[[1]] = header
+			new_dforest[start:end] = temp_dforest
 			new_dforest[[1]][[1]] = ntree
 			update(new_dforest)
 		},progress = FALSE)
+
 	return(new_dforest)
 } 

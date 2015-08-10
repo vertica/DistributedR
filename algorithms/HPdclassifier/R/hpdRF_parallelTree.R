@@ -274,7 +274,8 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		print(paste("max_trees_per_iteration",
 			toString(max_trees_per_iteration),sep = " = "))
 
-
+	if(do.trace)
+		print(paste("trees left: ", ntree, " out of a total of ", ntree))
 	suppressWarnings(model <-
 		.hpdRF_distributed(observations, responses, 
 		ntree = as.integer(max_trees_per_iteration), nBins,
@@ -298,7 +299,9 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 
 	while(curr_ntree > 0)
 	{
-	
+		if(do.trace)
+		print(paste("trees left: ",curr_ntree, " out of a total of ", ntree))
+
 		suppressWarnings(model <-
 			.hpdRF_distributed(observations, responses, 
 			ntree = as.integer(min(curr_ntree,max_trees_per_iteration)), 
@@ -326,6 +329,10 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		temp_forest = .distributeForest(model$forest)
 		forest <- .combineDistributedForests(forest,temp_forest)
 		curr_ntree = as.integer(curr_ntree - min(ntree,max_trees_per_iteration))
+
+		forest <- .redistributeForest(forest,
+	       	       split(1:(ntree-curr_ntree),1:sum(distributedR_status()$Inst)))
+
 		rm(model)
 		gc()
 	}
@@ -469,7 +476,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	print(timing_info)
 
 	if(do.trace & completeModel & varImp)
-	print("computing model importance")
+	print("computing variable importance")
 	timing_info <- Sys.time()
 	if(varImp & completeModel)
 		model$importance <- varImportance(model,data,responses)

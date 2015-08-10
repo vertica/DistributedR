@@ -357,8 +357,6 @@
 	if(trace)
 	print("shuffling data")
 	timing_info <- Sys.time()
-	if(trace)
-	print(distributedR_status())
 	foreach(i, 1:npartitions(observations), 
 		   function(		   
 		   forest = splits(attr(forest,"dforest"),i),
@@ -416,8 +414,6 @@
 	timing_info <- Sys.time() - timing_info
 	if(trace)
 	print(timing_info)
-	if(trace)
-	print(distributedR_status())
 
 	if(trace)
 	print("building subtrees")
@@ -545,7 +541,9 @@
 	class_count = darray(npartitions = npartitions(observations))
 
 	dforest = forest
+	suppressWarnings({
 	votes = darray(npartitions =c(npartitions(dforest),npartitions(observations)))
+	})
 	foreach(i,0:(npartitions(votes)-1), 
 		function(predictions=splits(votes,i+1),
 			observations=splits(observations,
@@ -619,16 +617,17 @@
 	if(trace)
 	print("reducing model")
 	timing_info <- Sys.time() 
+	suppressWarnings({
 	reducedModel <- 
 		 .reduceModel(votes, responses, 
 		 cutoff = cutoff,classes = classes, reduceModel = reduceModel)
 	new_treeIDs <- reducedModel$subsetForest
 	votes <- reducedModel$new_votes
-	new_treeIDs = list(new_treeIDs)
+	new_treeIDs <- split(new_treeIDs,1:npartitions(dforest))
 	if(reduceModel)
 		dforest <- .redistributeForest(dforest,new_treeIDs)
 	attr(dforest,"ntree") <- length(unlist(new_treeIDs))
-
+	})
 	gc()
 	timing_info <- Sys.time() - timing_info
 	if(trace)
@@ -683,7 +682,6 @@
 			update(L1)
 			update(L2)
 		},progress = trace)
-
 
 
 	colnames(oob_predictions) <- "oob_predictions"
@@ -836,8 +834,6 @@
       cp = 0, min_split = 1, max_depth = 10000 )
 {
 	gc()
-	if(trace)
-	print(distributedR_status())
 	workers = sum(distributedR_status()$Inst)
 	threshold = max(threshold, node_size)
 
@@ -858,8 +854,6 @@
 		active_nodes = as.integer(1:ntree)
 	else
 		active_nodes = integer(0)
-	if(trace)
-	print(distributedR_status())
 
 	if(trace)
 	print("initializing")
@@ -868,8 +862,6 @@
 		response_cardinality, features_num, weights, 
 		replacement, max_nodes, scale, 
 		trace)
-	if(trace)
-	print(distributedR_status())
 
 	forest = initparam$forest
 	oob_indices = initparam$oob_indices
@@ -1043,7 +1035,9 @@
 	print("predicting observations")
 
 	dforest = forest$trees
-	votes = darray(npartitions = c(npartitions(dforest),npartitions(new_observations)))
+	suppressWarnings({
+	votes <- darray(npartitions = c(npartitions(dforest),npartitions(new_observations)))
+	})
 	foreach(i,0:(npartitions(votes)-1), 
 		function(predictions=splits(votes,i+1),
 			new_observations=splits(new_observations,
@@ -1068,6 +1062,7 @@
 			      	      	new_observations, 
 			      		as.integer(index),
 		     			PACKAGE = "HPdclassifier"))))
+			predictions = matrix(predictions,ncol=nrow(new_observations))
 			update(predictions)
 			.Call("garbageCollectForest",forest)
 		},progress = trace)
