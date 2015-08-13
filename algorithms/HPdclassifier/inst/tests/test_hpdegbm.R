@@ -793,7 +793,7 @@ context("Checking the interface of hpdegbm")
 test_that("The tree hyper-parameters are validated for AdaBoost", {
     expect_error(hpdegbm(X_train, Y_train, dl_GBM_model, dbest.iter, nExecutor=4, n.trees=-1000, distribution = "adaboost"), "'n.trees' must be an positive integer") 
 
-    expect_error(hpdegbm(X_train, Y_train, dl_GBM_model, dbest.iter, nExecutor=4, n.trees= 1000, interaction.depth = -3, distribution = "adaboost"), "'interaction.depth' must be an positive integer") 
+    expect_error(hpdegbm(X_train, Y_train, dl_GBM_model, dbest.iter, nExecutor=4, n.trees= 1000, interaction.depth = -3, distribution = "adaboost"), "'interaction.depth' must be an integer") 
 
     expect_error(hpdegbm(X_train, Y_train, dl_GBM_model, dbest.iter, nExecutor=4, n.trees= 1000, interaction.depth = 3,  n.minobsinnode = -10, distribution = "adaboost"), "'n.minobsinnode' must be an positive integer")
 }) 
