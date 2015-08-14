@@ -522,7 +522,6 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 	else 
 		cutoff = rep(1/length(model$classes),length(model$classes))
 
-	
 	tryCatch({
 	variables <- .parse_formula(model$terms, 
 		  data = newdata, trace = do.trace, na.action = na.action)
