@@ -51,7 +51,11 @@ namespace presto {
   split_type_ = ROW;
   dobject_type_ = (type=="darray") ? DARRAY : ((type=="dframe") ? DFRAME : ((type=="dlist") ? DLIST : DOBJECT));
   dobject_subtype_ = (subtype=="UNINIT_DECLARED") ? UNINIT_DECLARED : ((subtype=="FLEX_DECLARED") ? FLEX_DECLARED : STD);
-  split_distribution_ = (distribution=="custom") ? CUSTOM : (distribution=="random") ? RANDOM : ROUNDROBIN;
+  split_distribution_ = (distribution=="custom") ? CUSTOM :
+                          (distribution=="ddc") ? DDC :
+                          (distribution=="random") ? RANDOM :
+                          ROUNDROBIN;
+
   info = new WorkerIdxInfo;
 }
 
@@ -77,13 +81,15 @@ int DistributedObject::NextWorkerIdx(bool initialize) {
     info->worker_npartitions_map.clear();
     info->loader_workers.clear();
     switch(split_distribution_) {
-    case ROUNDROBIN:
+    case ROUNDROBIN: {
       info->worker_client_idx = 0;
       break;
-    case RANDOM:
+    }
+    case RANDOM: {
       info->worker_client_idx = rand() % pm_->NumClients();
       break;
-    case CUSTOM:
+    }
+    case CUSTOM: {
       DataLoaderManager* dataloader_ = pm_->GetDataLoader();
       if(dataloader_ == NULL) {
         std::string errormsg = "Unable to gather pre-defined partition distribution to workers.\n"
@@ -99,17 +105,29 @@ int DistributedObject::NextWorkerIdx(bool initialize) {
       info->worker_client_idx = info->loader_workers[info->idx];  
       info->worker_npartitions_map[info->worker_client_idx]--;
       break;
+    }
+    case DDC: {
+           info->worker_client_idx = pm_->worker_selector().getNextWorker();
+           break;
+    }
+    default : {
+        std::string msg = "Unknown split_distribution_";
+        LOG_ERROR(msg);
+        throw PrestoWarningException(msg);
+    }
     } 
   } else {
     switch(split_distribution_) {
-    case ROUNDROBIN:
+    case ROUNDROBIN: {
       info->worker_client_idx++;
       info->worker_client_idx = info->worker_client_idx % pm_->NumClients();
       break;
-    case RANDOM:
+    }
+    case RANDOM: {
       info->worker_client_idx = rand() % pm_->NumClients();
       break;
-    case CUSTOM:
+    }
+    case CUSTOM: {
       int idx_ = info->idx;
       idx_++;
       idx_ = idx_ % info->worker_npartitions_map.size();
@@ -122,7 +140,18 @@ int DistributedObject::NextWorkerIdx(bool initialize) {
       info->worker_npartitions_map[info->worker_client_idx]--;
       break;   
     }
-  } 
+    case DDC: {
+      info->worker_client_idx = pm_->worker_selector().getNextWorker();
+      break;
+    }
+
+    default : {
+        std::string msg = "Unknown split_distribution_";
+        LOG_ERROR(msg);
+        throw PrestoWarningException(msg);
+    }
+    }
+  }
 
   return info->worker_client_idx;
 }

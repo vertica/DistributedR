@@ -71,7 +71,8 @@ enum DobjectType {
 enum SplitDistribution {
   ROUNDROBIN = 1,
   RANDOM,
-  CUSTOM
+  CUSTOM,
+  DDC
 };
 
 /* A datastructure can have a subtype.
