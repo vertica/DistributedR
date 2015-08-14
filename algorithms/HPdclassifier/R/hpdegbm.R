@@ -54,16 +54,14 @@
 ####################################################################################
 hpdegbm <- function(
        X_train,Y_train, 
-       dl_GBM_model,
-       dbest.iter, 
        nExecutor,                                         
        #distribution = "adaboost",
        distribution = "bernoulli",
-       n.trees = 1000, 
-       interaction.depth = 3, 
+       n.trees = 100, 
+       interaction.depth = 1, 
        n.minobsinnode = 10,
        shrinkage = 0.50,     #[0.001, 1]
-       bag.fraction = 0.632, #0.5-0.8,
+       bag.fraction = 0.50, #0.5-0.8,
        offset = NULL, 
        misc = NULL, 
        w = NULL,
@@ -78,7 +76,7 @@ hpdegbm <- function(
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        completeModel = FALSE) # default system parameters are defined here
 
-# X_train: a data frame or data matrix containing the predictor variables
+# X_train: a dframe, darray, data frame, or data matrix containing the predictor variables
 # Y_train: a vector of outputs
 # dl_GBM_model: dlist storing the trained GBM model
 # dbest.iter: darray storing the best iterations of submodels
@@ -101,27 +99,27 @@ hpdegbm <- function(
    if(missing(Y_train))
 	stop("'Y_train' is a required argument")
 
-   if(!is.dframe(X_train) && !is.data.frame(X_train) && !is.darray(X_train) && !is.matrix(X_train))
+   #if(nrow(X_train) != nrow(as.matrix(Y_train)))
+   #		stop("'Y_train' must have same number of rows as 'X_train'")
+
+   if(!is.dframe(X_train) & !is.data.frame(X_train) & !is.darray(X_train) & !is.matrix(X_train))
        stop("'X_train' must be a dframe or data.frame or darray or matrix")
 
-   if(!is.dframe(Y_train) && !is.data.frame(Y_train) && !is.darray(Y_train) && !is.matrix(Y_train) && !is.vector(Y_train))
+   if(!is.dframe(Y_train) & !is.data.frame(Y_train) & !is.darray(Y_train) & !is.matrix(Y_train) & !is.vector(Y_train))
        stop("'Y_train' must be a dframe or data.frame or darray or matrix or numeric vector")
 
-   if(missing(dl_GBM_model))
-	stop("'dl_GBM_model' is a required argument")
+   if (missing(nExecutor))   
+       nExecutor <- sum(distributedR_status()$Inst)
 
-   if(missing(dbest.iter))
-	stop("'dbest.ier' is a required argument")
-
-   if(missing(nExecutor))
-	stop("'nExecutor' is a required argument")
-
-    nExecutor <- round(nExecutor)
-    if(nExecutor <= 0)
+   nExecutor <- round(nExecutor)
+   if(nExecutor <= 0)
         stop("nExecutor should be a positive integer number")
 
    if(missing(distribution))
 	stop("'distribution' is a required argument")
+
+   if ((!(distribution=="gaussian")) && (!(distribution=="bernoulli")) && (!(distribution=="adaboost")) && (!(distribution=="multinomial")))
+       stop("'distribution' must be gaussian or bernoulli or adaboost or multinomial")
 
    if(n.trees <= 0)
         stop("'n.trees' must be more than 0")
@@ -129,29 +127,20 @@ hpdegbm <- function(
    if(interaction.depth <= 0)
         stop("'interaction.depth' must be more than 0")
 
-
-   if ((interaction.depth%%1 < 0) && ((interaction.depth%%1 > 0)))
+   if (!(interaction.depth%%1 == 0)) 
         stop("'interaction.depth' must be an integer")
 
    if(n.minobsinnode <= 0)
         stop("'n.minobsinnode' must be more than 0")
 
-   if ((n.minobsinnode%%1 < 0) && ((n.minobsinnode%%1 > 0)))
+   if (!(n.minobsinnode%%1 == 0)) 
         stop("'n.minobsinnode' must be an integer")
 
-   if(shrinkage <= 0)
-        stop("'shrinkage' must be more than 0")
-
-   if ((shrinkage < 0.001) && ((shrinkage > 1)))
+   if ((shrinkage < 0.001) & ((shrinkage > 1)))
         stop("'shrinkage' must be between [0.001,1]")
 
-
-   if(bag.fraction <= 0)
-        stop("'bag.fraction' must be more than 0")
-
-   if (bag.fraction > 1)
+   if ((bag.fraction > 1) | (bag.fraction <= 0)) 
         stop("'shrinkage' must be (0,1]")
-
 
    # if trace=TRUE, print out running time
    if(trace) {
@@ -159,8 +148,12 @@ hpdegbm <- function(
         starttime <- Sys.time()
     }
 
+   # store trained gbm model
+   dl_GBM_model <- dlist(nExecutor)
+   dbest.iter <- darray(c(nExecutor,1), c(1,1))  
+  
    # model training
-   if ((!is.dframe(X_train)) && (!is.darray(X_train))) { # for small data, load the whole data into every core
+   if ((!is.dframe(X_train)) & (!is.darray(X_train))) { # for small data, load the whole data into every core
       # system parameters are transfered into foreach
       foreach(i, 1:nExecutor, function(dGBM_modeli=splits(dl_GBM_model,i), best.iter=splits(dbest.iter,i), x=X_train,y=Y_train, 
                   n.trees=n.trees, distribution=distribution, interaction.depth=interaction.depth, n.minobsinnode=n.minobsinnode, 
@@ -211,7 +204,7 @@ hpdegbm <- function(
       })
     } else{  ### For big data: load each partition into every core
      # X_train: dframe/darray
-     # Y_train: darray
+     # Y_train: dframe/darray
      # if nExecutor > npartition_train, distributed sampling can generate nExecutor partitions. nExecutor=npartition_of_sampled X_train. Or use one partition multiple times by i%%npartition_train+1
      npartition_train <- npartitions(X_train)
      # nExecutor <- npartition_train # already through random sampling

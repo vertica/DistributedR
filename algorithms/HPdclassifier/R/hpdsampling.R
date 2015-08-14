@@ -30,7 +30,7 @@
 hpdsampling <- function(dfX,daY, Ns, npartition)
 {
   #dfX: predictor variables in dframe/darray
-  #daY: vector of outcomes in darray (dvector/dfactor is not supported yet in2015-7-01
+  #daY: vector of outcomes in darray (dvector/dfactor is not supported yet in 2015-7-01
   #npartition: now the sampled data have the same npartition as input. In the future, the input and output may have different partitions
   #Ns : size of sub-chunks. #Ns <- 1*ceiling((nTrain/npartition)/npartition) # size of sampled sub-chunk
   #function output: dfRX, daRY                 
@@ -41,7 +41,13 @@ hpdsampling <- function(dfX,daY, Ns, npartition)
 	stop("'dfX' is a required argument")
 
    if(missing(daY))
-	stop("'Y_train' is a required argument")
+	stop("'daY' is a required argument")
+
+  # if(nrow(dfX) != nrow(daY))
+  #		stop("'daY' must have same number of rows as 'dfX'")
+
+   if(npartitions(dfX) != npartitions(daY))
+		stop("'daY' must have same number of partitions as 'dfX'")
 
    if(missing(Ns))
 	stop("'Ns' is a required argument")

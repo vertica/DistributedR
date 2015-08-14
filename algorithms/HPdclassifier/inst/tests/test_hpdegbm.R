@@ -7,9 +7,7 @@
 
 #################################################################################################
 ######################### generate testing scenarios for classification ######################### 
-library(testthat)
 library(gbm)
-library(distributedR)
 library(caTools)
 library(HPdclassifier)
 
@@ -73,10 +71,10 @@ p <- 10
 
 dfX <- dframe(c(nTrain,p), blocks=c(ceiling(nTrain/npartition),p))  # horizontal partition
 daY <- darray(c(nTrain,1), blocks=c(ceiling(nTrain/npartition),1))
-dl_GBM_model <- dlist(npartition)
+#dl_GBM_model <- dlist(npartition)
 nExecutor <- npartition
 
-dbest.iter <- darray(c(npartition,1), c(1,1))  # ## dNumericVector, dFactorVector
+#dbest.iter <- darray(c(npartition,1), c(1,1))  # ## dNumericVector, dFactorVector
 
 foreach(i, 1:nExecutor, function(X_train=splits(dfX,i),Y_train=splits(daY,i)) {
      n <- nrow(X_train)
@@ -139,16 +137,14 @@ daRY <- sampledXY[[2]]
 #################################################################################################
 ######################### test AdaBoost distribution for binary classification ################## 
 # testAdaBoost1: AdaBoost distribution, small training data, small testing data
-dl_GBM_model <- dlist(npartition)
+#dl_GBM_model <- dlist(npartition)
 nExecutor <- npartition
-dbest.iter <- darray(c(npartition,1), c(1,1))  # ## dNumericVector, dFactorVector
+#dbest.iter <- darray(c(npartition,1), c(1,1))  # ## dNumericVector, dFactorVector
 
 context("Checking the classification accuracy: AdaBoost")
 test_that("Test classification accuracy: AdaBoost", {
     finalModel1 <- hpdegbm(
        X_train,Y_train,  # dfRX,daRY: distributed big data, ### X_train, Y_train: centralized small data, ### X_train1,Y_train1: iris data
-       dl_GBM_model,
-       dbest.iter, 
        nExecutor,                                         
        #distribution = "bernoulli",
        distribution = "adaboost",
@@ -209,16 +205,14 @@ test_that("Test classification accuracy: AdaBoost", {
 
 #################################################################################################
 # testAdaBoost2: AdaBoost distribution, small training data, distributed testing data
-dl_GBM_model <- dlist(npartition)
+#dl_GBM_model <- dlist(npartition)
 nExecutor <- npartition
-dbest.iter <- darray(c(npartition,1), c(1,1))  
+#dbest.iter <- darray(c(npartition,1), c(1,1))  
 
 context("Checking the classification accuracy: AdaBoost")
 test_that("Test classification accuracy: AdaBoost", {
     finalModel2 <- hpdegbm(
        X_train,Y_train,  # dfRX,daRY: distributed big data, ### X_train, Y_train:centralized small data ### ### X_train1,Y_train1: iris data
-       dl_GBM_model,
-       dbest.iter, 
        nExecutor,                                         
        #distribution = "bernoulli",
        distribution = "adaboost",
@@ -278,16 +272,14 @@ test_that("Test classification accuracy: AdaBoost", {
 
 
 # testAdaBoost3: AdaBoost distribution, distributed training data, distributed testing data
-dl_GBM_model <- dlist(npartition)
+#dl_GBM_model <- dlist(npartition)
 nExecutor <- npartition
-dbest.iter <- darray(c(npartition,1), c(1,1))  
+#dbest.iter <- darray(c(npartition,1), c(1,1))  
 
 context("Checking the classification accuracy: AdaBoost")
 test_that("Test classification accuracy: AdaBoost", {
   finalModel3 <- hpdegbm(
        dfRX,daRY,  # dfRX,daRY: distributed big data, ### X_train, Y_train:centralized small data ### ### X_train1,Y_train1: iris data
-       dl_GBM_model,
-       dbest.iter, 
        nExecutor,                                         
        #distribution = "bernoulli",
        distribution = "adaboost",
@@ -349,16 +341,14 @@ test_that("Test classification accuracy: AdaBoost", {
 #################################################################################################
 ######################### test bernoulli distribution for binary classification ################# 
 # testBernoulli1: bernoulli distribution, small training data, small testing data
-dl_GBM_model <- dlist(npartition)
+#dl_GBM_model <- dlist(npartition)
 nExecutor <- npartition
-dbest.iter <- darray(c(npartition,1), c(1,1))  
+#dbest.iter <- darray(c(npartition,1), c(1,1))  
 
 context("Checking the classification accuracy: bernoulli")
 test_that("Test classification accuracy: bernoulli", {
     finalModel4 <- hpdegbm(
        X_train,Y_train,  # dfRX,daRY: distributed big data, ### X_train, Y_train:centralized small data ### ### X_train1,Y_train1: iris data
-       dl_GBM_model,
-       dbest.iter, 
        nExecutor,                                         
        distribution = "bernoulli",
        #distribution = "adaboost",
@@ -419,15 +409,13 @@ test_that("Test classification accuracy: bernoulli", {
 
 #################################################################################################
 # testBernoulli2: bernoulli distribution, small training data, distributed testing data
-dl_GBM_model <- dlist(npartition)
+#dl_GBM_model <- dlist(npartition)
 nExecutor <- npartition
-dbest.iter <- darray(c(npartition,1), c(1,1))  
+#dbest.iter <- darray(c(npartition,1), c(1,1))  
 
 test_that("Test classification accuracy: bernoulli", {
     finalModel5 <- hpdegbm(
        X_train,Y_train,  # dfRX,daRY: distributed big data, ### X_train, Y_train:centralized small data ### ### X_train1,Y_train1: iris data
-       dl_GBM_model,
-       dbest.iter, 
        nExecutor,                                         
        distribution = "bernoulli",
        #distribution = "adaboost",
@@ -487,16 +475,14 @@ test_that("Test classification accuracy: bernoulli", {
 
 
 # testBernoulli3: bernoulli distribution, distributed training data, distributed testing data
-dl_GBM_model <- dlist(npartition)
+#dl_GBM_model <- dlist(npartition)
 nExecutor <- npartition
-dbest.iter <- darray(c(npartition,1), c(1,1))  # ## dNumericVector, dFactorVector
+#dbest.iter <- darray(c(npartition,1), c(1,1))  # ## dNumericVector, dFactorVector
 
 context("Checking the classification accuracy: bernoulli")
 test_that("Test classification accuracy: bernoulli", {
     finalModel6 <- hpdegbm(
        dfRX,daRY,  # dfRX,daRY: distributed big data, ### X_train, Y_train:centralized small data ### ### X_train1,Y_train1: iris data
-       dl_GBM_model,
-       dbest.iter, 
        nExecutor,                                         
        distribution = "bernoulli",
        #distribution = "adaboost",
@@ -562,8 +548,6 @@ context("Checking the classification accuracy: multinomial")
 test_that("Test classification accuracy: multinomial", {
     finalModel7 <- hpdegbm(
        X_train1,Y_train1,  # dfRX,daRY: distributed big data, ### X_train, Y_train:centralized small data ### ### X_train1,Y_train1: iris data
-       dl_GBM_model,
-       dbest.iter, 
        nExecutor,                                         
        #distribution = "bernoulli",
        #distribution = "adaboost",
@@ -677,12 +661,12 @@ nrowX <- nrow(X)
 ncolX <- ncol(X)
 
 ###dfX <- dframe(X, c(nrowX/2,ncolX))
-dfX <- as.dframe(X, blocks=c(500,6))  ### how to convert data.frame to dframe?
-daY <- as.darray(as.matrix(Y), blocks=c(500,1))
+dfX8 <- as.dframe(X, blocks=c(500,6))  ### how to convert data.frame to dframe?
+daY8 <- as.darray(as.matrix(Y), blocks=c(500,1))
 
 
-daPredict <- darray(dim=c(N,1), blocks=c(500,1), sparse=FALSE)
-dl_GBM_model <- dlist(npartition)
+#daPredict <- darray(dim=c(N,1), blocks=c(500,1), sparse=FALSE)
+#dl_GBM_model <- dlist(npartition)
 nExecutor <- npartition
 
 
@@ -691,30 +675,28 @@ nExecutor <- npartition
 # testGaussian1: gaussian distribution for regression, distributed training data, distributed testing data
 ########################################################################################################################
 ### test distributed sampling: hpdsampling
-nTrain <- nrow(dfX)
+nTrain <- nrow(dfX8)
 Ns <- ceiling((nTrain/npartition)/npartition)
-npartition <- npartitions(dfX)
+npartition <- npartitions(dfX8)
 
 #hpdsampling <- function(dfX,daY, Ns, npartition)
-sampledXY <- hpdsampling(dfX,daY, Ns, npartition)
+sampledXY8 <- hpdsampling(dfX8,daY8, Ns, npartition)
 
-dfRX <- sampledXY[[1]]
-daRY <- sampledXY[[2]]
+dfRX8 <- sampledXY8[[1]]
+daRY8 <- sampledXY8[[2]]
 
 
 
 #########################################################################################################################
 # test hpdegbm: model training
-dl_GBM_model <- dlist(npartition)
+#dl_GBM_model <- dlist(npartition)
 nExecutor <- npartition
-dbest.iter <- darray(c(npartition,1), c(1,1))  # ## dNumericVector, dFactorVector
+#dbest.iter <- darray(c(npartition,1), c(1,1))  # ## dNumericVector, dFactorVector
 
 context("Checking the regression accuracy: gaussian")
 test_that("Test regression accuracy: gaussian", {
     finalModel8 <- hpdegbm(
-       dfRX,daRY,  # dfRX,daRY: distributed big data, ### X_train, Y_train:centralized small data ### ### X_train1,Y_train1: iris data
-       dl_GBM_model,
-       dbest.iter, 
+       dfRX8,daRY8,  # dfRX,daRY: distributed big data, ### X_train, Y_train:centralized small data ### ### X_train1,Y_train1: iris data
        nExecutor,                                         
        #distribution = "bernoulli",
        #distribution = "adaboost",

@@ -58,12 +58,13 @@ predict.hpdegbm <- function(object, newdata, appType="binary-classification", ty
   # train data: npartition_train/nExecutor_train
   # test data : npartition_test/nExecutor_test. maybe different from train data
 
+  # extract GBM models and corresponding best iterations (n.trees)
+  model <- object[[1]]
+  best.iter <- object[[2]]
+
   # check function arguments
   if(missing(object))
      stop("'object' is a required argument")
-
-  if(missing(best.iter))
-     stop("'best.iter' is a required argument")
 
   if(missing(newdata))
      stop("'newdata' is a required argument")
@@ -71,10 +72,6 @@ predict.hpdegbm <- function(object, newdata, appType="binary-classification", ty
   if(!is.dframe(newdata) && !is.darray(newdata) && !is.data.frame(newdata) && !is.matrix(newdata))
      stop("'newdata' must be a dframe or darray or data.frame or matrix")
  
-  # extract GBM models and corresponding best iterations (n.trees)
-  model <- object[[1]]
-  best.iter <- object[[2]]
-
   # prediction for distributed big data 
   if((is.dframe(newdata)) || (is.darray(newdata))) {
      npartition_test <- npartitions(newdata)  

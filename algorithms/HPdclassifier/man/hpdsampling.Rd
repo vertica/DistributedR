@@ -11,7 +11,7 @@ hpdsampling <- function(dfX, daY, Ns, npartition)
   \item{dfX}{input predictor variables in a dframe/darray.}
   \item{daY}{input vector of outcomes in a darray.}
   \item{Ns}{size of the sub-chunks. #Ns <- 1*ceiling((nTrain/npartition)/npartition) # size of the sampled sub-chunk}
-  \item{npartitionappType}{in Distributed R 1.2, the sampled data has the same npartition as input.}  
+  \item{npartition}{in Distributed R 1.2, the sampled data has the same npartition as input.}  
 }
 
 \value{
