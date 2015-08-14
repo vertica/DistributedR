@@ -285,7 +285,7 @@ bool TaskScheduler::IsSplitAvailable(const std::string& split_name, int executor
    } else
      onExec = false;
 
-   LOG_DEBUG("Check Split Availability: %s -  On Worker(%d), On Executor(%d)", split_name.c_str(), onWorker, onExec);
+   LOG_DEBUG("Check Split Availability: %s(executor: %d) -  On Worker(%d), On Executor(%d)", split_name.c_str(), executor_id, onWorker, onExec);
 
    return (onWorker || onExec);
 }
@@ -418,6 +418,32 @@ void TaskScheduler::StageUpdatedPartition(const std::string &name, size_t size, 
   updated_splits.insert(partition);
   stagelock.unlock();
   LOG_DEBUG("EXECUTE TaskID %18zu - Split %s staged to Worker", exec_taskid, name.c_str());
+}
+
+
+/**
+  * Called after EXECUTE is complete.
+  *
+  * Add Updated partitions (for Executes issued by dframe and dlist CC tasks)
+  *
+  */
+void TaskScheduler::AddUpdatedPartition(const std::string &name, size_t size, int executor_id, ::uint64_t exec_taskid) {
+
+  unique_lock<recursive_mutex> metalock(metadata_mutex);
+  if(executor_splits.find(name) != executor_splits.end()) {
+    ExecSplit *partition = executor_splits[name];
+    partition->executors.insert(executor_id);
+    executor_splits[name] = partition;
+  } else {
+    ExecSplit *partition = new ExecSplit;
+    partition->name = name;
+    partition->size = size;
+    partition->executors.insert(executor_id);
+    executor_splits[name] = partition;
+  }
+  metalock.unlock();
+
+  LOG_DEBUG("EXECUTE TaskID %18zu - Split %s added to Worker", exec_taskid, name.c_str());
 }
 
 

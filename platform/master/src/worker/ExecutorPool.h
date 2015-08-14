@@ -63,7 +63,7 @@ class ExecutorPool {
   void execute(std::vector<std::string> func,
                std::vector<NewArg> args, std::vector<RawArg> raw_args,
                std::vector<NewArg> composite_args, ::uint64_t id, 
-               ::uint64_t uid, Response* res, int executor_id);
+               ::uint64_t uid, Response* res, int executor_id, bool stage_updates);
   void clear(std::vector<std::string> splits, int executor_id);
   void persist(std::string split_name, int executor_id, uint64_t taskid);
 

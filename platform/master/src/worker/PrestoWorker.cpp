@@ -528,6 +528,7 @@ WorkerRequest* PrestoWorker::CreateListCcTask(CreateCompositeRequest& req){
   std::stringstream function_str;
   exec_req.set_id(req.id());
   exec_req.set_uid(req.uid());
+  exec_req.set_stage_updates(false);
 
   function_str << "composite_list <- c(";
 
@@ -581,6 +582,7 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
   std::stringstream function_str;
   exec_req.set_id(req.id());
   exec_req.set_uid(req.uid());
+  exec_req.set_stage_updates(false);
   std::pair<int, int> block_dim (0,0);
 
   int num_r_split = offsets.size()>0 ? 1:0; //At least one split is present.
@@ -1196,14 +1198,18 @@ void PrestoWorker::HandleRequests(int type) {
 
               int64_t executor_id = executorscheduler_->AddParentTask(new_args, parenttaskid, taskid);
               LOG_DEBUG("EXECUTE TaskID %18zu - Assigned to Executor Id %d. Validating input splits.", taskid, executor_id);
-              executorscheduler_->ValidatePartitions(new_args, executor_id, taskid);
-              //TODO: Add validation for CC newargs as well.
-              LOG_INFO("EXECUTE TaskID %18zu - All input splits validated. Sending to Executor Id %d for execution", taskid, executor_id);
 
+              executorscheduler_->ValidatePartitions(new_args, executor_id, taskid);
+              //LOG_DEBUG("EXECUTE TaskID %18zu - Input Arguments validated.", taskid);
+              executorscheduler_->ValidatePartitions(composite_args, executor_id, taskid);
+              //LOG_DEBUG("EXECUTE TaskID %18zu - Composite Arguments validated.", taskid);
+
+              LOG_INFO("EXECUTE TaskID %18zu - All input splits validated. Sending to Executor Id %d for execution", taskid, executor_id);
               executorpool_->execute(func, new_args, raw_args, composite_args,
                                      worker_req.newexecr().id(),
                                      worker_req.newexecr().uid(),
-                                     &worker_resp, executor_id);
+                                     &worker_resp, executor_id,
+                                     worker_req.newexecr().stage_updates());
             }
           }
           break;

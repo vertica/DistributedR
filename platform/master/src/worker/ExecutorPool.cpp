@@ -229,7 +229,8 @@ void ExecutorPool::execute(std::vector<std::string> func,
                            std::vector<RawArg> raw_args,
                            std::vector<NewArg> composite_args,
                            ::uint64_t id, ::uint64_t uid, 
-                           Response* res, int executor_id ) {
+                           Response* res, int executor_id,
+                           bool stage_updates) {
   int target_executor = executor_id;
 
   LOG_DEBUG("EXECUTE TaskID %18zu - Waiting for the Executor Id %d to be available", uid, target_executor);
@@ -390,7 +391,10 @@ void ExecutorPool::execute(std::vector<std::string> func,
      } 
 
      string name(cname);  // the name of a split after task completion
-     worker->GetScheduler()->StageUpdatedPartition(name, size, target_executor, uid);
+     if(stage_updates)
+       worker->GetScheduler()->StageUpdatedPartition(name, size, target_executor, uid);
+     else //direct updates
+       worker->GetScheduler()->AddUpdatedPartition(name, size, target_executor, uid);
      req.add_update_names(name);
      req.add_update_sizes(size);
      req.add_update_empties(empty);

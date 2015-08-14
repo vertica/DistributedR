@@ -126,6 +126,7 @@ message NewExecuteRRequest {
   optional int64 id = 5;
   required int64 uid = 6;
   optional int64 parenttaskid = 7;
+  optional bool stage_updates = 8 [default = true];
 };
 
 message IORequest {

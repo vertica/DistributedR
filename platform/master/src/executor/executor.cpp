@@ -172,7 +172,7 @@ ExecutorEvent Executor::GetNextEvent() {
 
     // Save the new value.
     char cmd[CMD_BUF_SIZE];
-    snprintf(cmd, CMD_BUF_SIZE, ".tmp.shmname <- deparse(substitute(`%s`)); print(.tmp.shmname); assign(.tmp.shmname, `%s`, .GlobalEnv); ", new_dobj_name.c_str(), varname.c_str());
+    snprintf(cmd, CMD_BUF_SIZE, ".tmp.shmname <- deparse(substitute(`%s`)); assign(.tmp.shmname, `%s`, .GlobalEnv); ", new_dobj_name.c_str(), varname.c_str());
     RR.parseEvalQ(cmd);
   }
 
@@ -275,7 +275,7 @@ int Executor::ReadSplitArgs() {  // NOLINT
         LOG_DEBUG("Partition %s is on Executor. Loading..", splitname);
 
         char cmd[CMD_BUF_SIZE];
-        snprintf(cmd, CMD_BUF_SIZE, ".tmp.varname <- deparse(substitute(`%s`)); print(.tmp.varname); assign(.tmp.varname, `%s`, .GlobalEnv); ", varname, splitname);
+        snprintf(cmd, CMD_BUF_SIZE, ".tmp.varname <- deparse(substitute(`%s`)); assign(.tmp.varname, `%s`, .GlobalEnv); ", varname, splitname);
         RR.parseEvalQ(cmd);
       } else {
         LOG_DEBUG("Partition %s is on Worker. Loading..", splitname);
@@ -426,7 +426,7 @@ int Executor::ReadCompositeArgs() {
       LOG_DEBUG("Composite Dobject %s is on Executor. Loading..", compositename);
 
       char cmd[CMD_BUF_SIZE];
-      snprintf(cmd, CMD_BUF_SIZE, ".tmp.varname <- deparse(substitute(`%s`)); print(.tmp.varname); assign(.tmp.varname, `%s`, .GlobalEnv); ", varname, compositename);
+      snprintf(cmd, CMD_BUF_SIZE, ".tmp.varname <- deparse(substitute(`%s`)); assign(.tmp.varname, `%s`, .GlobalEnv); ", varname, compositename);
       RR.parseEvalQ(cmd);
     } else {
       LOG_DEBUG("Composite Dobject %s is on Worker. Loading..", compositename);
@@ -897,9 +897,8 @@ int main(int argc, char *argv[]) {
       executor_trace = ZTracer::create_ZTrace("Executor", executor_ztrace_inst, &info, true);
 #endif
 
-      R.parseEvalQ("print(ls())");
       LOG_INFO("*** No Task under execution. Waiting from Task from Worker **");
-      R.parseEvalQ("print('Printing ls'); print(ls())");
+      R.parseEvalQ("print(ls())");
 
       int result = -1;
       next = ex->GetNextEvent();

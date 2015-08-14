@@ -75,8 +75,11 @@ class TaskScheduler {
 
   void ForeachComplete(uint64_t id, uint64_t uid, bool status);
   void StageUpdatedPartition(const std::string& split_name, size_t size, int executor_id, uint64_t exec_taskid);
+  void AddUpdatedPartition(const std::string& split_name, size_t size, int executor_id, uint64_t exec_taskid);
+
   int32_t ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
   int64_t AddParentTask(const std::vector<NewArg>& task_args, uint64_t parenttaskid, uint64_t taskid);
+
   void DeleteSplit(const std::string& splitname);
   void PersistDone(std::string splitname, int executor_id); 
 
