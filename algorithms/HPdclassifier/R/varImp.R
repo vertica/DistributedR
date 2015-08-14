@@ -132,7 +132,8 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 
 
 
-
+	#use a single foreach to set many partitions that will be redistributed
+	
 	temp_data = dframe(npartitions = npartitions(data)*npartitions(data))
 	foreach(i,1:(npartitions(data)*npartitions(data)),
 	function(source = ceiling(i/npartitions(data)),
@@ -150,7 +151,8 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 
 
 
-
+	#sending partitions to different workers and recombining 
+	
 	shuffled_data = dframe(npartitions = npartitions(data))
 	foreach(i,1:npartitions(data),
 	function(temp_data = splits(temp_data,
