@@ -382,8 +382,6 @@ extern "C"
     *(buffer++) = forest->nfeature;
     *(buffer++) = forest->nrow;
     *(buffer++) = forest->nleaves;
-    for(int i = 0; i < forest->ntree; i++)
-      *(buffer++) = forest->max_nodes[i];
 
     for(int i = 0; i < forest->nfeature; i++)
       *(buffer++) = forest->bin_num[i];
@@ -397,7 +395,9 @@ extern "C"
     for(int i = 0; i < forest->nfeature; i++)
       *(temp++) = forest->features_max[i];
     buffer = (int *) temp;
-    
+    for(int i = 0; i < forest->ntree; i++)
+      *(buffer++) = forest->max_nodes[i];
+
     UNPROTECT(1);
     return R_buffer;
   }
@@ -415,10 +415,6 @@ extern "C"
     forest->nrow = *(buffer++);
     forest->nleaves = *(buffer++);
 
-    forest->max_nodes = (int *)malloc(sizeof(int)*forest->ntree);
-    for(int i = 0; i < forest->ntree; i++)
-      forest->max_nodes[i] = *(buffer++); 
-
     forest->bin_num = (int *)malloc(sizeof(int)*forest->nfeature);
     for(int i = 0; i < forest->nfeature; i++)
       forest->bin_num[i] = *(buffer++);
@@ -435,6 +431,13 @@ extern "C"
     for(int i = 0; i < forest->nfeature; i++)
       forest->features_max[i] = *(temp++);
     buffer = (int *) temp;
+
+    SEXP header = VECTOR_ELT(R_buffer,0);
+    forest->max_nodes = (int *)malloc(sizeof(int)*forest->ntree);
+    memset(forest->max_nodes,0,sizeof(int)*forest->ntree);
+    for(int i = 0; i < forest->ntree && 
+	  buffer-INTEGER(header)< length(header); i++)
+      forest->max_nodes[i] = *(buffer++); 
 
     forest->trees = 
       (hpdRFnode **) malloc(sizeof(hpdRFnode *)*(forest->ntree));
@@ -754,5 +757,131 @@ extern "C"
 
   }
 
+  SEXP undoSplits(SEXP R_forest, SEXP R_node_ids)
+  {
+    hpdRFforest * forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
+    int* node_ids = INTEGER(R_node_ids);
+    hpdRFnode* parent;
+
+    for(int i = 0; i < length(R_node_ids); i++)
+      {
+	if(node_ids[i]-1 >= forest->nleaves ||
+	   node_ids[i]-1 < 0 ||
+	   forest->leaf_nodes[node_ids[i]-1] == NULL)
+	  continue;
+	parent = forest->leaf_nodes[node_ids[i]-1]->additional_info->parent;
+	if(parent == NULL)
+	  continue;
+
+	if(parent->left->additional_info)
+	  {
+	  forest->leaf_nodes[parent->left->additional_info->leafID-1] = NULL;
+	  }
+	if(parent->right->additional_info)
+	  {
+	  forest->leaf_nodes[parent->right->additional_info->leafID-1] = NULL;
+	  }
+
+	if(parent->left)
+	  destroyTree(parent->left);
+	if(parent->right)
+	  destroyTree(parent->right);
+
+	if(parent->split_criteria)
+	  free(parent->split_criteria);
+	parent->split_criteria = NULL;
+	parent->split_criteria_length = 0;
+	parent->split_variable = 0;
+	if(parent->additional_info)
+	  free(parent->additional_info);
+	parent->additional_info = NULL;
+
+	parent->left = NULL;
+	parent->right = NULL;
+
+      }
+
+    int nleaves = 0;
+    for(int i = 0; i < forest->nleaves; i++)
+      if(forest->leaf_nodes[i] != NULL)
+	{
+	  forest->leaf_nodes[nleaves] = forest->leaf_nodes[i];
+	  forest->leaf_nodes[nleaves]->additional_info->leafID = nleaves+1;
+	  nleaves++;
+	}
+    forest->nleaves = nleaves;
+  }
+
+  SEXP rpartModel(SEXP R_forest)
+  {
+    hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
+    hpdRFnode* tree = forest->trees[0];
+    SEXP model;
+    PROTECT(model = allocVector(VECSXP, 8));
+
+    int numNodes = countSubTree(tree);
+    int max_ncat = 0;
+    for(int i = 0; i < forest-> nfeature; i++)
+      if(forest->features_cardinality[i] != NA_INTEGER &&
+	 forest->features_cardinality[i] > max_ncat)
+	max_ncat = forest->features_cardinality[i];
+
+    SEXP indices, var, dev, yval, complexity, split_index, ncat,
+      csplit;
+    PROTECT(indices = allocVector(INTSXP, numNodes));
+    PROTECT(var = allocVector(INTSXP, numNodes));
+    PROTECT(dev = allocVector(REALSXP, numNodes));
+    PROTECT(yval = allocVector(REALSXP, numNodes));
+    PROTECT(complexity = allocVector(REALSXP, numNodes));
+    PROTECT(split_index = allocVector(REALSXP, numNodes));
+    PROTECT(ncat = allocVector(INTSXP, numNodes));
+    int csplit_count = 0;
+    convertTreetoRpart(tree, INTEGER(indices), INTEGER(var), 
+		       REAL(dev), REAL(yval), REAL(complexity),
+		       REAL(split_index),INTEGER(ncat),
+		       1, 1, 0, forest->features_cardinality,
+		       &csplit_count);
+
+    int nrow = csplit_count;
+    csplit_count = 0;
+    PROTECT(csplit = allocVector(INTSXP, nrow*max_ncat));
+    memset(INTEGER(csplit),0,sizeof(int)*nrow*max_ncat);
+
+    populateCsplit(tree,forest->features_cardinality, &csplit_count, 
+		   INTEGER(csplit), nrow);
+    setAttrib(csplit,install("nrow"),ScalarInteger(nrow));
+    
+   
+    SET_VECTOR_ELT(model,0,indices);
+    SET_VECTOR_ELT(model,1,var);
+    SET_VECTOR_ELT(model,2,dev);
+    SET_VECTOR_ELT(model,3,yval);
+    SET_VECTOR_ELT(model,4,complexity);
+    SET_VECTOR_ELT(model,5,split_index);
+    SET_VECTOR_ELT(model,6,ncat);
+    SET_VECTOR_ELT(model,7,csplit);
+
+    UNPROTECT(length(model)+1);
+    return model;
+    
+  }
+
+  SEXP gatherForest(SEXP forest_parts)
+  {
+    int ntree = INTEGER(VECTOR_ELT(VECTOR_ELT(forest_parts,0),0))[0];
+    SEXP forest;
+    PROTECT(forest = allocVector(VECSXP,ntree+1));
+    SET_VECTOR_ELT(forest,0,VECTOR_ELT(VECTOR_ELT(forest_parts,0),0));
+    for(int i = 0; i < length(forest_parts); i++)
+      {							
+	SEXP curr_forest = VECTOR_ELT(forest_parts,i);
+	for(int j = 1; j < length(curr_forest); j++)
+	  if(VECTOR_ELT(curr_forest,j) != R_NilValue)
+	    SET_VECTOR_ELT(forest,ntree--,VECTOR_ELT(curr_forest,j));
+      }
+    UNPROTECT(1);
+    return forest;
+  }
+  
 }
 

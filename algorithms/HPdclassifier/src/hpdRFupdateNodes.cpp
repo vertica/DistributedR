@@ -125,7 +125,7 @@ extern "C"
    @param R_splits_info - best splits for all nodes 
    @return - count of observations in all leaf nodes
    */
-  SEXP updateNodes(SEXP R_observations, SEXP R_responses, SEXP R_forest, SEXP R_active_nodes, SEXP R_splits_info)
+  SEXP updateNodes(SEXP R_observations, SEXP R_responses, SEXP R_forest, SEXP R_active_nodes, SEXP R_splits_info, SEXP R_max_depth)
   {
     hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
 
@@ -145,6 +145,7 @@ extern "C"
     PROTECT(R_node_counts = allocVector(INTSXP,leaf_nodes));
     int *node_counts = INTEGER(R_node_counts);
 
+    int max_depth = INTEGER(R_max_depth)[0];
     leaf_nodes = 0;
     int index = 0;
     for(int i  = 0; i < forest->nleaves;i++)
@@ -177,28 +178,39 @@ extern "C"
 			   &left_child_num_obs, &right_child_num_obs);
 
 		hpdRFnode *node_left_child = createChildNode(node_curr, FALSE,
-						  left_child_node_observations, left_child_weights,
+						  left_child_node_observations, 
+							     left_child_weights,
 						  left_child_num_obs,features_num);
 		hpdRFnode *node_right_child = createChildNode(node_curr, FALSE,
-						   right_child_node_observations, right_child_weights,
+						   right_child_node_observations, 
+							      right_child_weights,
 						   right_child_num_obs,features_num);
 		node_curr->left = node_left_child;
 		node_curr->right = node_right_child;
 		
-		node_left_child->additional_info->leafID = leaf_nodes+1;
-		node_counts[leaf_nodes] = node_left_child->additional_info->num_obs;
-		new_leaves[leaf_nodes++] = node_left_child;
+		if(node_left_child->additional_info->depth < max_depth)
+		  {
+		    node_left_child->additional_info->leafID = leaf_nodes+1;
+		    node_counts[leaf_nodes] = 
+		      node_left_child->additional_info->num_obs;
+		    new_leaves[leaf_nodes++] = node_left_child;
+		  }
 
-		node_right_child->additional_info->leafID = leaf_nodes+1;
-		node_counts[leaf_nodes] = node_right_child->additional_info->num_obs;
-		new_leaves[leaf_nodes++] = node_right_child;
+		if(node_right_child->additional_info->depth < max_depth)
+		  {
+		    node_right_child->additional_info->leafID = leaf_nodes+1;
+		    node_counts[leaf_nodes] = 
+		      node_right_child->additional_info->num_obs;
+		    new_leaves[leaf_nodes++] = node_right_child;
+		  }
 	      }
 
 	    cleanSingleNode(node_curr);
 	    index ++;
 
 	  }
-	else if(i != next_active_node)
+	else if(i != next_active_node && 
+		node_curr->additional_info->depth < max_depth)
 	  {
 	    node_curr->additional_info->leafID = leaf_nodes+1;
 	    node_counts[leaf_nodes] = node_curr->additional_info->num_obs;

@@ -79,14 +79,14 @@ int* sort(double* hist, int nbin)
  @retrun - best prediction (not split) of this histogram
  */
 double computeRegressionTreeStats(double* hist, int nbin, double* L0, 
-				  double* L1, double* default_cost)
+				  double* L1, double L2, double* default_cost)
 {
   for(int i = 0; i < nbin; i ++)
     {
       *L0 += hist[2*i];
       *L1 += hist[2*i + 1];
     }
-  *default_cost = -(*L1)*(*L1)/(*L0);
+  *default_cost = L2 -(*L1)*(*L1)/(*L0);
   return (*L1)/(*L0);
 }
 
@@ -142,7 +142,7 @@ void NumericVariableRegressionTreeSplit(double* hist, int nbin,
 
 {
   double L0_left = 0, L1_left = 0, L0_right = L0, L1_right = L1; 
-  double objective = L2-L1*L1/L0, obj_temp;
+  double objective = (1-cp)*(L2-L1*L1/L0), obj_temp;
   int split_val=1;
   for(int i = 0; i < nbin-1; i++)
     {
@@ -151,7 +151,7 @@ void NumericVariableRegressionTreeSplit(double* hist, int nbin,
       L0_right -= hist[2*i];
       L1_right -= hist[2*i+1];
       obj_temp = L2 -L1_left*L1_left/L0_left - L1_right*L1_right/L0_right;
-      if(obj_temp*cp < objective)
+      if(obj_temp < objective)
 	if((L0_left > 0) && (L0_right > 0) && 
 	   (L1_left/L0_left != L1_right/L0_right))
 	  {
@@ -188,7 +188,7 @@ void CategoricalVariableRegressionTreeSplit(double* hist, int nbin,
 
   int* order = sort(hist,nbin);
   double L0_left=0,L0_right=L0,L1_left=0,L1_right=L1;
-  double objective = L2-L1*L1/L0, split_val=0, obj_temp;
+  double objective = (1-cp)*(L2-L1*L1/L0), split_val=0, obj_temp;
   for(int split = 0; split < nbin; split++)
     {
       L0_left += hist[2*order[split]];
@@ -196,7 +196,7 @@ void CategoricalVariableRegressionTreeSplit(double* hist, int nbin,
       L1_left += hist[2*order[split] + 1];
       L1_right -= hist[2*order[split] + 1];
       obj_temp = L2-L1_left*L1_left/L0_left - L1_right*L1_right/L0_right;
-      if(obj_temp*cp < objective)
+      if(obj_temp < objective)
 	if((L0_left > 0) && (L0_right > 0) && 
 	   (L1_left/L0_left != L1_right/L0_right))
 	  {
@@ -240,6 +240,7 @@ void NumericVariableClassificationTreeSplit(double* hist, int nbin,
   double left_cost, right_cost, split_cost;
   int split_val=0;
   double left_sq,right_sq,left_sum,right_sum;
+  *cost = (1-cp)*(*cost);
   for(int k = 0; k < classes; k++)
     {
       left_counts[k] = 0;
@@ -267,7 +268,7 @@ void NumericVariableClassificationTreeSplit(double* hist, int nbin,
       right_cost = 1 - right_sq/right_sum/right_sum;
       split_cost = left_sum/sum * left_cost + right_sum/sum * right_cost;
 
-      if(split_cost < cp*(*cost))
+      if(split_cost < (*cost))
 	{
 	  *cost = split_cost;
 	  split_val = i+1;
@@ -415,17 +416,19 @@ extern "C"
 	SET_VECTOR_ELT(split_info,2,R_NilValue);
 	*REAL(VECTOR_ELT(split_info,3)) = DBL_MAX;
 	*REAL(VECTOR_ELT(split_info,4)) = 0;
+	*REAL(VECTOR_ELT(split_info,5)) = DBL_MAX;
       }
     for(int i = length(old_splits_info); i < length(R_active_nodes); i++)
       {
 	SEXP split_info;
-	PROTECT(split_info = allocVector(VECSXP,5));
+	PROTECT(split_info = allocVector(VECSXP,6));
 	SET_VECTOR_ELT(splits_info,i,split_info);
 	SET_VECTOR_ELT(split_info,0,ScalarInteger(0));
 	SET_VECTOR_ELT(split_info,1,R_NilValue);
 	SET_VECTOR_ELT(split_info,2,R_NilValue);
 	SET_VECTOR_ELT(split_info,3,ScalarReal(DBL_MAX));
 	SET_VECTOR_ELT(split_info,4,ScalarReal(0));
+	SET_VECTOR_ELT(split_info,5,ScalarReal(DBL_MAX));
 	UNPROTECT(1);
       }
     
@@ -435,21 +438,25 @@ extern "C"
       {
 	SEXP split_info=VECTOR_ELT(splits_info,i);
 	SEXP split_criteria=NULL;
-	double L0 = 0, L1 = 0;
-	double prediction;
 	SEXP node_histograms = VECTOR_ELT(R_histograms,i);
-	double default_cost;
+
+	double L0 = 0, L1 = 0, L2 =REAL(getAttrib(VECTOR_ELT(node_histograms,0),
+						   install("L2")))[0];
+	double prediction;
+ 	double default_cost;
 	int featureIndex = INTEGER(getAttrib(VECTOR_ELT(node_histograms,0),
 					     install("feature")))[0]-1;
 	if(!response_categorical)
 	  prediction = computeRegressionTreeStats(REAL(VECTOR_ELT(node_histograms,0)), 
-						  bin_num[featureIndex],&L0, &L1,
+						  bin_num[featureIndex],
+						  &L0, &L1, L2, 
 						  &default_cost);
 	else
 	  {
 	    prediction = computeClassificationTreeStats(REAL(VECTOR_ELT(node_histograms,0)),
 							bin_num[featureIndex], 
-							response_cardinality, &L0,
+							response_cardinality, 
+							&L0,
 							&default_cost);
 	    prediction = prediction + 1;
 	  }
@@ -464,6 +471,7 @@ extern "C"
 	    featureIndex = INTEGER(getAttrib(histogram,install("feature")))[0]-1;
 	    bool complete = false;
 	    double hist_cost = default_cost;
+	    *REAL(VECTOR_ELT(split_info,5)) = hist_cost;
 	    int curr_split_length;
 	    int* curr_split = computeSplit(histogram, 
 					   bin_num[featureIndex], 
@@ -527,11 +535,9 @@ extern "C"
 	node_curr->additional_info->completed = 
 	  INTEGER(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),0))[0];
 	int tree_id = node_curr->treeID-1;
-	if(tree_id >= 0 && tree_id < forest->ntree && max_nodes[tree_id] <= 0)
-	    continue;
 	node_curr->prediction = 
 	  *REAL(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),4));
-	
+
 	SEXP R_split_criteria = VECTOR_ELT(VECTOR_ELT(R_splits_info,i),2);
 	if(R_split_criteria != R_NilValue)
 	  {
@@ -543,6 +549,14 @@ extern "C"
 	      (double *) malloc(sizeof(double)*
 				node_curr->split_criteria_length);
 	    split_variable = node_curr->split_variable-1;
+
+	    node_curr->complexity = 
+	      REAL(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),3))[0];
+	    node_curr->deviance = 
+	      REAL(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),5))[0];
+	    node_curr->complexity = (node_curr->deviance-node_curr->complexity)/
+	      node_curr->deviance;
+
 	    min = forest->features_min[split_variable];
 	    max = forest->features_max[split_variable];
 	    nbin = forest->bin_num[split_variable];
@@ -563,9 +577,9 @@ extern "C"
 	  }
 	SET_VECTOR_ELT(R_splits_info,num_new_active_nodes,
 		       VECTOR_ELT(R_splits_info,i));
-
 	INTEGER(new_active_nodes)[num_new_active_nodes++] = active_node+1;
-	max_nodes[tree_id] --;
+	if(tree_id >= 0 && tree_id < forest->ntree && max_nodes[tree_id] > 0)
+	  max_nodes[tree_id] --;
       }
    SETLENGTH(R_splits_info,num_new_active_nodes);
    SETLENGTH(new_active_nodes,num_new_active_nodes);

@@ -23,11 +23,11 @@
 //however many bytes for split_criteria + 4 bytes for indicating if left,right,additional_info are null, 16 possible bytes for additional_info and 12*num_obs bytes for indices, weights
 int calculateBufferSize(hpdRFnode* tree)
 {
-  int total = sizeof(double) + 4*sizeof(int);
+  int total = 3*sizeof(double) + 4*sizeof(int);
   total += tree->split_criteria_length*sizeof(double);
   if(tree->additional_info)
-      total += 4*sizeof(int)+
-	tree->additional_info->num_obs*(sizeof(double) + sizeof(int));
+    total += 5*sizeof(int)+
+      tree->additional_info->num_obs*(sizeof(double) + sizeof(int));
 
   if(tree->left)
     total += calculateBufferSize(tree->left);
@@ -40,6 +40,9 @@ int* serializeTree(hpdRFnode *tree, int* buffer)
 {
   double* temp = (double*) buffer;
   *(temp++) = tree->prediction;
+  *(temp++) = tree->deviance;
+  *(temp++) = tree->complexity;
+
   buffer = (int *) temp;
   *(buffer++) = tree->treeID;
   *(buffer++) = tree->split_variable;
@@ -64,6 +67,7 @@ int* serializeTree(hpdRFnode *tree, int* buffer)
       *(buffer++) = tree->additional_info->completed;
       *(buffer++) = tree->additional_info->leafID;
       *(buffer++) = tree->additional_info->num_obs;
+      *(buffer++) = tree->additional_info->depth;
       temp = (double *) buffer;
       for(int i = 0; i < tree->additional_info->num_obs; i++)
 	temp[i] = tree->additional_info->weights[i];
@@ -84,6 +88,9 @@ int* unserializeTree(hpdRFnode *tree, int* buffer, hpdRFnode**leaf_nodes)
 {
   double * temp = (double *)buffer;
   tree->prediction = *(temp++);
+  tree->deviance = *(temp++);
+  tree->complexity = *(temp++);
+
   buffer = (int *) temp;
 
   tree->treeID = *(buffer++);
@@ -114,6 +121,7 @@ int* unserializeTree(hpdRFnode *tree, int* buffer, hpdRFnode**leaf_nodes)
       tree->additional_info->completed = *(buffer++);
       tree->additional_info->leafID = *(buffer++);
       tree->additional_info->num_obs = *(buffer++);
+      tree->additional_info->depth = *(buffer++);
       temp = (double *) buffer;
       tree->additional_info->weights = 
 	(double *) malloc(sizeof(double)*tree->additional_info->num_obs);
@@ -136,6 +144,8 @@ int* unserializeTree(hpdRFnode *tree, int* buffer, hpdRFnode**leaf_nodes)
     {
       tree->left = (hpdRFnode *)malloc(sizeof(hpdRFnode));
       buffer = unserializeTree(tree->left, buffer, leaf_nodes);
+      if(tree->left->additional_info)
+	tree->left->additional_info->parent = tree;
     }
   else
     tree->left = NULL;
@@ -143,6 +153,8 @@ int* unserializeTree(hpdRFnode *tree, int* buffer, hpdRFnode**leaf_nodes)
     {
       tree->right = (hpdRFnode *)malloc(sizeof(hpdRFnode));
       buffer = unserializeTree(tree->right, buffer, leaf_nodes);
+      if(tree->right->additional_info)
+	tree->right->additional_info->parent = tree;
     }
   else
     tree->right = NULL;
@@ -171,6 +183,11 @@ SEXP printNode(hpdRFnode *tree, int depth, int max_depth, SEXP classes)
     else
       printf("<prediction> %f </prediction>\n", prediction);
     
+    tab;
+    printf("<deviance> %f </deviance>\n", tree->deviance);
+    tab;
+    printf("<complexity> %f </complexity>\n", tree->complexity);
+
     
     double* split_criteria = tree->split_criteria;
     int split_var=tree->split_variable;
@@ -271,7 +288,10 @@ hpdRFnode* createChildNode(hpdRFnode* parent,
   hpdRFnode* child = (hpdRFnode*) malloc(sizeof(hpdRFnode));
   child->additional_info = (hpdRFNodeInfo *) malloc(sizeof(hpdRFNodeInfo));
   child->prediction = 0;
-
+  child->deviance = 0;
+  child->complexity = 0;
+  child->split_variable = -1;
+  child->additional_info->leafID = -1;
   child->additional_info->num_obs = child_num_obs;
   if(copy)
     {
@@ -298,8 +318,17 @@ hpdRFnode* createChildNode(hpdRFnode* parent,
   child->split_criteria = NULL;
   child->split_criteria_length = 0;
   if(parent != NULL)
-    child->treeID = parent->treeID;
-
+    {
+      child->treeID = parent->treeID;
+      child->additional_info->depth = parent->additional_info->depth;
+      child->additional_info->parent = parent;
+    }
+  else
+    {
+      child->additional_info->depth = 0;
+      child->additional_info->parent = NULL;
+      child->treeID = -1;
+    }
   return child;
 }
 
@@ -324,9 +353,6 @@ void cleanSingleNode(hpdRFnode *node)
   node->additional_info = NULL;
   
 }
-
-
-
 
 
 int countSubTree(hpdRFnode *tree)
@@ -385,3 +411,68 @@ void reformatTree(hpdRFnode* tree, SEXP forest, int* index,
 }
 
 
+int convertTreetoRpart(hpdRFnode* tree, int* indices,
+		       int* var, double* dev, 
+		       double* yval, double* complexity,
+		       double* split_index, int* ncat, 
+		       int rowID, double parent_cp, int node_index,
+		       int* features_cardinality, int* csplit_count)
+{
+  indices[node_index] = rowID;
+  var[node_index] = tree->split_criteria_length == 0? 0:tree->split_variable;
+  dev[node_index] = tree->deviance;
+  yval[node_index] = tree->prediction;
+  complexity[node_index] = parent_cp*tree->complexity;
+
+  if(tree->split_criteria_length == 0)
+    {
+      ncat[node_index] = NA_REAL;
+      split_index[node_index] = NA_REAL;
+    }
+  else if(features_cardinality[tree->split_variable-1] == NA_INTEGER)
+    {
+      ncat[node_index] = -1;
+      split_index[node_index] = tree->split_criteria[0];
+    }
+  else
+    {
+      ncat[node_index] = features_cardinality[tree->split_variable-1];
+      split_index[node_index] = ++(*csplit_count);
+    }
+
+  parent_cp = complexity[node_index];
+
+  if(tree->left)
+    node_index = convertTreetoRpart(tree->left, indices, var, dev,
+				    yval, complexity, split_index, ncat,
+				    rowID*2, parent_cp, 
+				    node_index+1, features_cardinality,
+				    csplit_count);
+  if(tree->right)
+    node_index = convertTreetoRpart(tree->right, indices, var, dev,
+				    yval, complexity, split_index, ncat,
+				    rowID*2+1, parent_cp, 
+				    node_index+1, features_cardinality,
+				    csplit_count);
+  return node_index;
+
+}
+
+
+void populateCsplit(hpdRFnode* tree, int* features_cardinality, 
+		    int* csplit_count, int* csplit, int nrow)
+{
+  if(tree->split_criteria_length != 0 && 
+     features_cardinality[tree->split_variable-1] != NA_INTEGER)
+    {
+      for(int i = 0; i < tree->split_criteria_length; i++)
+	csplit[*csplit_count + ((int) tree->split_criteria[i]-1)*nrow] = 2;
+      (*csplit_count)++;
+    }
+  if(tree->left)
+    populateCsplit(tree->left, features_cardinality, 
+		   csplit_count, csplit, nrow);
+  if(tree->right)
+    populateCsplit(tree->right, features_cardinality, 
+		   csplit_count, csplit, nrow);
+}
