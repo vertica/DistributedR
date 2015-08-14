@@ -50,6 +50,8 @@
 #include <ztracer.hpp>
 #endif
 
+#include "DdcWorkerSelector.h"
+
 //using namespace boost;
 using namespace Rcpp;
 using namespace std;
@@ -175,7 +177,20 @@ Release WorkerInfo resources to enable garbage-collection
   void SetMasterPortNum(int port_num) {master_.set_presto_port(port_num);}
   void SetResMgrInterrupt(volatile bool*);
   void SetLargeChunkServerThread(boost::thread* ptr) {lrg_chunk_trnfr_thr_ptr = ptr;}
- private:
+
+  void DdcSetChunkWorkerMap(const Rcpp::List& chunkWorkerMap) {
+      ddc::ChunkWorkerMap chunkWorkerMapCpp;
+      for (uint64_t i = 0; i < chunkWorkerMap.size(); ++i) {
+          chunkWorkerMapCpp[i] = chunkWorkerMap[i];
+      }
+      worker_selector_.setChunkWorkerMap(chunkWorkerMapCpp);
+  }
+
+  ddc::WorkerSelector worker_selector() const;
+
+  Rcpp::List WorkerMap();
+
+private:
   void InitProtoThread();
   void ConnectWorkers(const vector<ServerInfo>& workers);
   bool CheckMasterWorkerAddrSanity();
@@ -211,6 +226,9 @@ Release WorkerInfo resources to enable garbage-collection
   bool is_running_;
   volatile bool* res_manager_interrupted;
   boost::thread* lrg_chunk_trnfr_thr_ptr;
+
+  ddc::WorkerSelector worker_selector_;
+
 };
 }  // namespace presto
 #endif  // _PRESTO_MASTER_
