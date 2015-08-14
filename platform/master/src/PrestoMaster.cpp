@@ -650,6 +650,48 @@ int32_t PrestoMaster::ParseXMLConfig(const string& config,
 
   return workers->size();
 }
+ddc::WorkerSelector PrestoMaster::worker_selector() const
+{
+    return worker_selector_;
+}
+
+/**
+ * Create a worker map. This map includes information about the workers
+ * (hostname, port and number of executors).
+ */
+Rcpp::List PrestoMaster::WorkerMap() {
+    std::map<std::string, std::vector<size_t> > workerExtraInfo = GetWorkerStatus();
+
+    typedef map<int, boost::shared_ptr<WorkerInfo> >::iterator it_type;
+
+    Rcpp::List workerMap;
+    for(it_type it = worker_infos.begin(); it != worker_infos.end(); ++it) {
+        ::uint64_t numExecutors = 1;  // default to 1 executor per worker
+        std::string fullWorkerId = "";
+        fullWorkerId += (it->second)->hostname();
+        fullWorkerId += ":";
+        std::ostringstream os ;
+        os << (it->second)->port();
+        std::string portStr = os.str() ;
+        fullWorkerId += portStr;
+        std::map<std::string, std::vector<size_t> >::iterator it2 = workerExtraInfo.find(fullWorkerId);
+        if (it2 != workerExtraInfo.end()) {
+            std::vector<size_t> v = it2->second;
+            if (v.size() > 0) {
+                numExecutors = v[0];  // num executors is elem 0
+            }
+        }
+
+        Rcpp::List w;
+        w["hostname"] = (it->second)->hostname();
+        w["port"] = (it->second)->port();
+        w["num_executors"] = numExecutors;
+        std::ostringstream os2;
+        os2 << it->first;
+        workerMap[os2.str()] = w;
+    }
+    return workerMap;
+}
 
 /** Check if a master handler thead is running
  * @return return True if a handler is running. Otherwise, false
@@ -851,6 +893,8 @@ RCPP_MODULE(master_module) {
     .method("running", &presto::PrestoMaster::IsRunning)
     .method("start_dataloader", &presto::PrestoMaster::StartDataLoader)
     .method("stop_dataloader", &presto::PrestoMaster::StopDataLoader)
+    .method("worker_map", &presto::PrestoMaster::WorkerMap)
+    .method("ddc_set_chunk_worker_map", &presto::PrestoMaster::DdcSetChunkWorkerMap)
       ;  // NOLINT(whitespace/semicolon)
 }
 

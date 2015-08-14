@@ -1,8 +1,9 @@
 library(HPdclassifier)
+library(rpart)
 set.seed(2)
 
 context("Invalid Inputs to Variable Importance")
-model <- hpdRF_parallelTree(Species~.,data = iris, ntree = 20,varImp = TRUE,completeModel = TRUE)
+model <- hpdrpart(Species~.,data = iris)
 expect_error(varImportance(model, iris,iris$Species),
 				   "'ytest' must be a dframe or data.frame")
 expect_error(varImportance(model, as.dframe(iris),data.frame(iris$Species)),
@@ -23,7 +24,7 @@ varImp.data.frame <- varImportance(model, xtest, ytest)
 varImp.dframe <- varImportance(model, as.dframe(xtest), as.dframe(ytest))
 
 
-expect_equal(nrow(model$importance),ncol(xtest)+1)
+expect_equal(nrow(model$variable.importance),ncol(xtest)+1)
 expect_equal(nrow(varImp.data.frame),ncol(xtest))
 expect_true(any(varImp.data.frame > 0))
 expect_equal(nrow(varImp.dframe),ncol(xtest))

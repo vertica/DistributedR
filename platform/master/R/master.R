@@ -170,15 +170,20 @@ start_workers <- function(cluster_conf,
       sp_opt <- getOption("scipen")  # This option value determines whether exponentional or fixed expression will be used (m and e should not not be expressed using exponentional expression)
       options("scipen"=100000)
 
+      local_cmd <- paste("cd",rmt_home,";", bin_path,
+                   "-m", m, "-e", e, "-p", r$StartPortRange, "-q", r$EndPortRange, "-l", log, "-a", master_addr, "-b", master_port,
+                   "-w", r$Hostname, env_variables, sep=" ")
+      ssh_cmd <- paste("ssh -n", paste(rmt_uid,"@",r$Hostname,sep=""), "'", local_cmd,"'", sep=" ")
+      # do not use SSH if worker is running on localhost
+      if(r$Hostname == "localhost" || r$Hostname == "127.0.0.1") {
+          cmd <- local_cmd;
+      }
+      else {
+          cmd <- ssh_cmd;
+      }
+
       if(isTRUE(iscolocated)){
-      cmd <- paste("ssh -n", paste(rmt_uid,"@",r$Hostname,sep=""), "'cd",rmt_home,";", bin_path, 
-                   "-m", m, "-e", e, "-p", r$StartPortRange, "-q", r$EndPortRange, "-l", log, "-a", master_addr, "-b", master_port,
-		   "-c", iscolocated, "-o", resourcePool[1,1], "-k", resourcePool[1,2], "-d", resourcePool[1,3],
-		   "-w", r$Hostname, env_variables, "'", sep=" ")
-      }else{
-      cmd <- paste("ssh -n", paste(rmt_uid,"@",r$Hostname,sep=""), "'cd",rmt_home,";", bin_path, 
-                   "-m", m, "-e", e, "-p", r$StartPortRange, "-q", r$EndPortRange, "-l", log, "-a", master_addr, "-b", master_port,
-                   "-w", r$Hostname, env_variables, "'", sep=" ")
+          cmd <- paste(cmd, "-c", iscolocated, "-o", resourcePool[1,1], "-k", resourcePool[1,2], "-d", resourcePool[1,3], sep=" ")
       }
       
       options("scipen"=sp_opt)
@@ -211,7 +216,7 @@ distributedR_start <- function(inst=0, mem=0,
     stop("distributedR is already running. Call distributedR_shutdown() to terminate existing session\n")
   }
   if(presto_home==""){
-    presto_home<-ifelse(Sys.getenv(c("DISTRIBUTEDR_HOME"))=="", "/opt/hp/distributedR", Sys.getenv(c("DISTRIBUTEDR_HOME")))
+    presto_home<-ifelse(Sys.getenv(c("DISTRIBUTEDR_HOME"))=="", system.file(package='distributedR'), Sys.getenv(c("DISTRIBUTEDR_HOME")))
   }
   if (cluster_conf==""){
     cluster_conf <- paste(presto_home,"/conf/cluster_conf.xml",sep="")
@@ -438,3 +443,37 @@ check_dr_version_compatibility<-function(){
   return (TRUE)
 }
 
+ddyn.load <- function(x, trace = FALSE){
+
+  number_of_executors <- sum(distributedR_status()$Inst)
+  y <- lapply(x, .loadLibrary , trace=trace, num_of_Exec = number_of_executors)
+
+}
+
+.loadLibrary <- function(x, trace = FALSE, num_of_Exec) {
+  if(!is.character(x)){
+    stop("x must be of type character")
+  }
+
+  foreach(i, 1:num_of_Exec, progress=trace, function(x=x) {
+    thePath = paste(find.package(x), "/libs/", x, ".so", sep="")
+    dyn.load(thePath)
+  })
+}
+ddyn.unload <- function(x, trace = FALSE){
+
+  number_of_executors <- sum(distributedR_status()$Inst)
+  y <- lapply(x, .unloadLibrary, trace=trace, num_of_Exec = number_of_executors)
+
+}
+
+.unloadLibrary <- function(x, trace = FALSE, num_of_Exec) {
+  if(!is.character(x)){
+    stop("x must be of type character")
+  }
+
+  foreach(i, 1:num_of_Exec, progress=trace, function(x=x) {
+    thePath = paste(find.package(x), "/libs/", x, ".so", sep="")
+    dyn.unload(thePath)
+  })
+}
