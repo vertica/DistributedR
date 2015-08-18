@@ -2,15 +2,15 @@
 \alias{ddyn.unload}
 \title{ddyn.unload}
 
-\description{Unload C++ library from all Executors}
+\description{Unload \code{so} library from all Executors}
 
 \usage{
     ddyn.unload(x)
-    ddyn.unload(c("library1","library2",...))
+    ddyn.unload(c("package1","package2",...))
 }
 
 \arguments{
-    \item{x}{List or a vector of libraries that needs to be un-loaded on all executors}
+    \item{x}{List or a vector of packages that their \code{so} libraries need to be un-loaded on all executors}
 }
 
 \details{
@@ -38,6 +38,6 @@
 \dontrun{
 library(distributedR)
 distributedR_start()
-ddyn.unload(c("distributedR"))
+ddyn.unload(c("HPdcluster"))
 }
 }
