@@ -93,7 +93,7 @@ hpdRF_parallelForest function runs \code{randomForest} function of randomForest 
     Ignored for regression.}
   \item{keep.forest}{If set to \code{FALSE}, the forest will not be
     retained in the output object.}
-  \item{nExecutor}{a positive integer number indicating the number of tasks for running the function. To have optimal performance, it is recommended to have this number smaller than the number of R-executors in the distributedR environment. It cannot be bigger than ntree.}
+  \item{nExecutor}{a positive integer number indicating the number of tasks for running the function. To have optimal performance, it is recommended to have this number smaller than or equal to the number of R-executors in the distributedR environment. It cannot be bigger than ntree. When it is not specified, it will be equal to the number of available executors by default.}
   \item{trace}{when this argument is true, intermediate steps of the progress are displayed.}
   \item{completeModel}{
     when it is FALSE (default), the output values that preserve information per sample are discarded. They are 'oob.times', 'votes', 'predicted', 'confusion', 'err.rate', 'mse', 'rsq', 'proximity', and 'test'. This feature is intended to keep the size of the output model small.}
@@ -183,29 +183,26 @@ Three scenarios can be imagined for the type of input data. When ordinary R type
     
 library(HPdclassifier)
 distributedR_start()
-drs <- distributedR_status()
-nparts <- sum(drs$Ins)
 
 ## Classification:
 ##data(iris)
-iris.rf <- hpdRF_parallelForest(Species ~ ., data=iris, importance=TRUE,
-                        nExecutor=nparts)
+iris.rf <- hpdRF_parallelForest(Species ~ ., data=iris, importance=TRUE)
 print(iris.rf)
 
 ## The 'unsupervised' case:
-iris.urf <- hpdRF_parallelForest(iris[, -5], nExecutor=nparts, 
+iris.urf <- hpdRF_parallelForest(iris[, -5], 
                             proximity=TRUE, completeModel=TRUE)
 MDSplot(iris.urf, iris$Species)
 
 ## stratified sampling: draw 20, 30, and 20 of the species to grow each tree.
 (iris.rf2 <- hpdRF_parallelForest(iris[1:4], iris$Species, 
-                          sampsize=c(20, 30, 20), nExecutor=nparts))
+                          sampsize=c(20, 30, 20)))
 
 ## Regression:
 ## data(airquality)
 ozone.rf <- hpdRF_parallelForest(Ozone ~ ., data=airquality, mtry=3,
                     importance=TRUE, na.action=na.omit, 
-                    nExecutor=nparts, completeModel=TRUE)
+                    completeModel=TRUE)
 print(ozone.rf)
 ## Show "importance" of variables: higher value mean more important:
 round(importance(ozone.rf), 2)
@@ -213,20 +210,19 @@ round(importance(ozone.rf), 2)
 ## "x" can be a matrix instead of a data frame:
 x <- matrix(runif(5e2), 100)
 y <- gl(2, 50)
-(myrf <- hpdRF_parallelForest(x, y, nExecutor=nparts))
+(myrf <- hpdRF_parallelForest(x, y))
 (predict(myrf, x))
 
 ## "complicated" formula:
 (swiss.rf <- hpdRF_parallelForest(sqrt(Fertility)~. - Catholic + I(Catholic<50),
-                          data=swiss, nExecutor=nparts))
+                          data=swiss))
 (predict(swiss.rf, swiss))
 ## Test use of 32-level factor as a predictor:
 x <- data.frame(x1=gl(32, 5), x2=runif(160), y=rnorm(160))
-(rf1 <- hpdRF_parallelForest(x[-3], x[[3]], ntree=10, nExecutor=nparts))
+(rf1 <- hpdRF_parallelForest(x[-3], x[[3]], ntree=10))
 
 ## Grow no more than 4 nodes per tree:
-(treesize(hpdRF_parallelForest(Species ~ ., data=iris, maxnodes=4, ntree=30,
-                                 nExecutor=nparts)))
+(treesize(hpdRF_parallelForest(Species ~ ., data=iris, maxnodes=4, ntree=30)))
 
 distributedR_shutdown()
  }
