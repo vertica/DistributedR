@@ -5,7 +5,7 @@ Version: 1.2.0
 Date: 2015-04-17
 Author: HP Vertica Analytics Team
 Maintainer: HP Vertica Analytics Team <distributedRTeam@external.groups.hp.com>
-Depends: R (>= 3.0.0), distributedR, data.table (>= 1.8.10), hdfsconnector
+Depends: R (>= 3.0.0), distributedR, data.table (>= 1.8.10)
 LinkingTo: Rcpp
 Suggests: vRODBC
 Description: Functions to load data into distributed data structures. Written using HP Vertica Distributed R package.
