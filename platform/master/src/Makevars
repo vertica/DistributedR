@@ -64,3 +64,6 @@ PKG_CPPFLAGS = -Ithird_party/boost_1_50_0 -Ithird_party/install/include -Imessag
 #   BLKIN_LINKER_FLAGS = -lzipkin-c -lblkin-front -lzipkin-cpp
 
 PKG_LIBS += -Lthird_party/install/lib -lpthread -lboost_thread -lboost_system -lboost_log -lboost_log_setup -lboost_chrono -lboost_filesystem -lboost_date_time -latomicio -lR-common -lR-proto -lzmq -luuid -lprotobuf
+
+%.o: %.cpp $(wildcard *.h) $(wildcard common/*.h)
+	g++ -c $< $(PKG_CPPFLAGS) -o $@
