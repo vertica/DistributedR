@@ -104,7 +104,12 @@ std::pair<void*, int64_t> TransferServer::transfer_blob(const string &name, Work
   void* server_ret;
   pthread_join(server_thread, &server_ret);
   sem_destroy(&server_ready);
-  //return *reinterpret_cast<int32_t*>(server_ret);
+
+  if(error_in_transfer_thread) {
+    forward_exception_to_r(PrestoWarningException
+       ("Master failed to fetch data from Worker. Check master logs for more information."));
+  }
+
   return std::make_pair<void*, int64_t>(dest_, bytes_fetched_);
   // TODO(erik): error handling
 
@@ -170,8 +175,8 @@ void* TransferServer::worker_transfer_server(void) {
   char split_size[24];
   memset(split_size, 0x00, 24);
   int rbytes = recv(new_fd, split_size, sizeof(split_size), 0);
-  size_ = (size_t)(atoi(split_size));
-  
+  size_ = (size_t)(atoll(split_size));
+
   if(destination_ == WORKER) {
     SharedMemoryObject shm(
       boost::interprocess::open_or_create, name_.c_str(),
@@ -185,13 +190,18 @@ void* TransferServer::worker_transfer_server(void) {
     atomicio(read, new_fd, dest_, size_);
     dest_ = NULL;
 
-    LOG_DEBUG("worker_transfer_server: Transfered to a Shared memory file %s(%zu)", name_.c_str(), size_);
+    LOG_DEBUG("worker_transfer_server: Transfered to a Shared memory file %s (size: %zu)", name_.c_str(), size_);
   } else {
     if(dest_ == NULL) {
       dest_ = malloc(size_);
+      if(dest_ == NULL) {
+        LOG_ERROR("worker_transfer_server: Failed to allocate buffer of size %zu", size_);
+        error_in_transfer_thread = true;
+        return reinterpret_cast<void*>(&ret);
+      }
     }
 
-    LOG_DEBUG("worker_transfer_server: Transferred to temporary buffer(%zu)", size_);
+    LOG_DEBUG("worker_transfer_server: Transferred to temporary buffer of size %zu", size_);
     bytes_fetched_ += (size_);
     atomicio(read, new_fd, dest_, size_);
   }
@@ -264,7 +274,6 @@ void* TransferServer::R_transfer_server(void) {
   if(destination_ == WORKER) {
     LOG_ERROR("Cannot send data partition from an R instance to a Worker");
     error_in_transfer_thread = true;
-    sem_post(&server_ready);
     return reinterpret_cast<void*>(&ret);
   } else {
     dest_ = (void*)malloc(size_);

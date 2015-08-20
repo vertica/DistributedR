@@ -252,19 +252,29 @@ ArrayData* ParseShm(const string &name) {
 }
 
 ArrayData* CreateDobjectData(RInside &R, ARRAYTYPE org_class, const string &varname, const string &newname, StorageLayer store, size_t r_size) {
-   char cmd[CMD_BUF_SIZE];
-   snprintf(cmd, CMD_BUF_SIZE, "`%s.serializedtmp...` <- serialize(`%s`, NULL)",
-       varname.c_str(), varname.c_str());
-    R.parseEval(cmd);
-    snprintf(cmd, CMD_BUF_SIZE, "as.numeric(object.size(`%s.serializedtmp...`))", varname.c_str());
-    size_t size = Rcpp::as<size_t>(R.parseEval(cmd));
+   size_t size = 0;
 
-    if (org_class == DATA_FRAME) 
-       return new DistDataFrame(newname, store, r_size, R[varname+".serializedtmp..."], (size - SEXP_HEADER_SIZE));
-    else if (org_class == LIST) {
+   if(store == WORKER) {
+     char cmd[CMD_BUF_SIZE];
+     snprintf(cmd, CMD_BUF_SIZE, "`%s.serializedtmp...` <- serialize(`%s`, NULL)",
+         varname.c_str(), varname.c_str());
+      R.parseEval(cmd);
+      snprintf(cmd, CMD_BUF_SIZE, "as.numeric(object.size(`%s.serializedtmp...`))", varname.c_str());
+      size = Rcpp::as<size_t>(R.parseEval(cmd));
+    }
+
+    if (org_class == DATA_FRAME) {
+       if(store == WORKER) 
+         return new DistDataFrame(newname, store, r_size, R[varname+".serializedtmp..."], (size - SEXP_HEADER_SIZE));
+       else 
+         return new DistDataFrame(newname, store, r_size, NULL, size);
+    } else if (org_class == LIST) {
        SEXP sexp_from = R[varname];     // Extracting length of the list in the split.
        int split_len = LENGTH(sexp_from);
-       return new DistList(newname, store, r_size, R[varname+".serializedtmp..."], (size - SEXP_HEADER_SIZE), split_len);
+       if(store == WORKER) 
+         return new DistList(newname, store, r_size, R[varname+".serializedtmp..."], (size - SEXP_HEADER_SIZE), split_len);
+       else
+         return new DistList(newname, store, r_size, NULL, size, split_len);
     } else {
        ostringstream msg;
        msg << "Unhandled dobject: "<< org_class ;

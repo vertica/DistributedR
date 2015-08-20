@@ -328,8 +328,8 @@ int Executor::ReadRawArgs() {  // NOLINT
       for (int j = 0; j < size; j++) {
         if (scanf("%c", &raw[j]) != 1)
           break;
-      }      
-      RR["rawtmpvar..."] = raw;      
+      }
+      RR["rawtmpvar..."] = raw;  
       RR.parseEvalQ(cmd);
     } else {
       // the raw variable will be passed without using protobuf - external fetch needed
@@ -721,6 +721,11 @@ int Executor::PersistToWorker() {
   ARRAYTYPE orig_class = in_memory_partitions[std::string(split)]->GetClassType();
   ArrayData* data = ParseVariable(RR, split, split, orig_class, WORKER);
   delete data;
+
+  char cmd[CMD_BUF_SIZE];
+  snprintf(cmd, CMD_BUF_SIZE, "rm(list=ls(pattern='serializedtmp...'));");
+  RR.parseEvalQ(cmd);
+
   LOG_DEBUG("Persist split(%s) to worker complete", split);
 }
 
@@ -848,7 +853,7 @@ int main(int argc, char *argv[]) {
 
   LOG_DEBUG("Loading libraries");
   // load packages
-  R.parseEvalQ("tryCatch({library(Matrix);library(MatrixHelper);library(Executor);gc.time()}, error=function(ex){Sys.sleep(2);library(Matrix);library(MatrixHelper);library(Executor);gc.time()})");
+  R.parseEvalQ("tryCatch({library(Matrix);library(Executor);gc.time()}, error=function(ex){Sys.sleep(2);library(Matrix);library(Executor);gc.time()})");
   
   updatesptr = new set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>>;
   set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>> &updates = *updatesptr;

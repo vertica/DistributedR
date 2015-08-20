@@ -79,7 +79,7 @@ DistDataFrame::DistDataFrame(const std::string &name, StorageLayer store, size_t
   } else {
     header = new dframe_header_t;
     header->type = DATA_FRAME;
-    header->size = size;
+    header->size = r_size;
     header->dims[0] = 0;
     header->dims[1] = 0;
     header->store = store;

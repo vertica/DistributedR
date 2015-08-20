@@ -1124,7 +1124,7 @@ void PrestoWorker::HandleRequests(int type) {
                        worker_req.createcomposite().cargs_size(), &cc_args);
 
               executorscheduler_->ValidatePartitions(cc_args, -1, taskid);
-              LOG_INFO("CREATECOMPOSITE TaskID %10zu - All required splits to create composite dobject validated", taskid);
+              LOG_INFO("CREATECOMPOSITE TaskID %10zu - All input splits validated", taskid);
 
               createcomposite(worker_req.createcomposite());
             }

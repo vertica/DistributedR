@@ -80,7 +80,7 @@ DistList::DistList(const std::string &name, StorageLayer store, size_t r_size,
   } else {
     header = new dlist_header_t;
     header->type = LIST;
-    header->size = size;
+    header->size = r_size;
     header->dims[0] = 1;
     header->dims[1] = split_len;
     header->store = store;

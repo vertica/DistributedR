@@ -695,7 +695,7 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
      fprintf(executors[executor].send, "%s\n", splits[i].c_str());
   }
   fflush(executors[executor].send);
-  LOG_INFO("CLEAR Task                        - Sent CLEAR task to Executor Id %d. No wait.", executor);
+  LOG_INFO("CLEAR Task                        - CLEAR sent to Executor Id %d", executor);
 
   /*char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
@@ -745,7 +745,7 @@ void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid
   fprintf(executors[executor].send, "%d\n", PERSIST); 
   fprintf(executors[executor].send, "%s\n", split_name.c_str());
   fflush(executors[executor].send);
-  LOG_INFO("PERSIST Task                      - Sent split %s to Executor Id %d to persist", split_name.c_str(), executor);
+  LOG_INFO("PERSIST Task                      - Split %s sent to Executor Id %d for persist", split_name.c_str(), executor);
 
   char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
@@ -772,7 +772,7 @@ void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid
           msg << "TASK_EXCEPTION : Persist task execution failed at Executor " << executor << " with message: " << task_msg;
           LOG_ERROR(msg.str());
        } else
-         LOG_INFO("PERSIST Task                      - Split %s persisted successfully", split_name.c_str());
+         LOG_DEBUG("PERSIST Task                      - Split %s persisted successfully", split_name.c_str());
        break;
     }
   }

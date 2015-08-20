@@ -26,6 +26,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <limits>
 
 #include "TaskScheduler.h"
 #include "ExecutorPool.h"
@@ -60,7 +61,7 @@ TaskScheduler::~TaskScheduler() {
     delete *update_it;
   }
   updated_splits.clear();
-  LOG_INFO("Deleted Executor Scheduler");
+  LOG_INFO("Worker shutdown - Deleted Executor Scheduler");
 }
 
 /**
@@ -150,7 +151,7 @@ int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& task_args, uin
            task_splits.push_back(task_args[i].list_arraynames(j));
       } else
         task_splits.push_back(task_args[i].arrayname());
-    } 
+    }
 
     // Check if this is for dobject initialization foreach/task
     if(task_args.size() == 1) {
@@ -170,9 +171,10 @@ int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& task_args, uin
     }
 
     // Get available Executors of all input splits in the task
+    unique_lock<recursive_mutex> metalock(metadata_mutex, defer_lock);
     map<int, size_t> available;
     for(int32_t i = 0; i < task_splits.size(); i++) {
-       unique_lock<recursive_mutex> metalock(metadata_mutex);
+       metalock.lock();
        if(executor_splits.find(task_splits[i]) != executor_splits.end()) {
          ExecSplit *partition = executor_splits[task_splits[i]];
          boost::unordered_set<int> execs = partition->executors;
@@ -185,10 +187,8 @@ int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& task_args, uin
        metalock.unlock();
     }
 
-
-    // If multiple available Executors, pich one which has maximum cumulative split size.
-    // Else, pick the 1st one.
-    if(available.size() > 0) {
+    // Memory efficient: Pick one with max cumulative split size
+    /*if(available.size() > 0) {
        map<int, size_t>::iterator best = available.begin();
        if(task_splits.size() > 1) {
          for (map<int, size_t>::iterator itr = available.begin();
@@ -199,6 +199,29 @@ int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& task_args, uin
          }
       }
       target_executor = best->first;
+    }*/
+
+    // Performance: Pick one with least execute load
+    int min_load = std::numeric_limits<int>::max();
+    if(available.size() > 0) {
+      map<int, size_t>::iterator best = available.begin();
+
+      metalock.lock();
+      for (map<int, size_t>::iterator itr = available.begin(); 
+           itr != available.end(); itr++) {
+        if(executor_stat[itr->first]->exec_load == 0) {
+          best = itr;
+          break;
+        } else {
+          if(executor_stat[itr->first]->exec_load < min_load) {
+            min_load = executor_stat[itr->first]->exec_load;
+            best = itr;
+          }
+        }
+      }
+      metalock.unlock();
+
+      target_executor = best->first;
     }
 
     // If no Executor assigned yet, choose one in round robin fashion
@@ -207,6 +230,10 @@ int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& task_args, uin
        LOG_DEBUG("Executor Scheduler: Task %zu - Assigned to Executor Id %d in round robin", taskid, target_executor);
     } else
        LOG_DEBUG("Executor Scheduler: Task %zu - Assigned to Executor Id %d", taskid, target_executor);
+
+    metalock.lock();
+    executor_stat[target_executor]->exec_load++;
+    metalock.unlock();
 
     return target_executor;
 }
@@ -458,6 +485,12 @@ void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
   boost::unordered_map<int, std::vector<std::string>> clear_map;
 
   unique_lock<recursive_mutex> metalock(metadata_mutex);
+
+  //Reset exec_stat
+  for(boost::unordered_map<int, ExecStat*>::iterator itr = executor_stat.begin(); 
+      itr != executor_stat.end(); ++itr) {
+    itr->second->exec_load = 0;
+  }
   
   if(status) {
     // Foreach is successful.
@@ -474,7 +507,7 @@ void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
           partition->executors.insert(split->executor);
           executor_splits[split->name] = partition;
        } else {
-         LOG_DEBUG("METADATAUPDATE Task               - Adding new split %s to Executor Id %d", split->name.c_str(), split->executor);
+         LOG_DEBUG("METADATAUPDATE Task               - Adding new split %s(size: %zu) to Executor Id %d", split->name.c_str(), split->size, split->executor);
          ExecSplit *partition = new ExecSplit;
          partition->name = split->name;
          partition->size = split->size;
@@ -502,7 +535,7 @@ void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
           ExecSplit* partition = executor_splits[parent];
           for(boost::unordered_set<int>::iterator i = partition->executors.begin();
               i != partition->executors.end(); i++) {
-             LOG_INFO("METADATAUPDATE Task               - Previous split %s will be cleared from Executor Id %d", parent.c_str(), (*i));
+             LOG_DEBUG("METADATAUPDATE Task               - Previous split %s will be cleared from Executor Id %d", parent.c_str(), (*i));
              clear_map[*i].push_back(parent);
           }
         }
@@ -527,7 +560,7 @@ void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
     boost::unordered_set<SplitUpdate*>::iterator it;
     for(it = updated_splits.begin(); it != updated_splits.end(); ++it) {
        SplitUpdate* split = *it;
-       LOG_INFO("METADATAUPDATE Task               - Newly created split %s will be cleared from Executor Id %d", split->name.c_str(), split->executor);
+       LOG_DEBUG("METADATAUPDATE Task               - Newly created split %s will be cleared from Executor Id %d", split->name.c_str(), split->executor);
        clear_map[split->executor].push_back(split->name);
     }
     stagelock.unlock();
@@ -546,7 +579,7 @@ void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
   req.mutable_location()->CopyFrom(worker->SelfServerInfo());
   //req.set_status(status);
   worker->getMaster()->MetadataUpdated(req);
-  LOG_INFO("METADATAUPDATE Task               - Updated Worker Metadata. Sent notification to Master");
+  LOG_DEBUG("METADATAUPDATE Task               - Updated Worker Metadata. Sent notification to Master");
 
   for(boost::unordered_map<int, std::vector<std::string>>::iterator itr = clear_map.begin();
       itr != clear_map.end(); itr++) {

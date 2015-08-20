@@ -163,7 +163,6 @@ static void dispatch_createcomposite(WorkerInfo *wi,
   req.mutable_dims()->CopyFrom(carg.dim());
 
   if(task_args !=NULL && DATASTORE == RINSTANCE) {
-
     for (int i = 0; i < task_args->size(); i++) {
       if ((*task_args)[i].arrays_size() == 1 || (*task_args)[i].is_list()) {
         NewArg arg;
@@ -179,8 +178,6 @@ static void dispatch_createcomposite(WorkerInfo *wi,
         req.add_task_args()->CopyFrom(arg);
       }
     }
-  } else {
-    LOG_ERROR("Task args is NULL for DATASTORE as RINSTANCE");
   }
 
   req.set_id(id);
@@ -1147,7 +1144,6 @@ SEXP Scheduler::GetSplitToMaster(const string &name) {
   pair<void*, int64_t> ret = tw.transfer_blob(name, wi, hostname_, store);
 
   SEXP data = Deserialize(ret.first, ret.second);
-  //free(ret.first);
   return data;
 }
 
