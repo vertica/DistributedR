@@ -12,8 +12,8 @@ LDFLAGS = -L../third_party/install/lib -lpthread -lboost_thread -lboost_system -
 #   BLKIN_INCLUDE = -I../third_party/install/include/blkin -DPERF_TRACE
 #   BLKIN_LINKER_FLAGS = -lzipkin-c -lblkin-front -lzipkin-cpp
 
-#PRESTO_COMMON_DIR = .
-#PRESTO_COMMON_HEADERS = $(wildcard ${PRESTO_COMMON_DIR}/*.h)
+PRESTO_COMMON_DIR = .
+PRESTO_COMMON_HEADERS = $(wildcard ${PRESTO_COMMON_DIR}/*.h)
 #PRESTO_COMMON_SRC = $(wildcard ${PRESTO_COMMON_DIR}/*.cpp)
 #PRESTO_COMMON_OBJS = $(PRESTO_COMMON_SRC:.cpp=.o)
 PRESTO_COMMON_OBJS = executor.o
@@ -21,7 +21,7 @@ PRESTO_COMMON_OBJS = executor.o
 all: $(PRESTO_COMMON_OBJS) ../../inst/bin/R-executor-bin
 
 # Common objects
-%.o: %.cpp
+%.o: %.cpp $(PRESTO_COMMON_HEADERS) $(wildcard ../common/*.h)
 	g++ -c $< $(CXXFLAGS) $(R_CXXFLAGS) -o $@
 
 # Common library

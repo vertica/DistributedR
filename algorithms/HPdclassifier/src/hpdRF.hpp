@@ -25,6 +25,8 @@
 #include<time.h>
 
 
+struct HPDRFNode;
+
 typedef struct 
 {
   int* indices;
@@ -32,11 +34,16 @@ typedef struct
   int attempted, completed;
   int leafID;
   int num_obs;
+  int depth;
+  struct HPDRFNode* parent;
+
 } hpdRFNodeInfo;
 
 typedef struct HPDRFNode
 {
   double prediction;
+  double deviance;
+  double complexity;
   hpdRFNodeInfo* additional_info;
   struct HPDRFNode* left;
   struct HPDRFNode* right;
@@ -83,10 +90,26 @@ int* unserializeTree(hpdRFnode *tree, int* buffer, hpdRFnode**leaf_nodes);
 int countSubTree(hpdRFnode *tree);
 void reformatTree(hpdRFnode* tree, SEXP forest, int* index, 
 		  int *features_cardinality, int nrow, int treeID);
-hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
-				    int *feature_cardinality, int obs_index,
-				    bool na_pass, int* leaf_count, 
-				    double** weight);
+
+extern "C"
+{
+SEXP undoSplits(SEXP R_forest, SEXP R_node_ids);
+}
+
+
+int convertTreetoRpart(hpdRFnode* tree, int* indices,
+		       int* var, double* dev, 
+		       double* yval, double* complexity,
+		       double* split_index, int* ncat, 
+		       int rowID, double parent_cp, int node_index,
+		       int* features_cardinality, int* csplit_count);
+
+
+void populateCsplit(hpdRFnode* tree, int* features_cardinality, 
+		    int* csplit_count, int* csplit, int nrow);
+
+
+
 
 /*
  This function takes an array from R and converts it to C format by 

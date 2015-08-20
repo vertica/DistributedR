@@ -21,7 +21,9 @@ extern "C"
 		     SEXP R_bin_num, SEXP old_splits_info, SEXP R_cp);
   SEXP applySplits(SEXP R_forest, SEXP R_splits_info, SEXP R_active_nodes);
   SEXP updateNodes(SEXP R_observations, SEXP R_responses, 
-		   SEXP R_forest, SEXP R_active_nodes, SEXP R_splits_info);
+		   SEXP R_forest, SEXP R_active_nodes, SEXP R_splits_info,
+		   SEXP R_max_depth);
+
   SEXP cleanForest(SEXP R_forest, SEXP R_responses);
   SEXP getForestParameters(SEXP R_forest);
   
@@ -29,10 +31,14 @@ extern "C"
   SEXP hpdRF_local(SEXP observations, SEXP responses, SEXP ntree, SEXP bin_max,
 		   SEXP features_cardinality, SEXP response_cardinality, 
 		   SEXP features_num, SEXP node_size, SEXP weights,
-		   SEXP observation_indices, SEXP features_min, SEXP features_max,
+		   SEXP observation_indices, 
+		   SEXP features_min, SEXP features_max,
 		   SEXP max_nodes, SEXP tree_ids, SEXP max_nodes_per_iteration,
-		   SEXP trace, SEXP scale, SEXP max_time, SEXP R_cp)
+		   SEXP trace, SEXP scale, SEXP max_time, 
+		   SEXP R_cp, SEXP R_max_depth, SEXP R_min_count,
+		   SEXP R_random_seed)
   {
+    srand(INTEGER(R_random_seed)[0]);
     SEXP R_forest;
     printf("initializing forest\n");
     PROTECT(R_forest=initializeForest(observations, responses, ntree, bin_max,
@@ -53,6 +59,8 @@ extern "C"
     for(int i = 0; i < forest->ntree; i++)
       if(forest->max_nodes[i] > 0)
 	max_nodes_reached = false;
+    int max_depth = INTEGER(R_max_depth)[0];
+    int min_count = INTEGER(R_min_count)[0];
 
     int i = 0;
     time_t starttime;
@@ -115,14 +123,29 @@ extern "C"
 	
 	printf("updating nodes\n");
 	updateNodes(observations, responses, R_forest, 
-		    active_nodes, splits_info);
+		    active_nodes, splits_info, R_max_depth);
 
 	UNPROTECT_PTR(active_nodes);
 	PROTECT(active_nodes = allocVector(INTSXP,forest->nleaves));
 	int num_active_nodes = 0;
+
+	
+	SEXP bad_nodes;
+	PROTECT(bad_nodes = allocVector(INTSXP,forest->nleaves));
+	for(int i = 0; i < forest->nleaves; i++)
+	  if(forest->leaf_nodes[i]->additional_info->num_obs < min_count)
+	      INTEGER(bad_nodes)[num_active_nodes++] = i+1;
+	SETLENGTH(bad_nodes, num_active_nodes);
+	undoSplits(R_forest,bad_nodes);
+	UNPROTECT_PTR(bad_nodes);
+	
+	num_active_nodes = 0;
+
 	for(int i = 0; i < forest->nleaves; i++)
 	  if(!forest->leaf_nodes[i]->additional_info->attempted &&
-	     forest->leaf_nodes[i]->additional_info->num_obs > INTEGER(node_size)[0])
+	     forest->leaf_nodes[i]->additional_info->num_obs > 
+	     INTEGER(node_size)[0] &&
+	     forest->leaf_nodes[i]->additional_info->depth < max_depth)
 	      INTEGER(active_nodes)[num_active_nodes++] = i+1;
 	SETLENGTH(active_nodes,num_active_nodes);
 

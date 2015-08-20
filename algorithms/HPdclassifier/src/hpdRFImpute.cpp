@@ -1,5 +1,11 @@
 #include"hpdRF.hpp"
 
+hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
+				    int *feature_cardinality, int obs_index,
+				    bool na_pass, int* leaf_count, 
+				    double** weight);
+
+
 template <typename obs_type>
 void registerTreeIndices(hpdRFnode* tree, obs_type* feature_observations, bool categorical)
 {

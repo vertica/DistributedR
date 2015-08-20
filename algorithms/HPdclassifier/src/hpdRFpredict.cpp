@@ -150,8 +150,10 @@ extern "C"
     hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
     int obs_index = INTEGER(R_obs_index)[0]-1;
     int tree_id = INTEGER(R_tree_id)[0]-1;
-    if(forest->trees[tree_id] == NULL)
+    if(tree_id < 0 || tree_id >= forest->ntree || 
+       forest->trees[tree_id] == NULL)
       return ScalarReal(NA_REAL);
+
     double prediction = treePredictObservation(forest->trees[tree_id], 
 					       R_observations, 
 					       forest->features_cardinality, 

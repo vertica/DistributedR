@@ -275,14 +275,14 @@
 }
 
 
-.updateDistributedForest <- function(observations, responses, forest, active_nodes, splits_info, trace = FALSE)
+.updateDistributedForest <- function(observations, responses, forest, active_nodes, splits_info, min_split = 1, max_depth = 10000,trace = FALSE)
 {
 	timing_info <- Sys.time()
 	null_observations = lapply(1:ncol(observations), function(i)
 			  return(integer(0)))
 	null_responses = list(integer(0))
 	.Call("updateNodes",null_observations, null_responses, 
-		forest, active_nodes, splits_info,
+		forest, active_nodes, splits_info, as.integer(max_depth),
 	        PACKAGE = "HPdclassifier")
 
 	leaf_counts = darray(npartitions = npartitions(observations))
@@ -292,14 +292,15 @@
 			responses = splits(responses,i),
 			active_nodes = active_nodes,
 			splits_info = splits_info,
-			leaf_counts = splits(leaf_counts,i))
+			leaf_counts = splits(leaf_counts,i),
+			max_depth = as.integer(max_depth))
 		{
 			library(HPdclassifier)
 			dforest = .Call("unserializeForest",forest[[1]])
 			
 			leaf_counts = .Call("updateNodes",
 				observations, responses,
-				dforest, active_nodes, splits_info,
+				dforest, active_nodes, splits_info,max_depth,
 	       			PACKAGE = "HPdclassifier")
 			leaf_counts = matrix(leaf_counts,nrow = 1)
 			forest = list(.Call("serializeForest",dforest))
@@ -312,6 +313,25 @@
 	timing_info <- Sys.time() - timing_info
 	if(trace)
 	print(timing_info)
+
+	bad_splits = as.integer(which(leaf_counts < min_split))
+	if(length(bad_splits) > 0)
+	{
+	.Call("undoSplits",forest,bad_splits)
+
+	foreach(i,1:npartitions(observations), 
+		function(forest = splits(attr(forest,"dforest"),i),
+			bad_splits = bad_splits)
+			{
+				library(HPdclassifier)
+				dforest = .Call("unserializeForest",forest[[1]])
+				.Call("undoSplits",dforest,bad_splits)
+				forest = list(.Call("serializeForest",dforest))
+				.Call("garbageCollectForest",dforest)
+				update(forest)
+			},progress = trace,scheduler=1)
+	leaf_counts = leaf_counts[-bad_splits]
+	}
 	return(leaf_counts)
 	
 }
@@ -319,7 +339,8 @@
 
 .localizeData <-function(observations, responses, forest, bin_max, 
 	      nodes, max_nodes, node_size, tree_ids, 
-	      max_nodes_per_iteration, trace = FALSE,
+	      max_nodes_per_iteration, min_split, max_depth, 
+ 	      trace = FALSE,
 	      data_local=NULL)
 {
 	workers = length(nodes)
@@ -336,8 +357,6 @@
 	if(trace)
 	print("shuffling data")
 	timing_info <- Sys.time()
-	if(trace)
-	print(distributedR_status())
 	foreach(i, 1:npartitions(observations), 
 		   function(		   
 		   forest = splits(attr(forest,"dforest"),i),
@@ -395,8 +414,6 @@
 	timing_info <- Sys.time() - timing_info
 	if(trace)
 	print(timing_info)
-	if(trace)
-	print(distributedR_status())
 
 	if(trace)
 	print("building subtrees")
@@ -422,6 +439,8 @@
 			nparts = npartitions(observations),
 			max_nodes_per_iteration = max_nodes_per_iteration,
 			hpdRF_local = .hpdRF_local,
+			max_depth = max_depth,
+			min_split  = min_split,
 			random_seed = sample.int(1000,i))
       {
 		library(HPdclassifier)
@@ -473,7 +492,9 @@
 			features_min, features_max, 
 			max_nodes = as.integer(max_nodes),
 			tree_ids = as.integer(tree_ids), 
-			max_nodes_per_iteration = max_nodes_per_iteration)
+			max_nodes_per_iteration = max_nodes_per_iteration,
+			min_split = min_split, max_depth = max_depth,
+			random_seed = random_seed)
 
 		
 		dforest = list(.Call("serializeForest",forest))
@@ -508,7 +529,7 @@
 
 
 .predictOOB <- function(forest, observations, responses, oob_indices, 
-	    cutoff, classes, trace)
+	    cutoff, classes, reduceModel = FALSE, trace)
 {
 	timing_info <- Sys.time()
 	oob_predictions = dframe(npartitions = npartitions(observations))
@@ -517,59 +538,24 @@
 	L0 = darray(npartitions = npartitions(observations))
 	L1 = darray(npartitions = npartitions(observations))
 	L2 = darray(npartitions = npartitions(observations))
-
-	temp_forest = .Call("serializeForest",forest,PACKAGE="HPdclassifier")
 	class_count = darray(npartitions = npartitions(observations))
 
-	ntree = length(temp_forest) - 1
-	dforest = dlist(npartition = min(ntree,sum(distributedR_status()$Inst)))
-	trees_per_partition <- floor(ntree/npartitions(dforest))
-	leftover = ntree - trees_per_partition*npartitions(dforest)
-	trees = sapply(1:npartitions(dforest), function(i) 
-	{
-	      if(i <= leftover) return(trees_per_partition+1)
-	      return(trees_per_partition)
+	dforest = forest
+	suppressWarnings({
+	votes = darray(npartitions =c(npartitions(dforest),npartitions(observations)))
 	})
-	tree_ids = c(0,cumsum(trees))+1
-	tree_ids = lapply(1:(length(tree_ids)-1), function(i) 
-	{
-		ids = (tree_ids[i]+1):tree_ids[i+1]
-		if(tree_ids[i] >= tree_ids[i+1])
-			ids = integer(0)
-		return(ids)
-
-	})
-	trees = lapply(tree_ids, function(ids) 
-	{
-		if(length(ids) == trees_per_partition)
-		return(c(temp_forest[ids],NA))
-		return(temp_forest[ids])
-	})
-
-	foreach(i,1:npartitions(dforest), function(forest = splits(dforest,i), 
-		      forest_header = temp_forest[[1]], 
-		      tree_ids = tree_ids[[i]],
-		      trees = trees[[i]], 
-		      ntree = ntree)
-	{
-		forest =  vector(mode = "list", length = ntree+1)
-		forest[[1]] <- forest_header
-		if(length(tree_ids)>0)
-			forest[tree_ids] <- trees
-		update(forest)
-	},progress = trace)
-
-	votes = darray(npartitions = c(npartitions(dforest),npartitions(observations)))
 	foreach(i,0:(npartitions(votes)-1), 
 		function(predictions=splits(votes,i+1),
 			observations=splits(observations,
 				floor(i%%npartitions(observations))+1),
 			oob_indices = splits(oob_indices,
 				floor(i%%npartitions(observations))+1),
-			forest = splits(dforest,floor(i / npartitions(observations)) + 1),
-			tree_ids = tree_ids[[floor(i / npartitions(observations)) + 1]])
+			forest = splits(dforest,
+			        floor(i / npartitions(observations)) + 1))
 	{
 		library(HPdclassifier)
+		tree_ids = which(!sapply(forest,is.null))
+		tree_ids = tree_ids[-1]
 		forest = .Call("unserializeForest",forest, 
 		       	    PACKAGE = "HPdclassifier")  
 
@@ -599,10 +585,10 @@
 			      	ncol = nrow(observations),
 				length(tree_ids))
 		tree_ids = tree_ids - 1
-
-		temp_predictions = lapply(tree_ids,
-		function(tree_id)
+		temp_predictions = lapply(1:length(tree_ids),
+		function(tree_id_index)
 		{
+			tree_id = tree_ids[tree_id_index]
 			tree_oob_indices = oob_indices[[tree_id]]
 			tree_predictions = sapply(tree_oob_indices,
 				function(obs)
@@ -611,7 +597,7 @@
 				observations, 
 				as.integer(obs),
 				PACKAGE = "HPdclassifier"))
-			return(cbind(rep(tree_id,
+			return(cbind(rep(tree_id_index,
 				length(tree_oob_indices)),
 				tree_oob_indices,as.numeric(tree_predictions)))
 		})
@@ -619,7 +605,6 @@
 		{
 		for(i in 1:length(temp_predictions))
 		{
-		      temp_predictions[[i]][,1]=temp_predictions[[i]][,1]-min(tree_ids)+1
 		      predictions[temp_predictions[[i]][,c(1,2)]] = 
 		      		temp_predictions[[i]][,3]
 		}
@@ -629,20 +614,25 @@
 	},progress = trace)
 
 
-
 	if(trace)
 	print("reducing model")
 	timing_info <- Sys.time() 
-
-	reducedModel <- .reduceModel(votes, responses, cutoff = cutoff,classes = classes)
+	suppressWarnings({
+	reducedModel <- 
+		 .reduceModel(votes, responses, 
+		 cutoff = cutoff,classes = classes, reduceModel = reduceModel)
 	new_treeIDs <- reducedModel$subsetForest
 	votes <- reducedModel$new_votes
-	.Call("eliminateTreesFromModel",forest,as.integer(sort(new_treeIDs)))
+	new_treeIDs <- split(new_treeIDs,1:npartitions(dforest))
+	if(reduceModel)
+		dforest <- .redistributeForest(dforest,new_treeIDs)
+	attr(dforest,"ntree") <- length(unlist(new_treeIDs))
+	})
 	gc()
-
 	timing_info <- Sys.time() - timing_info
 	if(trace)
 	print(timing_info)
+
 	
 
 	foreach(i,1:npartitions(observations), function(
@@ -663,7 +653,8 @@
 			ntree = nrow(predictions)
 			err.count = matrix(as.integer(0),nrow=1,
 				  ncol = nrow(predictions)*length(classes))
-			class_count = matrix(as.integer(0),ncol = ntree*length(classes),nrow = 1)
+			class_count = matrix(as.integer(0),
+				  ncol = ntree*length(classes),nrow = 1)
 
 			sse = matrix(as.numeric(0),
 				  ncol = nrow(predictions),nrow = 1)
@@ -691,7 +682,6 @@
 			update(L1)
 			update(L2)
 		},progress = trace)
-
 
 
 	colnames(oob_predictions) <- "oob_predictions"
@@ -723,23 +713,27 @@
 	mse = sse/L0
 	rsq = 1 - mse/var_response
 
-
-	timing_info <- Sys.time() - timing_info
-	if(trace)
-	print(timing_info)
-
-
 	return(list(oob_predictions = oob_predictions, 
-		err.rate = err.rate, rsq = rsq, mse = mse))
+		err.rate = err.rate, rsq = rsq, mse = mse, dforest = dforest))
 }
 
 .reduceModel <- function(separated_votes, responses, cutoff, classes, 
-	     accuracy_convergence = 0.001)
+	     accuracy_convergence = 0.001, reduceModel)
 {
 	old_trees = NULL
 	ntree = nrow(separated_votes)
+	if(reduceModel == FALSE)
+	{
+	current_trees = 1:ntree
+	excluded_trees = integer(0)
+	}
+	else
+	{
 	excluded_trees = 1:ntree
 	current_trees = integer(0)
+	}
+	nrow = nrow(responses)
+
 	response_cardinality = NA
 	if(length(classes) > 0)
 		response_cardinality = length(classes)
@@ -771,6 +765,7 @@
 
 	while(!identical(current_trees,old_trees) & length(excluded_trees)>0)
 	{
+
 	errors = darray(npartitions = npartitions(responses))
 	foreach(i,1:npartitions(responses), function(
 		votes = splits(votes,i),
@@ -792,12 +787,17 @@
 		update(errors)
 		update(total_errors)
 	},progress = FALSE)
-	#decide about which trees to keep
 
 	errors = getpartition(errors)
-	errors = apply(errors,2,sum)/nrow(responses)
-	new_tree_index = which.min(errors)
 	total_errors_curr = sum(getpartition(total_errors))
+
+
+
+	#decide about which trees to keep
+	errors = apply(errors,2,sum)
+	errors = errors/nrow
+	new_tree_index = which.min(errors)
+
 
 	if(errors[new_tree_index] >= -accuracy_convergence & 
 		total_errors_curr <= full_model_errors & 
@@ -831,11 +831,9 @@
       replacement = TRUE, cutoff , classes, completeModel = FALSE, 
       max_nodes_per_iteration =  .Machine$integer.max, 
       trace = FALSE, features_min = NULL, features_max = NULL, scale = 1L, 
-      cp = 1)
+      cp = 0, min_split = 1, max_depth = 10000 )
 {
 	gc()
-	if(trace)
-	print(distributedR_status())
 	workers = sum(distributedR_status()$Inst)
 	threshold = max(threshold, node_size)
 
@@ -856,8 +854,6 @@
 		active_nodes = as.integer(1:ntree)
 	else
 		active_nodes = integer(0)
-	if(trace)
-	print(distributedR_status())
 
 	if(trace)
 	print("initializing")
@@ -866,8 +862,6 @@
 		response_cardinality, features_num, weights, 
 		replacement, max_nodes, scale, 
 		trace)
-	if(trace)
-	print(distributedR_status())
 
 	forest = initparam$forest
 	oob_indices = initparam$oob_indices
@@ -897,7 +891,8 @@
 		if(trace)
 		print("updating nodes with splits") 
 		leaf_nodes = .updateDistributedForest(observations, responses,
-			   forest, active_nodes, splits_info, trace)
+			   forest, active_nodes, splits_info, 
+			   min_split, max_depth,trace)
 		leaf_attempted = .Call("getAttemptedNodes",forest)
 		active_nodes = which(leaf_nodes > threshold & leaf_attempted == 0)
 		max_nodes = .Call("getMaxNodes", forest)
@@ -962,6 +957,7 @@
 				max_nodes, node_size, 
 				active_tree_ids,
 				max_nodes_per_iteration,
+				min_split = min_split, max_depth = max_depth,
 				trace,
 				data_local)
 			gc()
@@ -981,9 +977,11 @@
       node_size=1, weights=NULL, observation_indices=NULL, 
       features_min = NULL, features_max = NULL, max_nodes = Inf,
       tree_ids = NULL, max_nodes_per_iteration = .Machine$integer.max, 
-      max_time = -1, cp = 1, 
-      trace = TRUE)
+      max_time = -1, cp = 0, max_depth = 10000, min_split = 1,
+      trace = TRUE, random_seed = NULL)
 {
+	if(!is.null(random_seed))
+	set.seed(random_seed)
 	nrow = nrow(observations)
 	ncol = ncol(observations)
 	if(is.null(weights))
@@ -1015,12 +1013,14 @@
 	tree_ids = as.integer(tree_ids)
 	node_size = as.integer(node_size)
 	max_time  = as.integer(max_time)
+	random_seed = sample.int(10000,1)
 	forest = .Call("hpdRF_local",observations, responses, ntree, bin_max,
 			features_cardinality, response_cardinality,
 			features_num, node_size, weights, observation_indices,
 			features_min, features_max, max_nodes, tree_ids, 
 			max_nodes_per_iteration, trace, scale, max_time, 
-			as.numeric(cp))
+			as.numeric(cp), as.integer(max_depth), 
+			as.integer(min_split),as.integer(random_seed))
 
 	return(forest)
 }
@@ -1034,61 +1034,69 @@
 	if(trace)
 	print("predicting observations")
 
-	if(is.null(dforest))
-	{
-	dforest = dlist(npartitions = 1)
-	oob_dobject<- function(forest = splits(dforest,1))
-	{
-		forest = list()
-		for(i in 1:get("forest_chunks"))
-	      	      forest[[i]] <- get(paste("forest",i,"_temp",sep="")) 
-		update(forest)
-	}
-	formals(oob_dobject)[["forest_chunks"]] = length(forest$trees)
-	for(i in 1:length(forest$trees))
-	      formals(oob_dobject)[[paste("forest",i,"_temp",sep="")]] = forest$trees[[i]]
-	foreach(i,1,oob_dobject,progress = trace)
-	}
+	dforest = forest$trees
+	suppressWarnings({
+	votes <- darray(npartitions = c(npartitions(dforest),npartitions(new_observations)))
+	})
+	foreach(i,0:(npartitions(votes)-1), 
+		function(predictions=splits(votes,i+1),
+			new_observations=splits(new_observations,
+				floor(i%%npartitions(new_observations))+1),
+			forest = splits(dforest,
+			        floor(i / npartitions(new_observations)) + 1))
+		{
+			library(HPdclassifier)
+			tree_ids = which(sapply(forest,function(x) !is.null(x)))
+			tree_ids = tree_ids[-1]-1
 
-	foreach(i,1:npartitions(new_observations), function( 
-		forest = splits(dforest),
-		new_observations = splits(new_observations,i),
-		predictions = splits(predictions,i),
-		cutoff = cutoff, classes = classes)
-	{
-		library(HPdclassifier)
-		forest = .Call("unserializeForest",forest)
-		forestparam=.Call("getForestParameters", forest)
-		response_cardinality = forestparam[[2]]
-		ntree = forestparam[[7]]
+			forest = .Call("unserializeForest",forest, 
+		       	    PACKAGE = "HPdclassifier") 
 
-		predictions = sapply(1:nrow(new_observations), function(index)
-			sapply(1:ntree, function(tree_id)
-			       as.numeric(.Call("specificTreePredictObservation",
+			forestparam=.Call("getForestParameters", forest)
+			response_cardinality = forestparam[[2]]
+			ntree = forestparam[[7]]
+			predictions = sapply(1:nrow(new_observations), function(index)
+			       sapply(tree_ids, function(tree_id)
+			            as.numeric(.Call("specificTreePredictObservation",
 					forest, as.integer(tree_id), 
 			      	      	new_observations, 
 			      		as.integer(index),
 		     			PACKAGE = "HPdclassifier"))))
+			predictions = matrix(predictions,ncol=nrow(new_observations))
+			update(predictions)
+			.Call("garbageCollectForest",forest)
+		},progress = trace)
 
-		if(is.na(response_cardinality))
+	response_cardinality = length(classes)
+	if(length(classes) == 0)
+	response_cardinality = NA
+	nparts = npartitions(dforest)
+	foreach(i,1:npartitions(predictions), 
+		function(predictions = splits(predictions,i),
+			votes = splits(votes,
+			      as.list((1:nparts - 1)*npartitions(predictions)+i)),
+			cutoff = cutoff, classes = classes, 
+			response_cardinality = response_cardinality)
 		{
-			predictions = data.frame(apply(predictions,2,mean))
-		}
-		if(!is.na(response_cardinality))
-		{
-			k = as.integer(response_cardinality)
-			if(is.na(cutoff))
-				cutoff = rep(1/k,k)
-			cutoff = as.numeric(cutoff)
-			predictions = .Call("combineVotesClassification",
-				 predictions, cutoff, k,
-				 PACKAGE = "HPdclassifier")
-			predictions = data.frame(factor(classes[predictions], 
-				    levels = classes))
-		}
-		update(predictions)
-		.Call("garbageCollectForest",forest)
-	}, progress = trace)
+			predictions = do.call(rbind,votes)
+			if(is.na(response_cardinality))
+			{
+				predictions = data.frame(apply(predictions,2,mean))
+			}
+			if(!is.na(response_cardinality))
+			{
+				k = as.integer(response_cardinality)
+				if(is.na(cutoff))
+					cutoff = rep(1/k,k)
+				cutoff = as.numeric(cutoff)
+				predictions = .Call("combineVotesClassification",
+					predictions, cutoff, k,
+					PACKAGE = "HPdclassifier")
+				predictions = data.frame(factor(classes[predictions], 
+					levels = classes))
+			}
+			update(predictions)
+		},progress = trace)
 
 	return(list(predictions=predictions,dforest = dforest))
 }

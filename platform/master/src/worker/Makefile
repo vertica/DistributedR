@@ -21,7 +21,7 @@ PRESTO_COMMON_OBJS = $(PRESTO_COMMON_SRC:.cpp=.o)
 all: $(PRESTO_COMMON_OBJS) ../../inst/bin/R-worker-bin
 
 # Common objects
-%.o: %.cpp
+%.o: %.cpp $(PRESTO_COMMON_HEADERS) $(wildcard ../common/*.h)
 	g++ -c $< $(CXXFLAGS) $(R_CXXFLAGS) -o $@
 
 # Common library

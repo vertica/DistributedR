@@ -41,6 +41,10 @@ function(X, centers, iter.max = 10, nstart = 1,
         sampling_threshold = 1e6, trace = FALSE, na_action = c("exclude","fail"), completeModel = FALSE)
 {
     startTotalTime <- proc.time()
+    # loading the so library on all available executors
+    ddyn.load("HPdcluster")
+    # unloading the so library from all available executors at the exit time
+    on.exit(ddyn.unload("HPdcluster"))
 
     # validating the input arguments
     if(is.null(X)) stop("'X' is a required argument")
@@ -129,7 +133,6 @@ function(X, centers, iter.max = 10, nstart = 1,
     Norms <- clone(X, ncol=1, sparse=FALSE)
     if(is.null(mask)) {
         foreach(i, 1:npartitions(X), progress=trace, function(Xi=splits(X,i), Ni=splits(Norms,i)) {
-            library(HPdcluster)
             if(class(Xi) == "matrix")
                 .Call("calculate_norm", Xi, Ni, PACKAGE="HPdcluster")
             else
@@ -138,7 +141,6 @@ function(X, centers, iter.max = 10, nstart = 1,
         })
     } else {
         foreach(i, 1:npartitions(X), progress=trace, function(Xi=splits(X,i), Ni=splits(Norms,i), maski=splits(mask,i)) {
-            library(HPdcluster)
             good <- maski > 0
             if(class(Xi) == "matrix")
                 Ni[good,] <- .Call("calculate_norm", Xi[good,], Ni[good,], PACKAGE="HPdcluster")
@@ -430,7 +432,6 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
             foreach(i, 1:nparts, progress=trace, kmeansFunc <- function(Xi=splits(X,i), Ni=splits(Norms,i),
                     centers=centers, sumOfClusteri=splits(sumOfCluster,i), numOfPointsi=splits(numOfPoints,i),
                     clusteri=splits(cluster,i), nmeth=nmeth, completeModel=completeModel){
-                library(HPdcluster)
                 cl = integer(nrow(Xi))
                 nc = integer(nrow(centers))
                 if(class(Xi) == "matrix")
@@ -478,7 +479,6 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
             foreach(i, 1:nparts, progress=trace, kmeansFunc <- function(Xi=splits(X,i), maski=splits(mask,i), Ni=splits(Norms,i),
                     centers=centers, sumOfClusteri=splits(sumOfCluster,i), numOfPointsi=splits(numOfPoints,i),
                     clusteri=splits(cluster,i), nmeth=nmeth, completeModel=completeModel){
-                library(HPdcluster)
                 good <- maski > 0
                 m <- as.integer(sum(maski))
                 cl <- integer(m)
@@ -536,7 +536,6 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
         if(is.null(mask)) {
             foreach(i, 1:nparts, progress=trace, wssFunction <- function(Xi=splits(X,i),
                     dwssi=splits(dwss,i), clusteri=splits(cluster,i), centers=centers){
-                library(HPdcluster)
 	    		if(class(Xi) == "matrix")
 	    			dwssi <- .Call("calculate_wss", Xi, centers, clusteri, PACKAGE="HPdcluster")
 	    		else
@@ -546,7 +545,6 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
         } else {
             foreach(i, 1:nparts, progress=trace, wssFunction <- function(Xi=splits(X,i), maski=splits(mask,i),
                     dwssi=splits(dwss,i), clusteri=splits(cluster,i), centers=centers){
-                library(HPdcluster)
                 good <- maski > 0
 	    		if(class(Xi) == "matrix")
 	    			dwssi <- .Call("calculate_wss", Xi[good,], centers, clusteri[good,], PACKAGE="HPdcluster")
@@ -616,7 +614,6 @@ hpdapply <- function(newdata, centers, trace=FALSE) {
     Norms <- clone(newdata, ncol=1, sparse=FALSE)
     if(is.null(mask)) {
         foreach(i, 1:npartitions(newdata), progress=trace, function(Xi=splits(newdata,i), Ni=splits(Norms,i)) {
-            library(HPdcluster)
             if(class(Xi) == "matrix")
                 .Call("calculate_norm", Xi, Ni, PACKAGE="HPdcluster")
             else
@@ -625,7 +622,6 @@ hpdapply <- function(newdata, centers, trace=FALSE) {
         })
     } else {
         foreach(i, 1:npartitions(newdata), progress=trace, function(Xi=splits(newdata,i), maski=splits(mask,i), Ni=splits(Norms,i)) {
-            library(HPdcluster)
             good <- maski > 0
             if(class(Xi) == "matrix")
                 Ni[good,] <- .Call("calculate_norm", Xi[good,], Ni[good,], PACKAGE="HPdcluster")
@@ -647,7 +643,6 @@ hpdapply <- function(newdata, centers, trace=FALSE) {
     }
     if(is.null(mask)) { # there is no missed value in newdata
         foreach(i, 1:nparts, progress=trace, function(xi=splits(newdata,i), centers=centers, clusteri=splits(cluster,i), Ni=splits(Norms,i) ){
-          library(HPdcluster)
           cl = integer(nrow(xi))
           nc = integer(nrow(centers))
           if(class(xi) == "matrix")
@@ -661,7 +656,6 @@ hpdapply <- function(newdata, centers, trace=FALSE) {
         })
     } else { # some of the samples should be ignored because of missed values
         foreach(i, 1:nparts, progress=trace, function(xi=splits(newdata,i), centers=centers, clusteri=splits(cluster,i), maski=splits(mask,i), Ni=splits(Norms,i) ){
-          library(HPdcluster)
           good <- maski > 0
           m <- as.integer(sum(maski))
           cl <- integer(m)

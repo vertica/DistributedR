@@ -35,6 +35,12 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
                         trace=FALSE, na_action = c("pass","exclude","fail")) {
   OutDegree <- NULL # reserved for the future
   startTotalTime <- proc.time()
+
+  # loading the so library on all available executors
+  ddyn.load("HPdgraph")
+  # unloading the so library from all available executors at the exit time
+  on.exit(ddyn.unload("HPdgraph"))
+
   ### Validating the inputs
   if (trace) {
     cat("Validating the inputs\n")
@@ -144,7 +150,6 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
         #In parallel perform rowsums
         while(env$index < nparts){
             foreach(j, 1:min(nWorkers, nparts - env$index), progress=trace, sumarray<-function(dg=splits(dgraph,j+env$index), tp=splits(OutDegree,j)){
-                library(HPdgraph)
                 if(class(dg) == "matrix")
                     tp <- tp + rowSums(dg)
                 else
@@ -159,7 +164,6 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
         while(env$index < nparts){
             foreach(j, 1:min(nWorkers, nparts - env$index), progress=trace, 
                     sumarray<-function(dg=splits(dgraph,j+env$index), tp=splits(OutDegree,j), wi=splits(weights,j+env$index)){
-                library(HPdgraph)
                 if(class(dg) == "matrix")
                     tp <- tp + rowSums(dg * wi)
                 else
@@ -205,7 +209,6 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
     if(is.null(weights) && is.null(personalized)) {
         foreach(i, 1:nparts, progress=trace, function(dg=splits(dgraph,i), PR_newi=splits(PR_new,i), prOld=splits(PR),
                    damping=damping, TPs=splits(OutDegree,1)) {
-            library(HPdgraph)
             if(class(dg) == "matrix") {
                 .Call("pagerank_vm", PR_newi, prOld, dg, TPs, damping, NULL, NULL, PACKAGE="HPdgraph")
             } else {
@@ -216,7 +219,6 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
     } else if(!is.null(weights) && is.null(personalized)) {
         foreach(i, 1:nparts, progress=trace, function(dg=splits(dgraph,i), PR_newi=splits(PR_new,i), prOld=splits(PR),
                    damping=damping, TPs=splits(OutDegree,1), wi=splits(weights,i)) {
-            library(HPdgraph)
             if(class(dg) == "matrix") {
                 .Call("pagerank_vm", PR_newi, prOld, dg, TPs, damping, NULL, wi, PACKAGE="HPdgraph")
             } else {
@@ -227,7 +229,6 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
     } else if(is.null(weights) && !is.null(personalized)) {
         foreach(i, 1:nparts, progress=trace, function(dg=splits(dgraph,i), PR_newi=splits(PR_new,i), prOld=splits(PR),
                    damping=damping, TPs=splits(OutDegree,1), peri=splits(personalized,i)) {
-            library(HPdgraph)
             if(class(dg) == "matrix") {
                 .Call("pagerank_vm", PR_newi, prOld, dg, TPs, damping, peri, NULL, PACKAGE="HPdgraph")
             } else {
@@ -238,7 +239,6 @@ hpdpagerank <- function(dgraph, niter = 1000, eps = 0.001, damping=0.85, persona
     } else {
         foreach(i, 1:nparts, progress=trace, function(dg=splits(dgraph,i), PR_newi=splits(PR_new,i), prOld=splits(PR),
                    damping=damping, TPs=splits(OutDegree,1), wi=splits(weights,i), peri=splits(personalized,i)) {
-            library(HPdgraph)
             if(class(dg) == "matrix") {
                 .Call("pagerank_vm", PR_newi, prOld, dg, TPs, damping, peri, wi, PACKAGE="HPdgraph")
             } else {
