@@ -15,7 +15,7 @@ PRESTO_COMMON_OBJS = $(PRESTO_COMMON_SRC:.cpp=.o)
 all: $(PRESTO_COMMON_OBJS) ../third_party/install/lib/libR-common.a
 
 # Common objects
-%.o: %.cpp
+%.o: %.cpp $(PRESTO_COMMON_HEADERS)
 	g++ -c $< $(CXXFLAGS) $(R_CXXFLAGS) -o $@
 
 # Common library
