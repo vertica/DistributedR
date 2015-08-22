@@ -121,7 +121,7 @@
     Stratify <- length(sampsize) > 1
     if ((!Stratify) && sampsize > nSamples) stop("sampsize too large")
 
-    if(is.dframe(x)) { # when x is dframe and y formula
+    if(is.dframe(x)) { # when x is dframe
         if (missing(formula))
             formula <- ~.
         if (!is.null(y))
