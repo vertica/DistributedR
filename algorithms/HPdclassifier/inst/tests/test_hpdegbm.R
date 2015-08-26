@@ -9,6 +9,7 @@
 ######################### generate testing scenarios for classification ######################### 
 library(gbm)
 library(caTools)
+library(testthat)
 library(HPdclassifier)
 
 
@@ -44,7 +45,7 @@ colnames(valid1.iris) <- c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal
 #################################################################################################
 #################################################################################################
 ######### generate small and medium-size simulated training and testing data by R matrix ########
-n <- 20000
+n <- 4000
 p <- 10
 X_train <- matrix(rnorm(n*p), nrow=n)
 y <- rep(0, n)
@@ -66,7 +67,7 @@ Y_train <- y  ### is.vector: truth, numeric
 npartition <- 4 
 
 ### generate training data by distributedR
-nTrain <- 100000 
+nTrain <- 10000 
 p <- 10
 
 dfX <- dframe(c(nTrain,p), blocks=c(ceiling(nTrain/npartition),p))  # horizontal partition
@@ -122,11 +123,7 @@ foreach(i, 1:nExecutor_test, function(X_test=splits(dfX_test,i),Y_test=splits(da
 
 #################################################################################################
 ### test distributed sampling: hpdsampling
-Ns <- 1*ceiling((nTrain/npartition)/npartition)
-npartition <- npartitions(dfX)
-
-#hpdsampling <- function(dfX,daY, Ns, npartition)
-sampledXY <- hpdsampling(dfX,daY, Ns, npartition)
+sampledXY <- hpdsampling(dfX,daY, nClass=2, sampleThresh=200)
 
 dfRX <- sampledXY[[1]]
 daRY <- sampledXY[[2]]
@@ -153,7 +150,7 @@ test_that("Test classification accuracy: AdaBoost", {
        n.trees = 1000, 
        interaction.depth = 3, 
        n.minobsinnode = 10,
-       shrinkage = 0.50,     #[0.001, 1]
+       shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
        offset = NULL, 
        misc = NULL, 
@@ -171,8 +168,7 @@ test_that("Test classification accuracy: AdaBoost", {
 
 
     newdata1 <- X_test        # test centralized small simulated data
-    Predictions1 <- predict.hpdegbm(finalModel1, newdata1, appType="binary-classification", type="link", trace = FALSE)
-    #print(confusion(Predictions1 > 0, y_test > 0))   # Y_test: centralized small data
+    Predictions1 <- predict.hpdegbm(finalModel1, newdata1, type="link", trace = FALSE)
     result1 <- confusion(Predictions1 > 0, y_test > 0)
 
     PredictionsGBM1_1 <- predict.gbm(finalModel1[[1]][[1]], newdata1, n.trees=finalModel1[[2]][1],type="link", trace = FALSE)
@@ -221,7 +217,7 @@ test_that("Test classification accuracy: AdaBoost", {
        n.trees = 1000, 
        interaction.depth = 3, 
        n.minobsinnode = 10,
-       shrinkage = 0.50,     #[0.001, 1]
+       shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
        offset = NULL, 
        misc = NULL, 
@@ -239,8 +235,8 @@ test_that("Test classification accuracy: AdaBoost", {
 
 
     newdata2 <- dfX_test     # test distributed big data
-    Predictions2 <- predict.hpdegbm(finalModel2, newdata2, appType="binary-classification", type="link", trace = FALSE)
-    print(confusion(Predictions2 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
+    Predictions2 <- predict.hpdegbm(finalModel2, newdata2, type="link", trace = FALSE)
+    print(confusion(Predictions2 > 0, getpartition(daY_test) > 0)) 
     result2 <- confusion(Predictions2 > 0, getpartition(daY_test) > 0)
 
     newdata21 <- getpartition(newdata2)
@@ -274,12 +270,12 @@ test_that("Test classification accuracy: AdaBoost", {
 # testAdaBoost3: AdaBoost distribution, distributed training data, distributed testing data
 #dl_GBM_model <- dlist(npartition)
 nExecutor <- npartition
-#dbest.iter <- darray(c(npartition,1), c(1,1))  
+ 
 
 context("Checking the classification accuracy: AdaBoost")
 test_that("Test classification accuracy: AdaBoost", {
   finalModel3 <- hpdegbm(
-       dfRX,daRY,  # dfRX,daRY: distributed big data, ### X_train, Y_train:centralized small data ### ### X_train1,Y_train1: iris data
+       dfRX,daRY, #dfX, daY, # # dfRX,daRY: distributed big data, ### X_train, Y_train:centralized small data ### ### X_train1,Y_train1: iris data
        nExecutor,                                         
        #distribution = "bernoulli",
        distribution = "adaboost",
@@ -288,7 +284,7 @@ test_that("Test classification accuracy: AdaBoost", {
        n.trees = 1000, 
        interaction.depth = 3, 
        n.minobsinnode = 10,
-       shrinkage = 0.50,     #[0.001, 1]
+       shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
        offset = NULL, 
        misc = NULL, 
@@ -306,7 +302,7 @@ test_that("Test classification accuracy: AdaBoost", {
 
 
     newdata3 <- dfX_test     # test distributed big data
-    Predictions3 <- predict.hpdegbm(finalModel3, newdata3, appType="binary-classification", type="link", trace = FALSE)
+    Predictions3 <- predict.hpdegbm(finalModel3, newdata3, type="link", trace = FALSE)
     print(confusion(Predictions3 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
     result3 <- confusion(Predictions3 > 0, getpartition(daY_test) > 0)
 
@@ -357,7 +353,7 @@ test_that("Test classification accuracy: bernoulli", {
        n.trees = 1000, 
        interaction.depth = 3, 
        n.minobsinnode = 10,
-       shrinkage = 0.50,     #[0.001, 1]
+       shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
        offset = NULL, 
        misc = NULL, 
@@ -375,7 +371,7 @@ test_that("Test classification accuracy: bernoulli", {
 
 
     newdata4 <- X_test        # test centralized small simulated data
-    Predictions4 <- predict.hpdegbm(finalModel4, newdata4, appType="binary-classification", type="link", trace = FALSE)
+    Predictions4 <- predict.hpdegbm(finalModel4, newdata4, type="link", trace = FALSE)
     print(confusion(Predictions4 > 0, y_test > 0))   # Y_test: centralized small data
     result4 <- confusion(Predictions4 > 0, y_test > 0)
 
@@ -424,7 +420,7 @@ test_that("Test classification accuracy: bernoulli", {
        n.trees = 1000, 
        interaction.depth = 3, 
        n.minobsinnode = 10,
-       shrinkage = 0.50,     #[0.001, 1]
+       shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
        offset = NULL, 
        misc = NULL, 
@@ -442,7 +438,7 @@ test_that("Test classification accuracy: bernoulli", {
 
 
     newdata5 <- dfX_test     # test distributed big data
-    Predictions5 <- predict.hpdegbm(finalModel5, newdata5, appType="binary-classification", type="link", trace = FALSE)
+    Predictions5 <- predict.hpdegbm(finalModel5, newdata5, type="link", trace = FALSE)
     print(confusion(Predictions5 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
     result5 <- confusion(Predictions5 > 0, getpartition(daY_test) > 0)
 
@@ -491,7 +487,7 @@ test_that("Test classification accuracy: bernoulli", {
        n.trees = 1000, 
        interaction.depth = 3, 
        n.minobsinnode = 10,
-       shrinkage = 0.50,     #[0.001, 1]
+       shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
        offset = NULL, 
        misc = NULL, 
@@ -509,7 +505,7 @@ test_that("Test classification accuracy: bernoulli", {
 
 
     newdata6 <- dfX_test     # test distributed big data
-    Predictions6 <- predict.hpdegbm(finalModel6, newdata6, appType="binary-classification", type="link", trace = FALSE)
+    Predictions6 <- predict.hpdegbm(finalModel6, newdata6, type="link", trace = FALSE)
     print(confusion(Predictions6 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
     result6 <- confusion(Predictions6 > 0, getpartition(daY_test) > 0)
 
@@ -574,7 +570,7 @@ test_that("Test classification accuracy: multinomial", {
 
 
     newdata7 <- valid1.iris  # test small real data 
-    Predictions7 <- predict.hpdegbm(finalModel7, newdata7, appType="multi-classification", type="response", trace = FALSE)
+    Predictions7 <- predict.hpdegbm(finalModel7, newdata7, type="response", trace = FALSE)
     print(Predictions7)
     as.factor(valid.iris$Species)
     print(table (Predictions7, as.numeric(valid.iris$Species)))
@@ -675,12 +671,7 @@ nExecutor <- npartition
 # testGaussian1: gaussian distribution for regression, distributed training data, distributed testing data
 ########################################################################################################################
 ### test distributed sampling: hpdsampling
-nTrain <- nrow(dfX8)
-Ns <- ceiling((nTrain/npartition)/npartition)
-npartition <- npartitions(dfX8)
-
-#hpdsampling <- function(dfX,daY, Ns, npartition)
-sampledXY8 <- hpdsampling(dfX8,daY8, Ns, npartition)
+sampledXY8 <- hpdsampling(dfX8,daY8, nClass=2, sampleThresh=200)
 
 dfRX8 <- sampledXY8[[1]]
 daRY8 <- sampledXY8[[2]]
@@ -738,7 +729,7 @@ test_that("Test regression accuracy: gaussian", {
     data2 <- data.frame(Y,X1=X1,X2=X2,X3=X3,X4=X4,X5=X5,X6=X6)
  
     newdata8 <- data2
-    Predictions8 <- predict.hpdegbm(finalModel8, newdata8, appType="regression", type="link", trace = FALSE)
+    Predictions8 <- predict.hpdegbm(finalModel8, newdata8, type="link", trace = FALSE)
     print (sum((data2$Y - Predictions8)^2))
     result8 <- sum((data2$Y - Predictions8)^2)
 

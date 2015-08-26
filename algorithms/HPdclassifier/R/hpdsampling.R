@@ -27,12 +27,12 @@
 ####################################################################################
 #                  Distributed sampling
 ####################################################################################
-hpdsampling <- function(dfX,daY, Ns, npartition)
+hpdsampling <- function(dfX,daY, nClass, sampleThresh=100)
 {
   #dfX: predictor variables in dframe/darray
-  #daY: vector of outcomes in darray (dvector/dfactor is not supported yet in 2015-7-01
-  #npartition: now the sampled data have the same npartition as input. In the future, the input and output may have different partitions
-  #Ns : size of sub-chunks. #Ns <- 1*ceiling((nTrain/npartition)/npartition) # size of sampled sub-chunk
+  #daY: vector of outcomes in darray (dvector/dfactor is not supported yet in 2015-7-01)
+  #nClass: number of classes
+  # sampleThresh = 200: sample size planning factor
   #function output: dfRX, daRY                 
 
   ####################################################################################
@@ -43,17 +43,12 @@ hpdsampling <- function(dfX,daY, Ns, npartition)
    if(missing(daY))
 	stop("'daY' is a required argument")
 
-  # if(nrow(dfX) != nrow(daY))
-  #		stop("'daY' must have same number of rows as 'dfX'")
+   if(nrow(dfX) != nrow(daY))
+  		stop("'daY' must have same number of rows as 'dfX'")
 
    if(npartitions(dfX) != npartitions(daY))
 		stop("'daY' must have same number of partitions as 'dfX'")
 
-   if(missing(Ns))
-	stop("'Ns' is a required argument")
-
-   if(missing(npartition))
-	stop("'npartition' is a required argument")
 
    if(!is.dframe(dfX) && !is.darray(dfX))
        stop("'dfX' must be a dframe or darray")
@@ -62,21 +57,35 @@ hpdsampling <- function(dfX,daY, Ns, npartition)
    if(!is.dframe(daY) && !is.darray(daY))
        stop("'daY' must be a dframe or darray")
 
-    if (npartition <= 0)
-       stop("'npartition' must be a positive number")
-
-    if (Ns <= 0)
-       stop("'Ns' must be a positive number")
+    if (sampleThresh < 100)
+       stop("'sampleThresh' must be larger than 100")
 
 
 
-  ### distributed sampling of X_train, Y_train
-  p <- ncol(dfX) # p: number of variables
-  dfSX <- dframe(c(Ns*npartition,p), blocks=c(Ns,p))  
-  daSY <- darray(c(Ns*npartition,1), blocks=c(Ns,1))
+   # sample size planning
+   # Ns : size of sub-chunks. #Ns <- 1*ceiling((nTrain/npartition)/npartition) # size of sampled sub-chunk
+   npartition <- npartitions(dfX)
+   nTrain   <- nrow(dfX)
+   p <- ncol(dfX) # p: number of variables
+   
+   sampleRatio <- (nTrain/(npartition * p * nClass)) / sampleThresh 
+   if (sampleRatio > 1) 
+      Ns <- ceiling((nTrain/npartition)/npartition) 
+   else 
+      Ns <- ceiling((1/sampleRatio) * (nTrain/npartition)/npartition) 
 
-  dfRX <- dframe(c(Ns*npartition*npartition,p), blocks=c(Ns*npartition,p))  
-  daRY <- darray(c(Ns*npartition*npartition,1), blocks=c(Ns*npartition,1))
+
+   ### distributed sampling of X_train, Y_train
+   dfSX <- dframe(c(Ns*npartition,p), blocks=c(Ns,p))  
+   dfRX <- dframe(c(Ns*npartition*npartition,p), blocks=c(Ns*npartition,p)) 
+
+   if (is.darray(daY)) {
+        daSY <- darray(c(Ns*npartition,1), blocks=c(Ns,1)) 
+        daRY <- darray(c(Ns*npartition*npartition,1), blocks=c(Ns*npartition,1))
+   } else {
+        daSY <- dframe(c(Ns*npartition,1), blocks=c(Ns,1)) 
+        daRY <- dframe(c(Ns*npartition*npartition,1), blocks=c(Ns*npartition,1))
+   }
 
   for ( k in 1: npartition) { # npartition
       # distributed sampling: The input and output have the same npartition 
@@ -94,18 +103,25 @@ hpdsampling <- function(dfX,daY, Ns, npartition)
       ASY <- getpartition(daSY)
 
       # move assembled sampled chunk to one partition of final training data
+      # For regression and binary classification, the response is a numeric vector
+      # For multi-class classification, the response is a factor vector
       foreach(l,k:k, function(RX_train=splits(dfRX,l),RY_train=splits(daRY,l), ASX=ASX, ASY=ASY ) {
           RX_train <- ASX
-          RY_train <- as.array(ASY)
+
+          if (is.numeric(RY_train)) {
+             RY_train <- as.array(ASY)
+          } else {
+              RY_train <- as.data.frame(ASY)
+          }
 
           update(RX_train)
           update(RY_train)
        })
   } # end of for
   
-  ####return one dframe and one darray from a defined R function
+
   sampledXY <- list(dfRX, daRY)
-  return(sampledXY) # dframe or darray
+  return(sampledXY) 
 
 } # end of distributed sampling
 

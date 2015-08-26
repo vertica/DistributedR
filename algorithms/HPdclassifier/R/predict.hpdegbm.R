@@ -45,12 +45,11 @@
 ####################################################################################
 ###                     Data-distributed and model-centralized prediction function of distributed GBM
 ####################################################################################
-predict.hpdegbm <- function(object, newdata, appType="binary-classification", type="link", trace = FALSE)
+predict.hpdegbm <- function(object, newdata, type="link", trace = FALSE)
 {
   # model: assembled GBM model
   # best.iter: best iteration of sub-models
   # newdata: testing data in dframe/darray
-  # appType: regression, binary-classification, multi-classification
   # type="link" or "response"
 
   ############### data-distributed and model-centralized  prediction #################
@@ -61,6 +60,11 @@ predict.hpdegbm <- function(object, newdata, appType="binary-classification", ty
   # extract GBM models and corresponding best iterations (n.trees)
   model <- object[[1]]
   best.iter <- object[[2]]
+
+
+  # extract distribution from trained model
+  firstModelDistr <- object[[1]][[1]]$distribution
+  distributionGBM <- firstModelDistr[[1]] 
 
   # check function arguments
   if(missing(object))
@@ -82,11 +86,11 @@ predict.hpdegbm <- function(object, newdata, appType="binary-classification", ty
 
 
      # distributed prediction
-     foreach(i, 1:nExecutor_test, function(GBM_model=model, best.iter=best.iter, predi=splits(daPredict,i), data2=splits(newdata,i),appType=appType, type=type) { 
+     foreach(i, 1:nExecutor_test, function(GBM_model=model, best.iter=best.iter, predi=splits(daPredict,i), data2=splits(newdata,i), distributionGBM=distributionGBM, type=type) { 
         library(gbm)
 
         # Gaussian distribution for regression
-        if (appType == "regression") {
+        if (distributionGBM == "gaussian") {
            # Prediction by the first sub-model: AdaBoost, Bernoulli distribution for binary classification
            GBM_modeli <- GBM_model[[1]]
            best.iteri <- best.iter[1,1]
@@ -103,7 +107,7 @@ predict.hpdegbm <- function(object, newdata, appType="binary-classification", ty
          }
 
          # bernoulli or AdaBoost distribution for binary classification
-         if (appType == "binary-classification") {
+         if ((distributionGBM == "bernoulli") | (distributionGBM == "adaboost") ) {
            # Prediction by the first sub-model: AdaBoost, Bernoulli distribution for binary classification
            GBM_modeli <- GBM_model[[1]]
            best.iteri <- best.iter[1,1]
@@ -121,7 +125,7 @@ predict.hpdegbm <- function(object, newdata, appType="binary-classification", ty
 
 
          # multinomial distribution for multi-class classification
-         if (appType == "multi-classification") {
+         if (distributionGBM == "multinomial") {
            # Prediction by the first sub-model
            # X: dframe/darray; Y: dframe (factor vector originally)/darray
            GBM_modeli <- GBM_model[[1]]
@@ -151,7 +155,7 @@ predict.hpdegbm <- function(object, newdata, appType="binary-classification", ty
      library(gbm)
 
      # Gaussian distribution for regression
-     if (appType == "regression") {
+     if (distributionGBM == "gaussian") {
         # Prediction by the first sub-model: gaussian distribution for regression
         GBM_modeli <- GBM_model[[1]]
         best.iteri <- best.iter[1,1]
@@ -168,7 +172,7 @@ predict.hpdegbm <- function(object, newdata, appType="binary-classification", ty
       }
 
      # bernoulli or AdaBoost distribution for binary classification
-     if (appType == "binary-classification") {
+    if ((distributionGBM == "bernoulli") | (distributionGBM == "adaboost")) {
         # Prediction by the first sub-model: AdaBoost, Bernoulli distribution for binary classification
         GBM_modeli <- GBM_model[[1]]
         best.iteri <- best.iter[1,1]
@@ -186,7 +190,7 @@ predict.hpdegbm <- function(object, newdata, appType="binary-classification", ty
 
 
      # multinomial distribution for multi-class classification
-     if (appType == "multi-classification") {
+     if (distributionGBM == "multinomial") {
         # Prediction by the first sub-model
         # X: dframe/darray; Y: dframe (factor vector originally)/darray
         GBM_modeli <- GBM_model[[1]]

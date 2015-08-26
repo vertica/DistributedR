@@ -99,8 +99,13 @@ hpdegbm <- function(
    if(missing(Y_train))
 	stop("'Y_train' is a required argument")
 
-   #if(nrow(X_train) != nrow(as.matrix(Y_train)))
-   #		stop("'Y_train' must have same number of rows as 'X_train'")
+   nSamples <- nrow(X_train)
+   if (nSamples == 0) stop("X_train has 0 rows")
+
+   if (is.vector(Y_train)) {
+      if(nrow(X_train) != length(Y_train))
+   		stop("'Y_train' must have same number of rows as 'X_train'")
+   }
 
    if(!is.dframe(X_train) & !is.data.frame(X_train) & !is.darray(X_train) & !is.matrix(X_train))
        stop("'X_train' must be a dframe or data.frame or darray or matrix")
@@ -157,13 +162,14 @@ hpdegbm <- function(
       # system parameters are transfered into foreach
       foreach(i, 1:nExecutor, function(dGBM_modeli=splits(dl_GBM_model,i), best.iter=splits(dbest.iter,i), x=X_train,y=Y_train, 
                   n.trees=n.trees, distribution=distribution, interaction.depth=interaction.depth, n.minobsinnode=n.minobsinnode, 
-                  shrinkage=shrinkage, bag.fraction=bag.fraction) {
+                  shrinkage=shrinkage, bag.fraction=bag.fraction, .tryCatchWE=.tryCatchWE) {
       library(gbm)
 
       if (distribution=="multinomial") {
          y <- unlist(y) #  convert it back to "factor" for multinomial distribution
       }
 
+      # example for tryCatchWE: oli <- .tryCatchWE( do.call("randomForest", inputD) )
       # apply gbm.fit for GBM modeling: local GBM model
       dGBM_model <- gbm.fit(x, y,  
          offset = NULL, 
@@ -191,8 +197,7 @@ hpdegbm <- function(
               overlay = FALSE, 
               method="OOB")
 
-
-       # gbm.more and gbm.perf have bugs for multinomial distribution 
+       if (best.iter0 <50) best.iter0 <- 50
        best.iter <- as.matrix(best.iter0)
 
 
@@ -210,7 +215,7 @@ hpdegbm <- function(
      # nExecutor <- npartition_train # already through random sampling
      foreach(i, 1:nExecutor, function(dGBM_modeli=splits(dl_GBM_model,i), best.iter=splits(dbest.iter,i), x=splits(X_train,i%%npartition_train+1),y=splits(Y_train,i%%npartition_train+1),
                   n.trees=n.trees, distribution=distribution, interaction.depth=interaction.depth, n.minobsinnode=n.minobsinnode, 
-                  shrinkage=shrinkage, bag.fraction=bag.fraction) {
+                  shrinkage=shrinkage, bag.fraction=bag.fraction, .tryCatchWE=.tryCatchWE) {
          library(gbm)
 
          if (distribution=="multinomial") {
@@ -274,8 +279,25 @@ hpdegbm <- function(
 } # end of hpdegbm for model training
 
 
-
-
+##' We want to catch *and* save both errors and warnings, and in the case of
+##' a warning, also keep the computed result.
+##'
+##' @title tryCatch both warnings and errors
+##' @param expr
+##' @return a list with 'value' and 'warnings', where 
+##'  'value' may be an error caught.
+##' @author Modified version of a piece of code written by Martin Maechler
+.tryCatchWE <- function(expr)
+{
+    list_of_Warnings <- list()
+    w.handler <- function(w){ # warning handler
+        list_of_Warnings[[length(list_of_Warnings)+1]] <<- w
+        invokeRestart("muffleWarning")
+    }
+    list(withCallingHandlers(tryCatch(expr, error = function(e) e),
+                                     warning = w.handler),
+         warnings = list_of_Warnings)
+}
 
 
 
