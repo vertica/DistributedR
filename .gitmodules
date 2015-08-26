@@ -1,4 +1,0 @@
-[submodule "algorithms/r-hdfsconnector"]
-	path = algorithms/r-hdfsconnector
-	url = https://github.com/vertica/r-hdfsconnector.git
-	branch = master
