@@ -46,4 +46,11 @@ case $key in
 esac
 done
 
-$R_WORKER_BINARY $org_arg
+# RInside needs to know about R_HOME. Usually his is not a problem as
+# RInside gets compiled in the local machine and R_HOME gets the right value.
+# However we're compiling RInside in the build machine and linking it statically
+# to R-executor-bin. Due to this we have to define the right R_HOME environment 
+# variable here. Otherwise the executors crash when they start.
+R_HOME=$(R --quiet --vanilla -e "R.home(component = 'home')" | sed -e "1d"|cut -c 6- | sed 's/.$//' | sed '/^$/d')
+R_HOME=$R_HOME $R_WORKER_BINARY $org_arg
+

@@ -45,12 +45,16 @@ You can also get a Virtual Machine with everything installed [here](http://www.v
         R> install.packages(c('Rcpp','RInside','XML','randomForest','data.table'))
 
 4. Compile and install Distributed R:
+    
+        $ R CMD INSTALL platform/executor
+        $ R CMD INSTALL platform/master
 
-        $ cd platform/
-        $ R CMD INSTALL executor
-        $ R CMD INSTALL master
+5. Or directly from the R console:
+        
+        R> devtools::install_github('vertica/DistributedR',subdir='platform/executor')
+        R> devtools::install_github('vertica/DistributedR',subdir='platform/master')
 
-5. Open R and run an example:
+6. Open R and run an example:
 
         library(distributedR)
         distributedR_start()  # start DR
