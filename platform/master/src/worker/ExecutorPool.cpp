@@ -735,7 +735,7 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
 
 
 void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid) {
-  LOG_DEBUG("PERSIST Task                   - Waiting for the Executor Id %d to persist split %s", executor, split_name.c_str());
+  LOG_DEBUG("PERSIST TaskID %18zu - Waiting for the Executor Id %d to persist Split %s", taskid, executor, split_name.c_str());
 
   unique_lock<mutex> lock(executors[executor].executor_mutex);
   while(executors[executor].ready==false) { executors[executor].sync.wait(lock); }
@@ -745,7 +745,7 @@ void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid
   fprintf(executors[executor].send, "%d\n", PERSIST); 
   fprintf(executors[executor].send, "%s\n", split_name.c_str());
   fflush(executors[executor].send);
-  LOG_INFO("PERSIST Task                      - Split %s sent to Executor Id %d for persist", split_name.c_str(), executor);
+  LOG_INFO("PERSIST TaskID %18zu - Split %s sent to Executor Id %d for persist", taskid, split_name.c_str(), executor);
 
   char task_msg[EXCEPTION_MSG_SIZE];
   while (true) {   // waiting for a result from executors 
@@ -772,7 +772,7 @@ void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid
           msg << "TASK_EXCEPTION : Persist task execution failed at Executor " << executor << " with message: " << task_msg;
           LOG_ERROR(msg.str());
        } else
-         LOG_DEBUG("PERSIST Task                      - Split %s persisted successfully", split_name.c_str());
+         LOG_DEBUG("PERSIST TaskID %18zu - Split %s persisted successfully", taskid, split_name.c_str());
        break;
     }
   }

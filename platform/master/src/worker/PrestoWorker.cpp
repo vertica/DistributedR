@@ -493,11 +493,11 @@ void PrestoWorker::clear(ClearRequest req) {
 
 void PrestoWorker::prepare_persist(const std::string& name, int executor, uint64_t taskid) {
 
-  LOG_DEBUG("prepare_persist: Received persist task(%s, %d) for main Task %zu", name.c_str(), executor, taskid);
+  LOG_DEBUG("TaskID %zu - Preparing PERSIST task for Split %s from Executor ID %d", taskid, name.c_str(), executor);
 
   PersistRequest persist_req;
   persist_req.set_id(000);
-  persist_req.set_uid(000);
+  persist_req.set_uid(taskid);
   persist_req.set_split_name(name);
   persist_req.set_executor(executor);
   persist_req.set_parenttaskid(taskid);
@@ -906,7 +906,7 @@ PrestoWorker::~PrestoWorker() {
       for (boost::unordered_set<string>::iterator i = shmem_arrays_.begin();
         i != shmem_arrays_.end(); i++) {
         if (i->c_str() != NULL) {
-          LOG_INFO("Removing Shared memory object: %s", i->c_str());
+          //LOG_INFO("Removing Shared memory object: %s", i->c_str());
           SharedMemoryObject::remove(i->c_str());
         }
       }
@@ -1062,7 +1062,7 @@ void PrestoWorker::HandleRequests(int type) {
           break;
         case WorkerRequest::NEWTRANSFER:
           {
-            LOG_DEBUG("New NEWTRANSFER Task           - Received from Worker %s at Port %d", worker_req.fetch().location().name().c_str(), worker_req.fetch().location().presto_port());
+            LOG_DEBUG("New NEWTRANSFER Task %10zu - Received from Worker %s at Port %d", worker_req.fetch().uid(), worker_req.fetch().location().name().c_str(), worker_req.fetch().location().presto_port());
             string store;
             if (worker_req.fetch().has_store()) {
               store = worker_req.fetch().store();
@@ -1090,7 +1090,7 @@ void PrestoWorker::HandleRequests(int type) {
           break;
         case WorkerRequest::PERSIST:
           {
-            LOG_INFO("New PERSIST Task - Received from Worker");
+            LOG_DEBUG("New PERSIST TaskID %14zu - Received from Worker for Split %s", worker_req.persist().uid(), worker_req.persist().split_name().c_str());
             executorpool_->persist(worker_req.persist().split_name(),
                                    worker_req.persist().executor(),
                                    worker_req.persist().parenttaskid());
@@ -1123,9 +1123,10 @@ void PrestoWorker::HandleRequests(int type) {
                 NewArg>(worker_req.createcomposite().cargs().begin(),
                        worker_req.createcomposite().cargs_size(), &cc_args);
 
-              executorscheduler_->ValidatePartitions(cc_args, -1, taskid);
-              LOG_INFO("CREATECOMPOSITE TaskID %10zu - All input splits validated", taskid);
+              if(cc_args.size() > 0)
+                executorscheduler_->ValidatePartitions(cc_args, -1, taskid);
 
+              LOG_INFO("CREATECOMPOSITE TaskID %10zu - All input splits validated", taskid);
               createcomposite(worker_req.createcomposite());
             }
           }
@@ -1199,10 +1200,11 @@ void PrestoWorker::HandleRequests(int type) {
               int64_t executor_id = executorscheduler_->AddParentTask(new_args, parenttaskid, taskid);
               LOG_DEBUG("EXECUTE TaskID %18zu - Assigned to Executor Id %d. Validating input splits.", taskid, executor_id);
 
-              executorscheduler_->ValidatePartitions(new_args, executor_id, taskid);
-              //LOG_DEBUG("EXECUTE TaskID %18zu - Input Arguments validated.", taskid);
-              executorscheduler_->ValidatePartitions(composite_args, executor_id, taskid);
-              //LOG_DEBUG("EXECUTE TaskID %18zu - Composite Arguments validated.", taskid);
+              if(new_args.size() > 0)
+                executorscheduler_->ValidatePartitions(new_args, executor_id, taskid);
+
+              if(composite_args.size() > 0)
+                executorscheduler_->ValidatePartitions(composite_args, executor_id, taskid);
 
               LOG_INFO("EXECUTE TaskID %18zu - All input splits validated. Sending to Executor Id %d for execution", taskid, executor_id);
               executorpool_->execute(func, new_args, raw_args, composite_args,
@@ -1591,7 +1593,7 @@ void PrestoWorker::shutdown() {
       for (boost::unordered_set<string>::iterator i = shmem_arrays_.begin();
         i != shmem_arrays_.end(); i++) {
         if (i->c_str() != NULL) {
-          LOG_DEBUG("Removing shared memory object: %s", i->c_str());
+          //LOG_DEBUG("Removing shared memory object: %s", i->c_str());
           SharedMemoryObject::remove(i->c_str());
         }
       }

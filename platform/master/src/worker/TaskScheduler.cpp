@@ -93,7 +93,7 @@ void TaskScheduler::DeleteSplit(const std::string& splitname) {
     executor_splits.erase(splitname);
     exists = true;
   } else
-    LOG_ERROR("Executor Scheduler: Split %s not found in executors for deletion", splitname.c_str());
+    LOG_ERROR("<Scheduler> Split %s not found in executors for deletion", splitname.c_str());
   metalock.unlock();
 
   if (exists) {
@@ -104,7 +104,7 @@ void TaskScheduler::DeleteSplit(const std::string& splitname) {
        executorpool->clear(splits, *it);
     }
   }
-  LOG_DEBUG("Executor Scheduler: Cleared split %s from executors", splitname.c_str()); 
+  LOG_DEBUG("<Scheduler> Cleared Split %s from executors", splitname.c_str()); 
 }
 
 /**
@@ -120,7 +120,7 @@ int TaskScheduler::GetDeterministicExecutor(int32_t split_id) {
   int exec_idx = 0;
   std::pair<int, int> cluster_info = worker->GetClusterInfo(); 
   if(cluster_info.first == 0) {
-    LOG_ERROR("Executor Scheduler: Error while getting deterministic executor - Number of workers is 0");
+    LOG_ERROR("<Scheduler> Error while getting deterministic executor - Number of workers is 0");
     return 0;
   }
 
@@ -128,7 +128,7 @@ int TaskScheduler::GetDeterministicExecutor(int32_t split_id) {
     int local_split_id = floor(split_id/cluster_info.first);
     exec_idx = local_split_id%cluster_info.second;
   } catch(std::exception &ex) {
-    LOG_ERROR("Executor Scheduler: Error while getting deterministic executor - %s", ex.what());
+    LOG_ERROR("<Scheduler> Error while getting deterministic executor - %s", ex.what());
   }
   return exec_idx;
 }
@@ -165,7 +165,7 @@ int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& task_args, uin
       // Calculate Deterministic Executor for the task
       if(version == 0) {
         target_executor = GetDeterministicExecutor(split_id);
-        LOG_DEBUG("Executor Scheduler: Task %zu - Dobject partition initialization assigned split %s to Executor Id %d", taskid, task_splits[0].c_str(), target_executor);
+        LOG_DEBUG("<Scheduler> TaskID %zu - Dobject partition initialization assigned Split %s to Executor Id %d", taskid, task_splits[0].c_str(), target_executor);
         return target_executor;
       }
     }
@@ -227,9 +227,9 @@ int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& task_args, uin
     // If no Executor assigned yet, choose one in round robin fashion
     if (target_executor == -1) {
        target_executor = executorpool->GetExecutorInRndRobin();
-       LOG_DEBUG("Executor Scheduler: Task %zu - Assigned to Executor Id %d in round robin", taskid, target_executor);
+       LOG_DEBUG("<Scheduler> TaskID %zu - Assigned to Executor Id %d in round robin", taskid, target_executor);
     } else
-       LOG_DEBUG("Executor Scheduler: Task %zu - Assigned to Executor Id %d", taskid, target_executor);
+       LOG_DEBUG("<Scheduler> TaskID %zu - Assigned to Executor Id %d", taskid, target_executor);
 
     metalock.lock();
     executor_stat[target_executor]->exec_load++;
@@ -250,7 +250,7 @@ int64_t TaskScheduler::AddParentTask(const std::vector<NewArg>& task_args, uint6
   unique_lock<mutex> parentlock(parent_mutex);
   if(parent_tasks.find(parenttaskid) != parent_tasks.end()) {
     executor_id = parent_tasks[parenttaskid];
-    LOG_DEBUG("Executor Scheduler: Task %zu - Found parent task %zu. Assigned to Executor Id %d", taskid, parenttaskid, executor_id);
+    LOG_DEBUG("<Scheduler> TaskID %zu - Parent task %zu found. Assigned to Executor Id %d", taskid, parenttaskid, executor_id);
   } else {
     executor_id = GetBestExecutor(task_args, taskid);
     parent_tasks[parenttaskid] = executor_id;
@@ -312,7 +312,7 @@ bool TaskScheduler::IsSplitAvailable(const std::string& split_name, int executor
    } else
      onExec = false;
 
-   LOG_DEBUG("Check Split Availability: %s(executor: %d) -  On Worker(%d), On Executor(%d)", split_name.c_str(), executor_id, onWorker, onExec);
+   LOG_DEBUG("<Scheduler> Split %s(Executor Id: %d) - On Worker(%d), On Executor(%d)", split_name.c_str(), executor_id, onWorker, onExec);
 
    return (onWorker || onExec);
 }
@@ -343,7 +343,7 @@ int64_t TaskScheduler::ExecutorToPersistFrom(const std::string& split_name) {
    int executor_id = -1; 
    unique_lock<recursive_mutex> metalock(metadata_mutex);
    if(executor_splits.find(split_name) == executor_splits.end()) {
-     LOG_ERROR("Executor Scheduler: Split %s does not exist in executors for persist", split_name.c_str());
+     LOG_ERROR("<Scheduler> Split %s does not exist in executors for persist", split_name.c_str());
      return 0;
    }
 
@@ -373,7 +373,7 @@ int64_t TaskScheduler::ExecutorToPersistFrom(const std::string& split_name) {
   *
   **/
 int32_t TaskScheduler::ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid) {
-   int needs_persisted = 0;
+   int needs_persist = 0;
    std::vector<std::string> all_partitions;
 
    for(int i=0; i<task_args.size(); i++) {
@@ -384,13 +384,10 @@ int32_t TaskScheduler::ValidatePartitions(const std::vector<NewArg>& task_args, 
         all_partitions.push_back(task_args[i].arrayname());
    }
 
-   boost::interprocess::interprocess_semaphore sema(0); 
-   unique_lock<recursive_mutex> lock(persist_mutex);
-   sync_persist[taskid] = &sema;
-   lock.unlock();
+   unique_lock<recursive_mutex> persistlock(persist_mutex, defer_lock);
 
+   boost::unordered_set<std::string> processed;
    for(int i=0; i<all_partitions.size(); i++) {
-
       bool launch_persist = false;
       int target_executor = -1;
       unique_lock<recursive_mutex> metalock(metadata_mutex);
@@ -398,34 +395,42 @@ int32_t TaskScheduler::ValidatePartitions(const std::vector<NewArg>& task_args, 
         if (!IsBeingPersisted(all_partitions[i])) {
            launch_persist = true;
            target_executor = ExecutorToPersistFrom(all_partitions[i]);
-           LOG_DEBUG("Executor Scheduler: Task %zu - Split %s will be persisted from Executor Id %d", taskid, all_partitions[i].c_str(), target_executor);
+           LOG_DEBUG("<Scheduler> TaskID %zu - Split %s will be persisted from Executor Id %d", taskid, all_partitions[i].c_str(), target_executor);
         } else {
-          LOG_DEBUG("Executor Scheduler: Task %zu - Split %s is already being persisted. Wait for it to complete", taskid, all_partitions[i].c_str());
+          LOG_DEBUG("<Scheduler> TaskID %zu - Split %s is being persisted", taskid, all_partitions[i].c_str());
         }
 
         // Update metadata and launch persists
-        lock.lock();
-        persist_tasks[all_partitions[i]].insert(taskid);
-        lock.unlock();
-        needs_persisted++;
+        if(processed.count(all_partitions[i]) == 0) {
+          persistlock.lock();
+          if(sync_persist.count(taskid) == 0) {
+            boost::interprocess::interprocess_semaphore sema(0);
+            sync_persist[taskid] = &sema;
+          }
+          persist_tasks[all_partitions[i]].insert(taskid);
+          persistlock.unlock();
+
+          needs_persist++;
+          processed.insert(all_partitions[i]);
+        }
 
         if(launch_persist) worker->prepare_persist(all_partitions[i], target_executor, taskid);
       } else
-        LOG_DEBUG("Executor Scheduler: Task %zu - Split %s doesnt need to be persisted", taskid, all_partitions[i].c_str());
+        LOG_DEBUG("<Scheduler> TaskID %zu - Split %s is available", taskid, all_partitions[i].c_str());
 
       metalock.unlock();
    }
 
-   for(int i=0; i< needs_persisted; i++) {
+   for(int i=0; i< needs_persist; i++) {
      sync_persist[taskid]->wait();
    }
 
-   LOG_DEBUG("Executor Scheduler: Task %zu - Dependent PERSIST tasks(#%d) complete", taskid, needs_persisted);
-   lock.lock();
+   LOG_DEBUG("<Scheduler> TaskID %zu - Dependent PERSIST tasks(#%d) complete", taskid, needs_persist);
+   persistlock.lock();
    sync_persist.erase(taskid);
-   lock.unlock();
+   persistlock.unlock();
 
-   return needs_persisted;
+   return needs_persist;
 }
 
 /**
