@@ -200,7 +200,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	if(do.trace)
 	print("converting to rpart model")
 	timing_info <- Sys.time()
-	model = convertToRpartModel(tree$forest, x_colnames)
+	model = .convertToRpartModel(tree$forest, x_colnames)
 	timing_info <- Sys.time() - timing_info
 	if(do.trace )
 	print(timing_info)
@@ -269,7 +269,7 @@ predict.hpdrpart <- function(model, newdata,do.trace = FALSE)
 	return(predictions)
 }
 
-convertToRpartModel <- function(tree, varnames)
+.convertToRpartModel <- function(tree, varnames)
 {
 	model <- .Call("rpartModel",tree)
 	csplit <- model[[8]]
