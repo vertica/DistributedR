@@ -141,11 +141,11 @@ hpdegbm <- function(
    if (!(n.minobsinnode%%1 == 0)) 
         stop("'n.minobsinnode' must be an integer")
 
-   if ((shrinkage < 0.001) & ((shrinkage > 1)))
+   if ((shrinkage < 0.001) | ((shrinkage > 1)))
         stop("'shrinkage' must be between [0.001,1]")
 
    if ((bag.fraction > 1) | (bag.fraction <= 0)) 
-        stop("'shrinkage' must be (0,1]")
+        stop("'bag.fraction' must be (0,1]")
 
    # if trace=TRUE, print out running time
    if(trace) {
