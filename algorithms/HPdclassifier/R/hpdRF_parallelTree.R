@@ -24,6 +24,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		   nBins=256, completeModel=FALSE, 
 		   reduceModel = FALSE, varImp = FALSE)
 {
+	ddyn.load("HPdclassifier")
 	if(!identical(na.action, na.exclude) &
 		!identical(na.action, na.omit) &
 		!identical(na.action, na.fail))
@@ -522,6 +523,7 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 	else 
 		cutoff = rep(1/length(model$classes),length(model$classes))
 
+	
 	tryCatch({
 	variables <- .parse_formula(model$terms, 
 		  data = newdata, trace = do.trace, na.action = na.action)
@@ -549,19 +551,25 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 }
 
 
-.parse_formula <- function(formula, data, na.action=na.fail, trace = FALSE) 
+.parse_formula <- function(formula, data, na.action=na.fail, weights = NULL, trace = FALSE) 
 {
 
 	timing_info <- Sys.time()
 
 	y <- dframe(npartitions = npartitions(data))
 	x <- dframe(npartitions = npartitions(data))
+	w <- dframe(npartitions = npartitions(data))
 	
 	if(trace)
 	print("processing formula")
 	
+	if(is.null(weights))
+		weights = clone(data,ncol = 1, data = 1)
+
 	terms = dlist(npartitions = npartitions(x))
 	x_colnames = dlist(npartitions = npartitions(x))
+
+
 	foreach(i,1:npartitions(data), function(
 				       data = splits(data,i),
 				       column_names = colnames(data),
@@ -570,9 +578,13 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 				       model_formula = formula,
 				       model_terms = splits(terms,i),
 				       x_colnames = splits(x_colnames,i),
+				       weights = splits(weights,i),
 				       na.action = na.action)
 	{
-  		assign("data", na.action(data), globalenv())
+  		assign("data", na.action(cbind(weights,data)), globalenv())
+		weights = data.frame(as.double(data[,1]))
+		data[,1] = NULL
+		update(weights)
 		colnames(data) <- column_names
 		if(inherits(model_formula, "formula"))
 			model_terms = terms(model_formula, data = data)
@@ -645,7 +657,7 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 	print(timing_info)
 
 
-    return(list(x=x,y=y, terms = terms,
+    return(list(x=x,y=y, w = w, terms = terms,
     		  x_cardinality = x_cardinality, 
 		  y_cardinality = y_cardinality,
 		  y_classes = y_levels$Levels,
