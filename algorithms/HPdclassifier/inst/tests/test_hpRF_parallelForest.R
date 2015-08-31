@@ -9,7 +9,6 @@ nInst <- sum(distributedR_status()$Inst)
 context("Checking the formula interface of hpdRF_parallelForest with data.frame")
 
 test_that("the inputes are validated", {
-    expect_error(hpdRF_parallelForest(Species ~ ., data=iris))
     expect_error(hpdRF_parallelForest(Species ~ ., data=iris, nExecutor = nInst, ntree=-1))
     expect_error(hpdRF_parallelForest(Species ~ ., airquality, nExecutor = nInst))
     expect_error(hpdRF_parallelForest(Ozone ~ ., data=airquality, nExecutor=nInst)) # airquality contains NA
@@ -65,7 +64,6 @@ context("Checking the formula interface of hpdRF_parallelForest with dframe")
     Dairquality <- as.dframe(airquality)
 
 test_that("the inputes are validated", {
-    expect_error(hpdRF_parallelForest(Species ~ ., data=Diris))
     expect_error(hpdRF_parallelForest(Species ~ ., data=Diris, nExecutor = nInst, ntree=-1))
     expect_error(hpdRF_parallelForest(Species ~ ., Dairquality, nExecutor = nInst))
     expect_error(hpdRF_parallelForest(Ozone ~ ., data=Dairquality, nExecutor=nInst))
@@ -122,7 +120,6 @@ x <- cleandata[-1]
 y <- cleandata[1]
 
 test_that("the inputes are validated", {
-    expect_error(hpdRF_parallelForest(x=x, y=y))
     expect_error(hpdRF_parallelForest(x=x, y=y, nExecutor = nInst, ntree=-1))
     expect_error(hpdRF_parallelForest(x=airquality[-1], y=airquality[1], nExecutor = nInst)) # airquality contains NA
     expect_error(hpdRF_parallelForest(x=x, y=y, nExecutor=100, ntree=50))
@@ -185,7 +182,6 @@ X <- as.darray(data.matrix(x))
 Y <- as.darray(data.matrix(y))
 
 test_that("the inputes are validated", {
-    expect_error(hpdRF_parallelForest(x=X, y=Y))
     expect_error(hpdRF_parallelForest(x=X, y=Y, nExecutor = nInst, ntree=-1))
     expect_error(hpdRF_parallelForest(x=X, y=Y, nExecutor=100, ntree=50))
 })

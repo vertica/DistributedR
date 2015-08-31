@@ -112,7 +112,7 @@ checkdims <- function(x, y) {
 setMethod("%*%", signature(x = "numeric", y = "dgCMatrix"),
 	  function(x, y) {
             if (checkdims(x, y)) {
-              return(.Call("spvm", x, y, as.integer(1), PACKAGE="MatrixHelper"))
+              return(.Call("spvm", x, y, as.integer(1)))
             } else {
               stop("arg dimensions do not match")
             }
@@ -121,7 +121,7 @@ setMethod("%*%", signature(x = "numeric", y = "dgCMatrix"),
 setMethod("%*%", signature(x = "matrix", y = "dgCMatrix"),
 	  function(x, y) {
             if (checkdims(x, y)) {
-              return(.Call("spvm", x, y, dim(x)[1], PACKAGE="MatrixHelper"))
+              return(.Call("spvm", x, y, dim(x)[1]))
             } else {
               stop("arg dimensions do not match")
             }
@@ -130,7 +130,7 @@ setMethod("%*%", signature(x = "matrix", y = "dgCMatrix"),
 setMethod("%*%", signature(x = "dgCMatrix", y = "numeric"),
 	  function(x, y) {
             if (checkdims(x, y)) {
-              return(.Call("spmv", x, y, as.integer(1), PACKAGE="MatrixHelper"))
+              return(.Call("spmv", x, y, as.integer(1)))
             } else {
               stop("arg dimensions do not match")
             }
@@ -139,7 +139,7 @@ setMethod("%*%", signature(x = "dgCMatrix", y = "numeric"),
 setMethod("%*%", signature(x = "dgCMatrix", y = "matrix"),
 	  function(x, y) {
             if (checkdims(x, y)) {
-              return(.Call("spmv", x, y, dim(y)[2], PACKAGE="MatrixHelper"))
+              return(.Call("spmv", x, y, dim(y)[2]))
             } else {
               stop("arg dimensions do not match")
             }

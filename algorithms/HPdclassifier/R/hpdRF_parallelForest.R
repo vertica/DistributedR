@@ -28,9 +28,13 @@
 ### formula interface for hpdRF_parallelForest.
 ### code gratefully copied from randomForest.formula (package randomForest_4.6-10).
 ###
-    nExecutor <- round(nExecutor)
-    if(nExecutor <= 0)
-        stop("nExecutor should be a positive integer number")
+    if (missing(nExecutor)) {
+        nExecutor <- sum(distributedR_status()$Inst)
+    } else {
+        nExecutor <- round(nExecutor)
+        if(nExecutor <= 0)
+            stop("nExecutor should be a positive integer number")
+    }
     if (!inherits(formula, "formula"))
         stop("method is only for formula objects")
     m <- match.call(expand.dots = FALSE)
@@ -104,16 +108,20 @@
     m <- match.call(expand.dots = FALSE)
     # validating the inputs
     ntree <- round(ntree)
-    nExecutor <- round(nExecutor)
-    if(nExecutor <= 0 || nExecutor > ntree)
-        stop("nExecutor should be a positive integer number and smaller than 'ntree'")
+    if (missing(nExecutor)) {
+        nExecutor <- sum(distributedR_status()$Inst)
+    } else {
+        nExecutor <- round(nExecutor)
+        if(nExecutor <= 0 || nExecutor > ntree)
+            stop("nExecutor should be a positive integer number and smaller than 'ntree'")
+    }
 
     nSamples <- NROW(x)
     if (nSamples == 0) stop("data (x) has 0 rows")
     Stratify <- length(sampsize) > 1
     if ((!Stratify) && sampsize > nSamples) stop("sampsize too large")
 
-    if(is.dframe(x)) { # when x is dframe and y formula
+    if(is.dframe(x)) { # when x is dframe
         if (missing(formula))
             formula <- ~.
         if (!is.null(y))

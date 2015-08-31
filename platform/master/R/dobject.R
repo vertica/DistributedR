@@ -76,7 +76,7 @@ setMethod("initialize", "dobject",
 
             supported_distributions <- c("roundrobin") #c("roundrobin", "random", "custom")
             distribution_policy <- as.character(tolower(distribution_policy))
-            if(!distribution_policy %in% supported_distributions && distribution_policy!="custom")
+            if(!distribution_policy %in% supported_distributions && distribution_policy!="custom" && distribution_policy!="ddc")
               stop("Invalid distribution policy")
 
             .Object@dimnames = list(NULL,NULL)

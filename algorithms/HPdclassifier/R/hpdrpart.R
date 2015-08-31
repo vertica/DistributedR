@@ -20,8 +20,12 @@
 hpdrpart <- function(formula, data, weights, subset , na.action = na.omit, 
 	 model = FALSE, x = FALSE, y = FALSE, params = NULL, 
 	 control = NULL, cost = NULL, 
-	 completeModel = TRUE, nBins = 256L, do.trace = FALSE)
+	 completeModel = FALSE, nBins = 256L, do.trace = FALSE)
 {
+
+	ddyn.load("HPdclassifier")
+	if(missing(weights))
+		weights = NULL
 
 	if(!identical(na.action, na.exclude) &
 		!identical(na.action, na.omit) &
@@ -44,10 +48,24 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 		stop("'data' is a required argument")
 	if(!is.dframe(data) & !is.data.frame(data))
 		stop("'data' must be a dframe or data.frame")
+	if(is.dframe(data) & !is.dframe(weights) & !is.null(weights))
+		stop("'weights' must be same type as data")
+	if(is.data.frame(data) & !is.data.frame(weights) & !is.null(weights))
+		stop("'weights' must be same type as data")
 	if(is.data.frame(data))
 		data = as.dframe(data)
+	if(is.data.frame(weights))
+		weights = as.dframe(weights)
 	if(attr(data,"npartitions")[2] > 1)
 		stop("'data' must be partitioned rowise")
+
+	if(!is.null(weights))
+	{
+		if(nrow(weights) != nrow(data))
+			stop("'weights' must have same number of rows as data") 
+		if(partitionsize(weights)[,1] != parititionsize(data)[,1])
+			stop("'weights' must be partitioned similarly to data")
+	}
 
 	nBins = as.integer(nBins)
 	if(nBins <= 0)
@@ -62,9 +80,9 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	   stop(paste("unable to apply formula to 'data'.",e))
 	})
 
-
+	
 	tryCatch({
-	variables <- .parse_formula(formula, data, 
+	variables <- .parse_formula(formula, data, weights = weights, 
 		  na.action = na.action, trace = do.trace)
 	},
 	error = function(cond){
@@ -79,20 +97,13 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	true_responses = variables$true_responses
 	xlevels = variables$x_classes
 	x_colnames = variables$x_colnames
+	weights = variables$weights
 	if(length(classes) > 0)
 		classes = classes[[1]]
 	else
 		classes = NULL
 
-	if(missing(weights))
-	{
-		weights = clone(observations, ncol = 1, data = 1)
-	}
-	if(!is.dframe(weights))
-	{
-		weights = as.dframe(weights)
-	}
-	
+
 
 
 	if(!is.na(response_cardinality))
@@ -189,7 +200,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	if(do.trace)
 	print("converting to rpart model")
 	timing_info <- Sys.time()
-	model = convertToRpartModel(tree$forest, x_colnames)
+	model = .convertToRpartModel(tree$forest, x_colnames)
 	timing_info <- Sys.time() - timing_info
 	if(do.trace )
 	print(timing_info)
@@ -212,15 +223,17 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	if(is.data.frame(data))
 		responses = getpartition(responses)
 
-	if(do.trace)
-	print("calculating variable importance")
-	timing_info <- Sys.time()
-	model$variable.importance <- 
-		varImportance(model,data,responses)
-	timing_info <- Sys.time() - timing_info
-	if(do.trace )
-	print(timing_info)
-
+	if(completeModel)
+	{
+		if(do.trace)
+		print("calculating variable importance")
+		timing_info <- Sys.time()
+		model$variable.importance <- 
+			varImportance(model,data,responses)
+		timing_info <- Sys.time() - timing_info
+		if(do.trace )
+		print(timing_info)
+	}
 	return(model)
 }
 
@@ -256,7 +269,7 @@ predict.hpdrpart <- function(model, newdata,do.trace = FALSE)
 	return(predictions)
 }
 
-convertToRpartModel <- function(tree, varnames)
+.convertToRpartModel <- function(tree, varnames)
 {
 	model <- .Call("rpartModel",tree)
 	csplit <- model[[8]]
@@ -275,5 +288,40 @@ convertToRpartModel <- function(tree, varnames)
 	splits <- splits[complete.cases(splits),]
 	csplit <- matrix(3-csplit,nrow = attr(csplit,"nrow"))
 	model <- list(frame = model, splits = splits, csplit = csplit)
+	return(model)
+}
+
+deploy.hpdrpart <- function(model)
+{
+	if(is.null(model$frame))
+		stop("'model' does not have an element called 'frame'")
+	if(is.null(model$frame$var))
+		stop("'model$frame' does not have an element called 'var'")
+	if(is.null(model$frame$n))
+		stop("'model$frame' does not have an element called 'n'")
+	if(is.null(model$frame$wt))
+		stop("'model$frame' does not have an element called 'wt'")
+	if(is.null(model$frame$dev))
+		stop("'model$frame' does not have an element called 'dev'")
+	if(is.null(model$frame$yval))
+		stop("'model$frame' does not have an element called 'yval'")
+	if(is.null(model$frame$complexity))
+		stop("'model$frame' does not have an element called 'complexity'")
+
+	if(is.null(model$splits))
+		stop("'model' does not have an element called 'splits'")
+	if(is.null(model$splits$count))
+		stop("'model$splits' does not have an element called 'count'")
+	if(is.null(model$splits$ncat))
+		stop("'model$splits' does not have an element called 'ncat'")
+	if(is.null(model$splits$improve))
+		stop("'model$splits' does not have an element called 'improve'")
+	if(is.null(model$splits$index))
+		stop("'model$splits' does not have an element called 'index'")
+	if(is.null(model$splits$adj))
+		stop("'model$splits' does not have an element called 'adj'")
+
+	if(is.null(model$csplit))
+		warning("'model' does not have an element called 'csplit'")
 	return(model)
 }

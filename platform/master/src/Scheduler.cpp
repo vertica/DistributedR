@@ -364,8 +364,8 @@ bool Scheduler::Done(TaskDoneRequest* req) {
       // because we already added the split before!
       split = new Split;
       split->name = cctask->name;
-      split->size = req->update_sizes(0);
-      split->empty = req->update_empties(0);
+      split->size = req->update_sizes_size() > 0 ? req->update_sizes(0) : 0;
+      split->empty = req->update_empties_size() > 0 ? req->update_empties(0) : true;
 //      splits[split->name] = split;
     } else {
       // This split is already in the split (OOCScheduler)
@@ -376,8 +376,8 @@ bool Scheduler::Done(TaskDoneRequest* req) {
           locked_size_[*i] -= split->size;
           locked_size_[*i] += req->update_sizes(0);
         }
-        split->size = req->update_sizes(0);
-        split->empty = req->update_empties(0);
+        split->size = req->update_sizes_size() > 0 ? req->update_sizes(0) : 0;
+        split->empty = req->update_empties_size() > 0 ? req->update_empties(0) : true;
       }
     }
     split->workers.insert(worker);  // update worker that has this split

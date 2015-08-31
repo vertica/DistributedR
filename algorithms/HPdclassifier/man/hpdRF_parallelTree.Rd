@@ -8,7 +8,7 @@ Random Forest Models over Distributed Data
 Distributed alternative for randomForest package that uses distributedR framework
 }
 \usage{
-hpdRF_parallelTree <- function(formula, data, ntree = 50, xtest, ytest, mtry, replace=TRUE, cutoff, nodesize, maxnodes = .Machine$integer.max, do.trace = FALSE, keep.forest = TRUE, na.action = na.fail, nBins=256, completeModel=FALSE)
+hpdRF_parallelTree (formula, data, ntree = 50, xtest, ytest, mtry, replace=TRUE, cutoff, nodesize, maxnodes = .Machine$integer.max, do.trace = FALSE, keep.forest = TRUE, na.action = na.fail, nBins=256, completeModel=FALSE)
 
 }
 \arguments{
