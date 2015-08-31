@@ -20,7 +20,7 @@
 hpdrpart <- function(formula, data, weights, subset , na.action = na.omit, 
 	 model = FALSE, x = FALSE, y = FALSE, params = NULL, 
 	 control = NULL, cost = NULL, 
-	 completeModel = TRUE, nBins = 256L, do.trace = FALSE)
+	 completeModel = FALSE, nBins = 256L, do.trace = FALSE)
 {
 
 	ddyn.load("HPdclassifier")
