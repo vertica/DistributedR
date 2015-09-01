@@ -3,7 +3,7 @@
 ##Also required is the a distance_metric function that can compare the loss in accuracy
 ##between predictions. 
 
-varImportance <- function(model, xtest, ytest, distance_metric)
+varImportance <- function(model, xtest, ytest,  ..., distance_metric)
 {
 	if(!is.dframe(xtest) & !is.data.frame(xtest))
 		stop("'xtest' must be a dframe or data.frame")
@@ -61,20 +61,38 @@ varImportance <- function(model, xtest, ytest, distance_metric)
 			distance_metric <- meanSquared
 	}
 
+
 	#this loop will shuffle the column locally and predict and 
 	#compute the difference in errors
 	importance = sapply(1:ncol(xtest), function(var)
 	{
 		shuffled_data <- shuffle_column(xtest, var)
-		shuffled_predictions <- predict(model, shuffled_data)
+		shuffled_predictions <- predict(model, shuffled_data, ...)
+		tryCatch({
+		if(is.data.frame(ytest) & !is.data.frame(shuffled_predictions))
+			shuffled_predictions <- data.frame(shuffled_predictions)
+		},error = function(e) 
+			stop("could not coerce output of predict function to data.frame"))
+
+
+		if(ncol(shuffled_predictions) != ncol(ytest))
+			stop("predict function must output only 1 column of predictions")
+		if(nrow(shuffled_predictions) != nrow(ytest))
+			stop("predict function must output as many predictions as 'ytest'")
+
 		var_imp = distance_metric(ytest, shuffled_predictions)[1]
 		return(var_imp)
 	})
-
 	names(importance) <- colnames(xtest)
 
 	#compute the errors without any shuffling
-	normal_predictions = predict(model, xtest)
+	normal_predictions = predict(model, xtest,...)
+	tryCatch({
+	if(is.data.frame(ytest) & !is.data.frame(normal_predictions))
+		shuffled_predictions <- data.frame(normal_predictions)
+	},error = function(e) 
+		stop("could not coerce output of predict function to data.frame"))
+
 	base_accuracy = distance_metric(ytest, normal_predictions)
 
 	importance <- importance - base_accuracy
