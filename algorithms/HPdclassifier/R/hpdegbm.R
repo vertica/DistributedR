@@ -99,16 +99,18 @@ hpdegbm <- function(
    if(missing(Y_train))
 	stop("'Y_train' is a required argument")
 
-   nSamples <- nrow(X_train)
-   if (nSamples == 0) stop("X_train has 0 rows")
+   if(!is.dframe(X_train) & !is.data.frame(X_train) & !is.darray(X_train) & !is.matrix(X_train)) {
+       stop("'X_train' must be a dframe or data.frame or darray or matrix")
+   } else {
+          nSamples <- nrow(X_train)
+          if (nSamples == 0) stop("X_train has 0 rows")
+   }
 
    if (is.vector(Y_train)) {
       if(nrow(X_train) != length(Y_train))
    		stop("'Y_train' must have same number of rows as 'X_train'")
    }
 
-   if(!is.dframe(X_train) & !is.data.frame(X_train) & !is.darray(X_train) & !is.matrix(X_train))
-       stop("'X_train' must be a dframe or data.frame or darray or matrix")
 
    if(!is.dframe(Y_train) & !is.data.frame(Y_train) & !is.darray(Y_train) & !is.matrix(Y_train) & !is.vector(Y_train))
        stop("'Y_train' must be a dframe or data.frame or darray or matrix or numeric vector")
