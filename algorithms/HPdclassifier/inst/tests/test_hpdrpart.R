@@ -1,7 +1,26 @@
 library(HPdclassifier)
 library(rpart)
-
 nInst <- sum(distributedR_status()$Inst)
+
+
+#generateData is a function that will output a dframe with nrow, ncol, npartitions
+#The columns of the dframe will be either categorical or numerical 
+#depending upon the value of features_categorical data
+#The response variable will be either categorical or numerical 
+#depending upon the value of the response_categorical
+
+#The features are numbers from 1:3 sampled randomly 
+#The output is the max of the features
+#The features are then cast as categories if necessary
+#The response is then cast as a category if necessary
+
+#This means that using generateData we can have regression, binary, multiclass testing
+#For regression testing, response_categorical = FALSE
+#For binary testing, response_categorical = FALSE, ncol = 2
+#For multiclass testing, response_categorical = FALSE, ncol > 2
+
+#Output dframe has columns X1:X<ncol> with X1 being response
+
 generateData <- function(nrow, ncol, 
 	     features_categorical, response_categorical, 
 	     npartitions = nInst)
@@ -99,7 +118,7 @@ expect_warning(hpdrpart(X1 ~ .,data = data, subset = 0),
 })
 
 
-context("Invalid Inputs to Predict Function")
+context("Invalid Inputs to Predict Function of hpdrpart")
 model <- hpdrpart(X1 ~ ., data = data)
 test_that("invalid newdata input to predict function",{
 expect_error(predict(model), "'newdata' is a required argument")
@@ -110,10 +129,10 @@ expect_error(predict(model,newdata = dframe(npartitions = c(1,2))),
 })
 
 
-context("Validating Outputs of Training Function")
+context("Validating Outputs of Training Function for hpdrpart")
 test_that("testing output for categorical trees", {
 data = generateData(100,2,TRUE,TRUE)
-model <- hpdrpart(X1 ~ ., data = data)
+model <- hpdrpart(X1 ~ ., data = data, completeModel = TRUE)
 
 expect_true("frame" %in% names(model))
 expect_true("splits" %in% names(model))
@@ -128,7 +147,7 @@ expect_true("control" %in% names(model))
 
 test_that("testing output for numerical trees", {
 data = generateData(100,2,FALSE,FALSE)
-model <- hpdrpart(X1 ~ ., data = data)
+model <- hpdrpart(X1 ~ ., data = data, completeModel = TRUE)
 
 expect_true("frame" %in% names(model))
 expect_true("splits" %in% names(model))
@@ -142,8 +161,9 @@ expect_true("control" %in% names(model))
 
 
 
-context("Accuracy Results for Training Simple Models") 
-test_that("basic training with categorical/categorical", {
+context("Accuracy Results for Training Simple Models for hpdrpart") 
+test_that("basic training with categorical features and categorical output", {
+#Building a classification tree with categorical variables
 set.seed(1)
 data = generateData(1000,2,TRUE,TRUE)
 model <- hpdrpart(X1 ~ ., data = data)
@@ -154,7 +174,8 @@ responses = getpartition(data)$X1
 expect_equal(predictions,responses)
 })
 
-test_that("basic training with numeric/categorical", {
+test_that("basic training with numeric features and categorical output", {
+#Building a classification tree with numeric features
 set.seed(1)
 data = generateData(1000,2,FALSE,TRUE)
 model <- hpdrpart(X1 ~ ., data = data)
@@ -165,7 +186,8 @@ responses = getpartition(data)$X1
 expect_equal(predictions,responses)
 })
 
-test_that("basic training with categorical/numeric", {
+test_that("basic training with categorical features and numeric output", {
+#Building a regression tree from categorical variables
 set.seed(1)
 data = generateData(1000,2,TRUE,FALSE)
 model <- hpdrpart(X1 ~ ., data = data)
@@ -176,7 +198,8 @@ responses = getpartition(data)$X1
 expect_equal(predictions,responses)
 })
 
-test_that("basic training with numeric/numeric", {
+test_that("basic training with numeric features and numeric output", {
+#Building a regression tree from numeric features
 set.seed(1)
 data = generateData(1000,2,FALSE,FALSE)
 model <- hpdrpart(X1 ~ ., data = data)
