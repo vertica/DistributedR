@@ -74,7 +74,6 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric)
 		},error = function(e) 
 			stop("could not coerce output of predict function to data.frame"))
 
-
 		if(ncol(shuffled_predictions) != ncol(ytest))
 			stop("predict function must output only 1 column of predictions")
 		if(nrow(shuffled_predictions) != nrow(ytest))
@@ -93,7 +92,7 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric)
 	},error = function(e) 
 		stop("could not coerce output of predict function to data.frame"))
 
-	base_accuracy = distance_metric(ytest, normal_predictions)
+	base_accuracy = distance_metric(ytest, normal_predictions)[1]
 
 	importance <- importance - base_accuracy
 	importance <- as.data.frame(importance)
