@@ -19,7 +19,7 @@ orc2dframe <- function(url, ...) {
     # 1. Schedule file across workers. Handles globbing also.
     library(hdfsconnector)
     plan <- create_plan(url, options, pm$worker_map())
-    #print(plan)  # for debugging
+    # print(plan)  # for debugging
 
     # set chunk_worker_map in master so dframe partitions are created on the right workers
     pm$ddc_set_chunk_worker_map(plan$chunk_worker_map)
@@ -48,6 +48,8 @@ orc2dframe <- function(url, ...) {
                                          schema=config$schema,
                                          chunkStart=config$chunk_start,
                                          chunkEnd=config$chunk_end,
+                                         delimiter=config$delimiter,
+                                         commentCharacter=config$comment_character,
                                          hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),
                                                                      '/conf/hdfs.json',
                                                                      sep=''))
