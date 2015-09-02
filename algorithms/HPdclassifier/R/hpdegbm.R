@@ -56,7 +56,7 @@ hpdegbm <- function(
        X_train,Y_train, 
        nExecutor,                                         
        #distribution = "adaboost",
-       distribution = "bernoulli",
+       distribution,
        n.trees = 100, 
        interaction.depth = 1, 
        n.minobsinnode = 10,
