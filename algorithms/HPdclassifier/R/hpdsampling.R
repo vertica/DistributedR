@@ -43,6 +43,9 @@ hpdsampling <- function(dfX,daY, nClass, sampleThresh=100)
    if(missing(daY))
 	stop("'daY' is a required argument")
 
+   if(missing(nClass))
+	stop("'nClass' is a required argument")
+
    if(nrow(dfX) != nrow(daY))
   		stop("'daY' must have same number of rows as 'dfX'")
 
@@ -90,9 +93,16 @@ hpdsampling <- function(dfX,daY, nClass, sampleThresh=100)
   for ( k in 1: npartition) { # npartition
       # distributed sampling: The input and output have the same npartition 
       foreach(i, 1:npartition, function(X_train2=splits(dfX,i),Y_train2=splits(daY,i),SX_train=splits(dfSX,i),SY_train=splits(daSY,i), Ns=Ns ) {
-          index <- sample(1:nrow(X_train2), Ns)
-          SX_train <- X_train2[index,]
-          SY_train <- Y_train2[index,]
+          if (Ns < nrow(X_train2)) {
+             index <- sample(1:nrow(X_train2), Ns)
+             SX_train <- X_train2[index,]
+             SY_train <- Y_train2[index,]
+           } else {
+             Ns<- ceiling (0.95 * nrow(X_train2))
+             index <- sample(1:nrow(X_train2), Ns)
+             SX_train <- X_train2[index,]
+             SY_train <- Y_train2[index,]
+          }
 
           update(SX_train)
           update(SY_train)

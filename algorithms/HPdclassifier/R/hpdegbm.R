@@ -54,10 +54,11 @@
 ####################################################################################
 hpdegbm <- function(
        X_train,Y_train, 
-       nExecutor,                                         
+       nExecutor, 
+       samplingFlag = TRUE,                                       
        #distribution = "adaboost",
        distribution,
-       n.trees = 100, 
+       n.trees = 1000, 
        interaction.depth = 1, 
        n.minobsinnode = 10,
        shrinkage = 0.50,     #[0.001, 1]
@@ -74,12 +75,13 @@ hpdegbm <- function(
        #response.name = "y",
        group = NULL,
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE) # default system parameters are defined here
+       completeModel = FALSE,
+       nClass,
+       sampleThresh) # default system parameters are defined here
 
 # X_train: a dframe, darray, data frame, or data matrix containing the predictor variables
 # Y_train: a vector of outputs
-# dl_GBM_model: dlist storing the trained GBM model
-# dbest.iter: darray storing the best iterations of submodels
+# samplingFlag: If true, call distributed sampling
 # distribution: support Gaussian, AdaBoost, bernoulli, multinomial in DR version 1.2
 # n.trees: the total numner of tress to fit 
 # interactive.depth: the maximum depth of variable interactions
@@ -129,24 +131,18 @@ hpdegbm <- function(
        stop("'distribution' must be gaussian or bernoulli or adaboost or multinomial")
 
    if(n.trees <= 0)
-        stop("'n.trees' must be more than 0")
+        stop("'n.trees' must be an positive integer")
 
-   if(interaction.depth <= 0)
-        stop("'interaction.depth' must be more than 0")
+   if (!(interaction.depth%%1 == 0) | !(interaction.depth > 0)) 
+        stop("'interaction.depth' must be at least 1")
 
-   if (!(interaction.depth%%1 == 0)) 
-        stop("'interaction.depth' must be an integer")
+   if (!(n.minobsinnode%%1 == 0) | !(n.minobsinnode >0)) 
+        stop("'n.minobsinnode' must be an positive integer")
 
-   if(n.minobsinnode <= 0)
-        stop("'n.minobsinnode' must be more than 0")
-
-   if (!(n.minobsinnode%%1 == 0)) 
-        stop("'n.minobsinnode' must be an integer")
-
-   if ((shrinkage < 0.001) | ((shrinkage > 1)))
+   if ( !((shrinkage >= 0.001) & (shrinkage <= 1)))
         stop("'shrinkage' must be between [0.001,1]")
 
-   if ((bag.fraction > 1) | (bag.fraction <= 0)) 
+   if (!((bag.fraction <= 1) & (bag.fraction > 0))) 
         stop("'bag.fraction' must be (0,1]")
 
    # if trace=TRUE, print out running time
@@ -171,7 +167,6 @@ hpdegbm <- function(
          y <- unlist(y) #  convert it back to "factor" for multinomial distribution
       }
 
-      # example for tryCatchWE: oli <- .tryCatchWE( do.call("randomForest", inputD) )
       # apply gbm.fit for GBM modeling: local GBM model
       dGBM_model <- gbm.fit(x, y,  
          offset = NULL, 
@@ -214,8 +209,18 @@ hpdegbm <- function(
      # Y_train: dframe/darray
      # if nExecutor > npartition_train, distributed sampling can generate nExecutor partitions. nExecutor=npartition_of_sampled X_train. Or use one partition multiple times by i%%npartition_train+1
      npartition_train <- npartitions(X_train)
-     # nExecutor <- npartition_train # already through random sampling
-     foreach(i, 1:nExecutor, function(dGBM_modeli=splits(dl_GBM_model,i), best.iter=splits(dbest.iter,i), x=splits(X_train,i%%npartition_train+1),y=splits(Y_train,i%%npartition_train+1),
+
+     ### distributed sampling: hpdsampling
+     if (samplingFlag == TRUE) {
+        sampledXY <- hpdsampling(X_train,Y_train, nClass, sampleThresh)
+        sX_train <- sampledXY[[1]]
+        sY_train <- sampledXY[[2]]
+     } else {
+        sX_train <- X_train
+        sY_train <- Y_train
+     }
+
+     foreach(i, 1:nExecutor, function(dGBM_modeli=splits(dl_GBM_model,i), best.iter=splits(dbest.iter,i), x=splits(sX_train,i%%npartition_train+1),y=splits(sY_train,i%%npartition_train+1),
                   n.trees=n.trees, distribution=distribution, interaction.depth=interaction.depth, n.minobsinnode=n.minobsinnode, 
                   shrinkage=shrinkage, bag.fraction=bag.fraction, .tryCatchWE=.tryCatchWE) {
          library(gbm)
