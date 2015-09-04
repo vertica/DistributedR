@@ -61,7 +61,7 @@ hpdegbm <- function(
        n.trees = 1000, 
        interaction.depth = 1, 
        n.minobsinnode = 10,
-       shrinkage = 0.50,     #[0.001, 1]
+       shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.50, #0.5-0.8,
        offset = NULL, 
        misc = NULL, 
@@ -150,6 +150,16 @@ hpdegbm <- function(
         cat("Start model training\n")
         starttime <- Sys.time()
     }
+
+   if (!((samplingFlag == TRUE) | (samplingFlag == FALSE)))
+         stop("'samplingFlag' must be TRUE or FALSE")
+
+   if (!(nClass%%1 == 0) | !(nClass > 0)) 
+        stop("'nClass' must be an positive integer")
+
+   if (!(sampleThresh > 0)) 
+        stop("'sampleThresh' must be an positive number")
+
 
    # store trained gbm model
    dl_GBM_model <- dlist(nExecutor)
