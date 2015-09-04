@@ -129,6 +129,32 @@ dfRX <- sampledXY[[1]]
 daRY <- sampledXY[[2]]
 
 
+context("Checking the interface of hpdegbm")
+test_that("The tree hyper-parameters are validated for AdaBoost", {
+    expect_error(hpdegbm(X_train, Y_train, nExecutor=4, n.trees=-1000, distribution = "adaboost", nClass=2), "'n.trees' must be an positive integer") 
+
+    expect_error(hpdegbm(X_train, Y_train,  nExecutor=4, n.trees= 1000, interaction.depth = -3, distribution = "adaboost", nClass=2), "'interaction.depth' must be at least 1") 
+
+    expect_error(hpdegbm(X_train, Y_train,  nExecutor=4, n.trees= 1000, interaction.depth = 3,  n.minobsinnode = -10, distribution = "adaboost", nClass=2), "'n.minobsinnode' must be an positive integer")
+}) 
+
+
+test_that("The inputs are validated for AdaBoost", {
+    expect_error(hpdegbm(Y_train=Y_train, nExecutor=4, n.trees=1000, distribution = "adaboost", nClass=2), "'X_train' is a required argument")
+
+    expect_error(hpdegbm(X_train=X_train,  nExecutor=4, n.trees=1000, distribution = "adaboost", nClass=2), "'Y_train' is a required argument")  
+    
+    expect_error(hpdegbm(X_train, Y_train, nExecutor=-4, Y_train, n.trees=1000,  distribution = "adaboost", nClass=2), "nExecutor should be a positive integer number") 
+})
+
+
+test_that("The bag.fraction is validated for AdaBoost", {
+   expect_error(hpdegbm(X_train, Y_train,  nExecutor=4,  bag.fraction = -0.632, distribution = "adaboost", nClass=2), "'bag.fraction' must be \\(0,1\\]")                                        
+})
+
+test_that("The learning rate is validated for AdaBoost", {
+    expect_error(hpdegbm(X_train, Y_train, nExecutor=4,  shrinkage=-0.50, distribution="adaboost", nClass=2), "'shrinkage' must be between \\[0.001,1\\]")                                      
+})
 
 
 #################################################################################################
@@ -164,7 +190,10 @@ test_that("Test classification accuracy: AdaBoost", {
        #response.name = "y",
        group = NULL,
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE) 
+       completeModel = FALSE,
+       samplingFlag = TRUE,
+       nClass = 2,
+       sampleThresh = 200) 
 
 
     newdata1 <- X_test        # test centralized small simulated data
@@ -231,7 +260,10 @@ test_that("Test classification accuracy: AdaBoost", {
        #response.name = "y",
        group = NULL,
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE) # default system parameters are defined here
+       completeModel = FALSE,
+       samplingFlag = TRUE,
+       nClass = 2,
+       sampleThresh = 200) # default system parameters are defined here
 
 
     newdata2 <- dfX_test     # test distributed big data
@@ -298,7 +330,10 @@ test_that("Test classification accuracy: AdaBoost", {
        #response.name = "y",
        group = NULL,
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE) # default system parameters are defined here
+       completeModel = FALSE,
+       samplingFlag = TRUE,
+       nClass = 2,
+       sampleThresh = 200) # default system parameters are defined here
 
 
     newdata3 <- dfX_test     # test distributed big data
@@ -367,7 +402,10 @@ test_that("Test classification accuracy: bernoulli", {
        #response.name = "y",
        group = NULL,
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE) # default system parameters are defined here
+       completeModel = FALSE,
+       samplingFlag = TRUE,
+       nClass = 2,
+       sampleThresh = 200) # default system parameters are defined here
 
 
     newdata4 <- X_test        # test centralized small simulated data
@@ -434,7 +472,10 @@ test_that("Test classification accuracy: bernoulli", {
        #response.name = "y",
        group = NULL,
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE) # default system parameters are defined here
+       completeModel = FALSE,
+       samplingFlag = TRUE,
+       nClass = 2,
+       sampleThresh = 200) # default system parameters are defined here
 
 
     newdata5 <- dfX_test     # test distributed big data
@@ -501,7 +542,10 @@ test_that("Test classification accuracy: bernoulli", {
        #response.name = "y",
        group = NULL,
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE) # default system parameters are defined here
+       completeModel = FALSE,
+       samplingFlag = TRUE,
+       nClass = 2,
+       sampleThresh = 200) # default system parameters are defined here
 
 
     newdata6 <- dfX_test     # test distributed big data
@@ -566,7 +610,10 @@ test_that("Test classification accuracy: multinomial", {
        #response.name = "y",
        group = NULL,
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE) # default system parameters are defined here
+       completeModel = FALSE,
+       samplingFlag = TRUE,
+       nClass = 2,
+       sampleThresh = 200) # default system parameters are defined here
 
 
     newdata7 <- valid1.iris  # test small real data 
@@ -710,7 +757,10 @@ test_that("Test regression accuracy: gaussian", {
        #response.name = "y",
        group = NULL,
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE) # default system parameters are defined here
+       completeModel = FALSE,
+       samplingFlag = TRUE,
+       nClass = 2,
+       sampleThresh = 200) # default system parameters are defined here
 
 
     ############################################################################################################
@@ -762,36 +812,6 @@ test_that("Test regression accuracy: gaussian", {
 
 
 
-context("Checking the interface of hpdegbm")
-test_that("The tree hyper-parameters are validated for AdaBoost", {
-    expect_error(hpdegbm(X_train, Y_train, dl_GBM_model, dbest.iter, nExecutor=4, n.trees=-1000, distribution = "adaboost"), "'n.trees' must be an positive integer") 
-
-    expect_error(hpdegbm(X_train, Y_train, dl_GBM_model, dbest.iter, nExecutor=4, n.trees= 1000, interaction.depth = -3, distribution = "adaboost"), "'interaction.depth' must be an integer") 
-
-    expect_error(hpdegbm(X_train, Y_train, dl_GBM_model, dbest.iter, nExecutor=4, n.trees= 1000, interaction.depth = 3,  n.minobsinnode = -10, distribution = "adaboost"), "'n.minobsinnode' must be an positive integer")
-}) 
-
-
-test_that("The inputs are validated for AdaBoost", {
-    expect_error(hpdegbm(Y_train, dl_GBM_model, dbest.iter, nExecutor, distribution = "adaboost"), "'X_train' is a required argument")
-
-    expect_error(hpdegbm(X_train, dl_GBM_model, dbest.iter, nExecutor, distribution = "adaboost"), "'Y_train' is a required argument")  
-    
-    expect_error(hpdegbm(X_train, Y_train, dbest.iter, nExecutor, distribution = "adaboost"), "'dl_GBM_model' is a required argument")  
-
-    expect_error(hpdegbm(X_train, Y_train, dl_GBM_model, nExecutor, distribution = "adaboost"), "'dbest.iter' is a required argument") 
-
-    expect_error(hpdegbm(X_train, Y_train, dl_GBM_model, dbest.iter, distribution = "adaboost"), "'nExecutor' is a required argument") 
-})
-
-
-test_that("The bag.fraction is validated for AdaBoost", {
-    expect_error(hpdegbm(X_train, Y_train, dl_GBM_model, dbest.iter, nExecutor=4,  bag.fraction = -0.632, distribution = "adaboost"), "'bag.fraction' must be(0,1]")                                        
-})
-
-test_that("The learning rate is validated for AdaBoost", {
-    expect_error(hpdegbm(X_train, Y_train, dl_GBM_model, dbest.iter, nExecutor=4,  shrinkage = -0.50, distribution = "adaboost"),"'shrinkage' must be (0, 1]")                                      
-})
 
 
 
