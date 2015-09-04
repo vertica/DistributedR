@@ -229,7 +229,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 		print("calculating variable importance")
 		timing_info <- Sys.time()
 		model$variable.importance <- 
-			varImportance(model,data,responses)
+			varImportance(model,data,responses, trace = do.trace)
 		timing_info <- Sys.time() - timing_info
 		if(do.trace )
 		print(timing_info)

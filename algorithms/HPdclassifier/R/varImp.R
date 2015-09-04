@@ -3,7 +3,7 @@
 ##Also required is the a distance_metric function that can compare the loss in accuracy
 ##between predictions. 
 
-varImportance <- function(model, xtest, ytest,  ..., distance_metric)
+varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FALSE)
 {
 	if(!is.dframe(xtest) & !is.data.frame(xtest))
 		stop("'xtest' must be a dframe or data.frame")
@@ -25,8 +25,13 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric)
 		#if the input was a dframe first randomize data then set shuffle function
 		permutation <- sample.int(nrow(xtest))
 		suppressWarnings({
+		if(trace)
+			print("shuffling data")
+		timing_info <- Sys.time()
 		xtest <- .shuffle_dframe(xtest,permutation)
 		ytest <- .shuffle_dframe(ytest,permutation)
+		if(trace)
+			print(Sys.time() - timing_info)
 		})
 	}
 
@@ -66,8 +71,23 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric)
 	#compute the difference in errors
 	importance = sapply(1:ncol(xtest), function(var)
 	{
+		if(trace)
+		print(paste("Calculating Importance for feature: ",
+			colnames(xtest)[var],sep=""))
+		timing_info <- Sys.time()
+		if(trace)
+		print("shuffling data")
 		shuffled_data <- shuffle_column(xtest, var)
+		if(trace)
+		print(Sys.time() - timing_info)
+
+		if(trace)
+		print("predicting shuffled data")
+		timing_info <- Sys.time()
 		shuffled_predictions <- predict(model, shuffled_data, ...)
+		if(trace)
+		print(Sys.time() - timing_info)
+
 		tryCatch({
 		if(is.data.frame(ytest) & !is.data.frame(shuffled_predictions))
 			shuffled_predictions <- data.frame(shuffled_predictions)
@@ -79,10 +99,16 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric)
 		if(nrow(shuffled_predictions) != nrow(ytest))
 			stop("predict function must output as many predictions as 'ytest'")
 
+		if(trace)
+		print("calculating error metric")
+		timing_info <- Sys.time()
 		var_imp = distance_metric(ytest, shuffled_predictions)[1]
+		if(trace)
+		print(Sys.time() - timing_info)
 		return(var_imp)
 	})
 	names(importance) <- colnames(xtest)
+
 
 	#compute the errors without any shuffling
 	normal_predictions = predict(model, xtest,...)

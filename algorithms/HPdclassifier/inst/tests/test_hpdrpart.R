@@ -167,7 +167,7 @@ test_that("basic training with categorical features and categorical output", {
 set.seed(1)
 data = generateData(1000,2,TRUE,TRUE)
 model <- hpdrpart(X1 ~ ., data = data)
-
+data <- generateData(1000,2,TRUE,TRUE)
 predictions = predict(model, data)
 predictions = getpartition(predictions)$predictions
 responses = getpartition(data)$X1
@@ -179,7 +179,7 @@ test_that("basic training with numeric features and categorical output", {
 set.seed(1)
 data = generateData(1000,2,FALSE,TRUE)
 model <- hpdrpart(X1 ~ ., data = data)
-
+data <- generateData(1000,2,FALSE,TRUE)
 predictions = predict(model, data)
 predictions = getpartition(predictions)$predictions
 responses = getpartition(data)$X1
@@ -191,7 +191,7 @@ test_that("basic training with categorical features and numeric output", {
 set.seed(1)
 data = generateData(1000,2,TRUE,FALSE)
 model <- hpdrpart(X1 ~ ., data = data)
-
+data <-generateData(1000,2,TRUE,FALSE)
 predictions = predict(model, data)
 predictions = getpartition(predictions)$predictions
 responses = getpartition(data)$X1
@@ -203,7 +203,7 @@ test_that("basic training with numeric features and numeric output", {
 set.seed(1)
 data = generateData(1000,2,FALSE,FALSE)
 model <- hpdrpart(X1 ~ ., data = data)
-
+data <- generateData(1000,2,FALSE,FALSE)
 predictions = predict(model, data)
 predictions = getpartition(predictions)$predictions
 responses = getpartition(data)$X1
