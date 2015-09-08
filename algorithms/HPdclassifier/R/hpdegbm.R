@@ -77,7 +77,7 @@ hpdegbm <- function(
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        completeModel = FALSE,
        nClass,
-       sampleThresh) # default system parameters are defined here
+       sampleThresh=100) # default system parameters are defined here
 
 # X_train: a dframe, darray, data frame, or data matrix containing the predictor variables
 # Y_train: a vector of outputs
