@@ -8,7 +8,7 @@
 #################################################################################################
 ######################### generate testing scenarios for classification ######################### 
 library(gbm)
-library(caTools)
+#library(caTools)
 library(testthat)
 library(HPdclassifier)
 
@@ -21,12 +21,18 @@ confusion <- function(a, b){
 
 
 #### real data: iris
-library(caret)
+#library(caret)
 data(iris)
 
-train <- createDataPartition(iris$Species, p=0.7, list=F)
-train.iris <- iris[train,]
-valid.iris <- iris[-train,]
+# split iris by caret function
+#train <- createDataPartition(iris$Species, p=0.7, list=F)
+#train.iris <- iris[train,]
+#valid.iris <- iris[-train,]
+
+# another method to split iris
+ind <- sample(2,nrow(iris),replace=TRUE,prob=c(0.7,0.3))
+train.iris <- iris[ind==1,]
+valid.iris <- iris[ind==2,]
 
 X_train <- train.iris
 Y_train <- train.iris$Species ### Y_train is a "factor" vector
@@ -127,34 +133,6 @@ sampledXY <- hpdsampling(dfX,daY, nClass=2, sampleThresh=200)
 
 dfRX <- sampledXY[[1]]
 daRY <- sampledXY[[2]]
-
-
-context("Checking the interface of hpdegbm")
-test_that("The tree hyper-parameters are validated for AdaBoost", {
-    expect_error(hpdegbm(X_train, Y_train, nExecutor=4, n.trees=-1000, distribution = "adaboost", nClass=2), "'n.trees' must be an positive integer") 
-
-    expect_error(hpdegbm(X_train, Y_train,  nExecutor=4, n.trees= 1000, interaction.depth = -3, distribution = "adaboost", nClass=2), "'interaction.depth' must be at least 1") 
-
-    expect_error(hpdegbm(X_train, Y_train,  nExecutor=4, n.trees= 1000, interaction.depth = 3,  n.minobsinnode = -10, distribution = "adaboost", nClass=2), "'n.minobsinnode' must be an positive integer")
-}) 
-
-
-test_that("The inputs are validated for AdaBoost", {
-    expect_error(hpdegbm(Y_train=Y_train, nExecutor=4, n.trees=1000, distribution = "adaboost", nClass=2), "'X_train' is a required argument")
-
-    expect_error(hpdegbm(X_train=X_train,  nExecutor=4, n.trees=1000, distribution = "adaboost", nClass=2), "'Y_train' is a required argument")  
-    
-    expect_error(hpdegbm(X_train, Y_train, nExecutor=-4, Y_train, n.trees=1000,  distribution = "adaboost", nClass=2), "nExecutor should be a positive integer number") 
-})
-
-
-test_that("The bag.fraction is validated for AdaBoost", {
-   expect_error(hpdegbm(X_train, Y_train,  nExecutor=4,  bag.fraction = -0.632, distribution = "adaboost", nClass=2), "'bag.fraction' must be \\(0,1\\]")                                        
-})
-
-test_that("The learning rate is validated for AdaBoost", {
-    expect_error(hpdegbm(X_train, Y_train, nExecutor=4,  shrinkage=-0.50, distribution="adaboost", nClass=2), "'shrinkage' must be between \\[0.001,1\\]")                                      
-})
 
 
 #################################################################################################
@@ -612,7 +590,7 @@ test_that("Test classification accuracy: multinomial", {
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        completeModel = FALSE,
        samplingFlag = TRUE,
-       nClass = 2,
+       nClass = 3,
        sampleThresh = 200) # default system parameters are defined here
 
 
@@ -629,11 +607,6 @@ test_that("Test classification accuracy: multinomial", {
 
 
     # compute classification error rate
-    aa <- Predictions7 - as.numeric(valid.iris$Species)
-    correctCount <- sum(aa == 0)
-    errorRate7 <- 1 - correctCount/(nrow(newdata7))
-    print(errorRate7)
-
     PredictionsGBM7_1 <- predict.gbm(finalModel7[[1]][[1]], newdata7, n.trees=finalModel7[[2]][1],type="response", trace = FALSE)
     aa7_1 <- apply(PredictionsGBM7_1, 1, which.max) - as.numeric(valid.iris$Species)
     correctCount7_1 <- sum(aa7_1 == 0)
@@ -646,31 +619,31 @@ test_that("Test classification accuracy: multinomial", {
     errorRate7_2 <- 1 - correctCount7_2/(nrow(newdata7))
     print(errorRate7_2)
 
-    PredictionsGBM7_3 <- predict.gbm(finalModel7[[1]][[3]], newdata7, n.trees=finalModel7[[2]][3],type="response", trace = FALSE)
-    aa7_3 <- apply(PredictionsGBM7_3, 1, which.max) - as.numeric(valid.iris$Species)
-    correctCount7_3 <- sum(aa7_3 == 0)
-    errorRate7_3 <- 1 - correctCount7_3/(nrow(newdata7))
-    print(errorRate7_3)
+   # PredictionsGBM7_3 <- predict.gbm(finalModel7[[1]][[3]], newdata7, n.trees=finalModel7[[2]][3],type="response", trace = FALSE)
+   # aa7_3 <- apply(PredictionsGBM7_3, 1, which.max) - as.numeric(valid.iris$Species)
+   # correctCount7_3 <- sum(aa7_3 == 0)
+   # errorRate7_3 <- 1 - correctCount7_3/(nrow(newdata7))
+   # print(errorRate7_3)
 
-    PredictionsGBM7_4 <- predict.gbm(finalModel7[[1]][[4]], newdata7, n.trees=finalModel7[[2]][4],type="response", trace = FALSE)
-    aa7_4 <- apply(PredictionsGBM7_4, 1, which.max) - as.numeric(valid.iris$Species)
-    correctCount7_4 <- sum(aa7_4 == 0)
-    errorRate7_4 <- 1 - correctCount7_4/(nrow(newdata7))
-    print(errorRate7_4)
+   # PredictionsGBM7_4 <- predict.gbm(finalModel7[[1]][[4]], newdata7, n.trees=finalModel7[[2]][4],type="response", trace = FALSE)
+   # aa7_4 <- apply(PredictionsGBM7_4, 1, which.max) - as.numeric(valid.iris$Species)
+   # correctCount7_4 <- sum(aa7_4 == 0)
+   # errorRate7_4 <- 1 - correctCount7_4/(nrow(newdata7))
+   # print(errorRate7_4)
 
     # availability of some outputs
     expect_false(is.null(Predictions7))
     expect_false(is.null(PredictionsGBM7_1))
     expect_false(is.null(PredictionsGBM7_2))
-    expect_false(is.null(PredictionsGBM7_3))
-    expect_false(is.null(PredictionsGBM7_4))
+   # expect_false(is.null(PredictionsGBM7_3))
+   # expect_false(is.null(PredictionsGBM7_4))
 
     # prediction accuracy
     expect_true(errorRate7 < 0.150)
     expect_true(errorRate7_1 < 0.150)
     expect_true(errorRate7_2 < 0.150)
-    expect_true(errorRate7_3 < 0.150)
-    expect_true(errorRate7_4 < 0.150)
+   # expect_true(errorRate7_3 < 0.150)
+   # expect_true(errorRate7_4 < 0.150)
 
     expect_true(abs(errorRate7 - errorRate7_1) < 0.15)
 })
@@ -812,7 +785,32 @@ test_that("Test regression accuracy: gaussian", {
 
 
 
+context("Checking the interface of hpdegbm")
+test_that("The tree hyper-parameters are validated for AdaBoost", {
+    expect_error(hpdegbm(X_train, Y_train, nExecutor=4, n.trees=-1000, distribution = "adaboost", nClass=2), "'n.trees' must be an positive integer") 
 
+    expect_error(hpdegbm(X_train, Y_train,  nExecutor=4, n.trees= 1000, interaction.depth = -3, distribution = "adaboost", nClass=2), "'interaction.depth' must be at least 1") 
+
+    expect_error(hpdegbm(X_train, Y_train,  nExecutor=4, n.trees= 1000, interaction.depth = 3,  n.minobsinnode = -10, distribution = "adaboost", nClass=2), "'n.minobsinnode' must be an positive integer")
+}) 
+
+
+test_that("The inputs are validated for AdaBoost", {
+    expect_error(hpdegbm(Y_train=Y_train, nExecutor=4, n.trees=1000, distribution = "adaboost", nClass=2), "'X_train' is a required argument")
+
+    expect_error(hpdegbm(X_train=X_train,  nExecutor=4, n.trees=1000, distribution = "adaboost", nClass=2), "'Y_train' is a required argument")  
+    
+    expect_error(hpdegbm(X_train, Y_train, nExecutor=-4, Y_train, n.trees=1000,  distribution = "adaboost", nClass=2), "nExecutor should be a positive integer number") 
+})
+
+
+test_that("The bag.fraction is validated for AdaBoost", {
+   expect_error(hpdegbm(X_train, Y_train,  nExecutor=4,  bag.fraction = -0.632, distribution = "adaboost", nClass=2), "'bag.fraction' must be \\(0,1\\]")                                        
+})
+
+test_that("The learning rate is validated for AdaBoost", {
+    expect_error(hpdegbm(X_train, Y_train, nExecutor=4,  shrinkage=-0.50, distribution="adaboost", nClass=2), "'shrinkage' must be between \\[0.001,1\\]")                                      
+})
 
 
 
