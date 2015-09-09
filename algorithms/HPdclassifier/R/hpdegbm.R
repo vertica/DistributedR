@@ -154,11 +154,14 @@ hpdegbm <- function(
    if (!((samplingFlag == TRUE) | (samplingFlag == FALSE)))
          stop("'samplingFlag' must be TRUE or FALSE")
 
-   if (!(nClass%%1 == 0) | !(nClass > 0)) 
-        stop("'nClass' must be an positive integer")
+   if (!((nClass%%1 == 0) & (nClass > 0) & (is.numeric(nClass)) & (length(nClass)==1))) 
+        stop("'nClass' must be a positive integer")
 
-   if (!(sampleThresh > 0)) 
-        stop("'sampleThresh' must be an positive number")
+   if ( (missing(nClass)) & ((is.dframe(X_train))) | ((is.darray(X_train))) )
+	stop("'nClass' is a required argument for X_train as dframe or darray")
+   
+   if (!((sampleThresh > 0) & (is.numeric(sampleThresh)) & (length(sampleThresh)==1) ))
+        stop("'sampleThresh' must be a positive number")
 
 
    # store trained gbm model
