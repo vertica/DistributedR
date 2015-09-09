@@ -60,9 +60,15 @@ hpdsampling <- function(dfX,daY, nClass, sampleThresh=100)
    if(!is.dframe(daY) && !is.darray(daY))
        stop("'daY' must be a dframe or darray")
 
-    if (sampleThresh < 100)
-       stop("'sampleThresh' must be larger than 100")
+   if ( (missing(nClass)) & ((is.dframe(X_train))) | ((is.darray(X_train))) )
+	stop("'nClass' is a required argument for X_train as dframe or darray")
 
+   if (!( (is.numeric(nClass)) & (length(nClass)==1) & (nClass%%1 == 0) & (nClass > 0) )) 
+        stop("'nClass' must be a positive integer")
+
+  
+   if (!( (is.numeric(sampleThresh)) & (length(sampleThresh)==1) & (sampleThresh > 0) ))
+        stop("'sampleThresh' must be a positive number")
 
 
    # sample size planning

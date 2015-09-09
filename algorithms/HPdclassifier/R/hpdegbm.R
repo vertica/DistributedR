@@ -130,20 +130,20 @@ hpdegbm <- function(
    if ((!(distribution=="gaussian")) && (!(distribution=="bernoulli")) && (!(distribution=="adaboost")) && (!(distribution=="multinomial")))
        stop("'distribution' must be gaussian or bernoulli or adaboost or multinomial")
 
-   if(n.trees <= 0)
-        stop("'n.trees' must be an positive integer")
+  if (!((n.trees%%1 == 0) & (n.trees > 0) & (is.numeric(n.trees)) & (length(n.trees)==1))) 
+        stop("'n.trees' must be a positive integer")
 
-   if (!(interaction.depth%%1 == 0) | !(interaction.depth > 0)) 
+   if (!( (is.numeric(interaction.depth)) & (length(interaction.depth)==1) & (interaction.depth%%1 == 0) & (interaction.depth > 0) )) 
         stop("'interaction.depth' must be at least 1")
 
-   if (!(n.minobsinnode%%1 == 0) | !(n.minobsinnode >0)) 
-        stop("'n.minobsinnode' must be an positive integer")
+   if (!( (is.numeric(n.minobsinnode)) & (length(n.minobsinnode)==1) & (n.minobsinnode%%1 == 0) & (n.minobsinnode > 0) )) 
+        stop("'n.minobsinnode' must be a positive integer")
 
-   if ( !((shrinkage >= 0.001) & (shrinkage <= 1)))
-        stop("'shrinkage' must be between [0.001,1]")
+   if ( !((shrinkage >= 0.001) & (shrinkage <= 1) & (is.numeric(shrinkage)) & (length(shrinkage)==1)))
+        stop("'shrinkage' must be a number in the interval [0.001,1]")
 
-   if (!((bag.fraction <= 1) & (bag.fraction > 0))) 
-        stop("'bag.fraction' must be (0,1]")
+   if (!( (is.numeric(bag.fraction)) & (length(bag.fraction)==1) & (bag.fraction <= 1) & (bag.fraction > 0) )) 
+        stop("'bag.fraction' must be a number in the interval (0,1]")
 
    # if trace=TRUE, print out running time
    if(trace) {
@@ -154,13 +154,14 @@ hpdegbm <- function(
    if (!((samplingFlag == TRUE) | (samplingFlag == FALSE)))
          stop("'samplingFlag' must be TRUE or FALSE")
 
-   if (!((nClass%%1 == 0) & (nClass > 0) & (is.numeric(nClass)) & (length(nClass)==1))) 
-        stop("'nClass' must be a positive integer")
-
    if ( (missing(nClass)) & ((is.dframe(X_train))) | ((is.darray(X_train))) )
 	stop("'nClass' is a required argument for X_train as dframe or darray")
-   
-   if (!((sampleThresh > 0) & (is.numeric(sampleThresh)) & (length(sampleThresh)==1) ))
+
+   if (!( (is.numeric(nClass)) & (length(nClass)==1) & (nClass%%1 == 0) & (nClass > 0) )) 
+        stop("'nClass' must be a positive integer")
+
+  
+   if (!( (is.numeric(sampleThresh)) & (length(sampleThresh)==1) & (sampleThresh > 0) ))
         stop("'sampleThresh' must be a positive number")
 
 
