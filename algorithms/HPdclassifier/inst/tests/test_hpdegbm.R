@@ -787,11 +787,11 @@ test_that("Test regression accuracy: gaussian", {
 
 context("Checking the interface of hpdegbm")
 test_that("The tree hyper-parameters are validated for AdaBoost", {
-    expect_error(hpdegbm(X_train, Y_train, nExecutor=4, n.trees=-1000, distribution = "adaboost", nClass=2), "'n.trees' must be an positive integer") 
+    expect_error(hpdegbm(X_train, Y_train, nExecutor=4, n.trees=-1000, distribution = "adaboost", nClass=2), "'n.trees' must be a positive integer") 
 
     expect_error(hpdegbm(X_train, Y_train,  nExecutor=4, n.trees= 1000, interaction.depth = -3, distribution = "adaboost", nClass=2), "'interaction.depth' must be at least 1") 
 
-    expect_error(hpdegbm(X_train, Y_train,  nExecutor=4, n.trees= 1000, interaction.depth = 3,  n.minobsinnode = -10, distribution = "adaboost", nClass=2), "'n.minobsinnode' must be an positive integer")
+    expect_error(hpdegbm(X_train, Y_train,  nExecutor=4, n.trees= 1000, interaction.depth = 3,  n.minobsinnode = -10, distribution = "adaboost", nClass=2), "'n.minobsinnode' must be a positive integer")
 }) 
 
 
@@ -805,11 +805,11 @@ test_that("The inputs are validated for AdaBoost", {
 
 
 test_that("The bag.fraction is validated for AdaBoost", {
-   expect_error(hpdegbm(X_train, Y_train,  nExecutor=4,  bag.fraction = -0.632, distribution = "adaboost", nClass=2), "'bag.fraction' must be \\(0,1\\]")                                        
+   expect_error(hpdegbm(X_train, Y_train,  nExecutor=4,  bag.fraction = -0.632, distribution = "adaboost", nClass=2), "'bag.fraction' must be a number in the interval \\(0,1\\]")                                        
 })
 
 test_that("The learning rate is validated for AdaBoost", {
-    expect_error(hpdegbm(X_train, Y_train, nExecutor=4,  shrinkage=-0.50, distribution="adaboost", nClass=2), "'shrinkage' must be between \\[0.001,1\\]")                                      
+    expect_error(hpdegbm(X_train, Y_train, nExecutor=4,  shrinkage=-0.50, distribution="adaboost", nClass=2), "'shrinkage' must be a number in the interval \\[0.001,1\\]")                                      
 })
 
 
