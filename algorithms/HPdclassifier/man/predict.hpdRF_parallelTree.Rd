@@ -7,7 +7,7 @@
 	given a distributed random forest model and new observations of the feature variables, predict the responses of the new observations
 }
 \usage{
-predict.hpdRF(object, newdata, cutoff, do.trace, na.action = na.fail)
+predict.hpdRF(object, newdata, cutoff, do.trace = FALSE, na.action = na.fail)
 }
 \arguments{
   \item{object}{
@@ -15,7 +15,7 @@ an object of class hpdRF_parallelTree, as that created by the function hpdRF_par
 
 }
   \item{newdata}{
-a dframe containing new data
+a dframe or data.frame containing new data
 }
   \item{cutoff}{
 (Classification only) A vector of length equal to number of classes. The ‘winning’ class for an observation is the one with the maximum ratio of proportion of votes to cutoff. Default is taken from the forest$cutoff component of object

@@ -88,7 +88,7 @@ The trained GBM models from executors are combined into an ensemble on the maste
 }
 
 \examples{
- \donotrun{
+ \dontrun{
     
 library(gbm)
 library(distributedR)

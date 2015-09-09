@@ -18,9 +18,9 @@
 
 
 hpdrpart <- function(formula, data, weights, subset , na.action = na.omit, 
-	 model = FALSE, x = FALSE, y = FALSE, params = NULL, 
+	 model = TRUE, x = FALSE, y = FALSE, params = NULL, 
 	 control = NULL, cost = NULL, 
-	 completeModel = FALSE, nBins = 256L, do.trace = FALSE)
+	 completeModel = FALSE, nBins = 256L, nExecutor = 1, do.trace = FALSE)
 {
 
 	ddyn.load("HPdclassifier")
@@ -67,6 +67,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 			stop("'weights' must be partitioned similarly to data")
 	}
 
+	keep.model = model
 	nBins = as.integer(nBins)
 	if(nBins <= 0)
 		stop("'nBins' must be more than 0")
@@ -160,12 +161,13 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	free_mem = free_mem - ncol(observations)*threshold*nodes_per_executor
 	free_sh_mem = free_sh_mem - ncol(observations)*threshold*nodes_per_executor
 
+	#rate_local_distributed is the ratio of local tree growth vs distributed
+	threshold = min(threshold,nrow(observations)/nExecutor)
 
 	threshold = as.integer(floor(threshold))
 	max_nodes_per_iteration = as.integer(floor(max_nodes_per_iteration))
 	nodes_per_executor = as.integer(floor(nodes_per_executor))
 
-	threshold = min(threshold,nrow(observations)/sum(DR_status$Inst))
 
 	if(do.trace)
 		print(paste("threshold",
@@ -196,22 +198,24 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	     min_split = control$minbucket, max_depth = control$maxdepth, 
 	     cp = control$cp)
 	})
-	     
-	if(do.trace)
-	print("converting to rpart model")
-	timing_info <- Sys.time()
-	model = .convertToRpartModel(tree$forest, x_colnames)
-	timing_info <- Sys.time() - timing_info
-	if(do.trace )
-	print(timing_info)
 
+	if(keep.model)
+	{	     
+		if(do.trace)
+		print("converting to rpart model")
+		timing_info <- Sys.time()
+		model = .convertToRpartModel(tree$forest, x_colnames)
+		timing_info <- Sys.time() - timing_info
+		if(do.trace )
+		print(timing_info)
+	}
 
 	model$call = match.call()
 	model$terms = variables$terms
 	if(is.na(response_cardinality))
-		model$method = "regression"
+		model$method = "anova"
 	if(!is.na(response_cardinality))
-		model$method = "classification"
+		model$method = "gini"
 	model$control = control
 	model$params = params
 	model$na.action = na.action
@@ -228,8 +232,16 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 		if(do.trace)
 		print("calculating variable importance")
 		timing_info <- Sys.time()
+		if(is.na(response_cardinality))
 		model$variable.importance <- 
-			varImportance(model,data,responses, trace = do.trace)
+			varImportance(model,data,responses, 
+				trace = do.trace, type = "vector")
+
+		if(!is.na(response_cardinality))
+		model$variable.importance <- 
+			varImportance(model,data,responses, 
+				trace = do.trace,type = "vector")
+
 		timing_info <- Sys.time() - timing_info
 		if(do.trace )
 		print(timing_info)
@@ -237,7 +249,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	return(model)
 }
 
-predict.hpdrpart <- function(model, newdata,do.trace = FALSE)
+predict.hpdrpart <- function(model, newdata,do.trace = FALSE, ...)
 {
 	if(missing(newdata))
 		stop("'newdata' is a required argument")
@@ -253,14 +265,20 @@ predict.hpdrpart <- function(model, newdata,do.trace = FALSE)
 	foreach(i,1:npartitions(newdata),
 		function(model=model, 
 			newdata = splits(newdata,i), 
-			predictions = splits(predictions,i))
+			predictions = splits(predictions,i),
+			args = list(...))
 		{
-			library(rpart)
+			library(rpart)	
 			class(model) <- class(model)[-1]
-			predictions = predict(model,newdata,type = "vector")
-			if(model$method=="classification")
+			args = c(list(object = model, newdata = newdata),args)
+			print(args)
+			predictions = do.call(predict,args)
+			print(predictions)
+	
+			if(model$method=="gini")
 			predictions = factor(model$classes[predictions], 
 				    levels = model$classes)
+			
 			predictions = data.frame(predictions)
 			update(predictions)
 		},progress = do.trace)
