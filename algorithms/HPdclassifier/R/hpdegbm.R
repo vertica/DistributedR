@@ -116,9 +116,8 @@ hpdegbm <- function(
    if ( (is.vector(Y_train))  & !(nrow(X_train) == length(Y_train)) ) 
        stop("'Y_train' must be non-empty and have same number of rows as 'X_train'")
 
-  # if ( (is.dframe(Y_train)) || (is.data.frame(Y_train)) || (is.darray(Y_train)) || (is.matrix(Y_train)) && (!(nrow(X_train)==nrow(Y_train))) ) {
-  #    stop("'Y_train' must be non-empty and have same number of rows as 'X_train'")
-  # }
+   if ( ((distribution=="bernoulli") || (distribution=="adaboost") | (distribution=="gaussian")) && (is.dframe(Y_train)) )
+      stop("'Y_train' cannot be dframe for regression and binary classification")
 
 
    if (missing(nExecutor))   
