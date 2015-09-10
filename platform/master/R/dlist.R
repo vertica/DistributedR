@@ -98,13 +98,13 @@ setMethod("dlist_set_split", signature("dlist", "numeric", "vector"),
   })
 
 
-#For a list R returns null as the dimension. We may change it in future.
 setMethod("partitionsize", signature("dlist","numeric"),
   function(x, index) {
-    return (NULL)
-})
+    if(index > npartitions(x)) stop("index exceeds number of partitions")
+    t(as.matrix(x@dobject_ptr$parts_sizes()[index,]))
+  })
 
 setMethod("partitionsize", signature("dlist","missing"),
   function(x, index) {
-    return (NULL)
-})
+    x@dobject_ptr$parts_sizes()
+  })

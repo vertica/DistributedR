@@ -56,6 +56,7 @@ message Array {
   required Tuple dim = 2;
   optional int64 size = 3 [default = 0];
   optional bool sparse = 4 [default = false];
+  optional Tuple psizes = 5;
 //  optional ServerInfo location = 4;
 }
 

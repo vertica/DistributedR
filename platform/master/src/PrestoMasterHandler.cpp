@@ -343,7 +343,6 @@ bool PrestoMasterHandler::UpdateFlexObjectSizes(std::set<string> names){
   return result;
 }
 
-
 bool PrestoMasterHandler::NewUpdate(NewUpdateRequest update) {
    boost::this_thread::interruption_point();// check if interrupted
    int32_t split_id;
@@ -355,6 +354,8 @@ bool PrestoMasterHandler::NewUpdate(NewUpdateRequest update) {
    arr.set_name(update.name());
    arr.set_size(update.size());
    arr.mutable_dim()->Clear();
+   arr.mutable_psizes()->Clear();
+   
    if(update.row_dim()==0)
      arr.mutable_dim()->add_val(1);
    else
@@ -363,8 +364,17 @@ bool PrestoMasterHandler::NewUpdate(NewUpdateRequest update) {
    if(update.col_dim()==0)
      arr.mutable_dim()->add_val(1);
    else
-     arr.mutable_dim()->add_val(update.col_dim());
+     arr.mutable_dim()->add_val(update.col_dim()); 
 
+   
+   
+   
+   // TODO(Ed): Adding a new variable is not needed, can use dim, but because dim() 
+   // is needing a hack (setting dim to 1 when 0) we are leaving it in place for now )
+   // psizes can be 0
+   arr.mutable_psizes()->add_val(update.row_dim());
+   arr.mutable_psizes()->add_val(update.col_dim());
+   
    // scheduler_->AddSplit(arr.name(), update.size(),
    //                      server_to_string(update.location()));
    DistributedObject* d = darray_map_->GetDistributedObject(

@@ -46,7 +46,13 @@ update <- function(x,empty=FALSE) {
 
 # get dimensions
 getdimensions <- function(x) {
-  objdim<-as.numeric(dim(x))
+  if(is.list(x) && !is.data.frame(x)) {
+    objdim <- c(length(x),0)
+  }
+  else {
+    objdim <- as.numeric(dim(x))
+  }
+
   if(is.null(objdim) || length(objdim)==0) objdim <-c(0,0) #For lists, numeric values, and non-matrix types etc.
   if(length(objdim)==1) objdim<-c(1,objdim) #Vectors have one dimension
   if(length(objdim)!=2) stop("Executor error: Can't figure out dimension of updated object")

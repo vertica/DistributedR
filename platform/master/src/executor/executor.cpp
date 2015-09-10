@@ -164,7 +164,7 @@ static inline void CreateUpdate(const string &varname, const string &splitname,
   std::pair<size_t, size_t> dims = ad->GetDims();  
 
   //TODO(iR) Hack for obtaining size of dataframe splits, since GetDims() is 0 for dframes and lists
-  if(org_class == DATA_FRAME){
+  if(org_class == DATA_FRAME || org_class == LIST || org_class == EMPTY){
     dims = make_pair(obj_nrow,obj_ncol);
   }
   
