@@ -53,10 +53,9 @@
 ###                Model training function of distributed GBM
 ####################################################################################
 hpdegbm <- function(
-       X_train,Y_train, 
-       nExecutor, 
-       samplingFlag = TRUE,                                       
-       #distribution = "adaboost",
+       X_train,
+       Y_train, 
+       nExecutor,                                     
        distribution,
        n.trees = 1000, 
        interaction.depth = 1, 
@@ -69,19 +68,19 @@ hpdegbm <- function(
        var.monotone = NULL,
        nTrain = NULL,
        train.fraction = NULL,
-       keep.data = TRUE,
+       keep.data = FALSE,
        verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
        var.names = NULL,
        #response.name = "y",
        group = NULL,
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        completeModel = FALSE,
+       samplingFlag = TRUE,  
        nClass,
        sampleThresh=100) # default system parameters are defined here
 
 # X_train: a dframe, darray, data frame, or data matrix containing the predictor variables
 # Y_train: a vector of outputs
-# samplingFlag: If true, call distributed sampling
 # distribution: support Gaussian, AdaBoost, bernoulli, multinomial in DR version 1.2
 # n.trees: the total numner of tress to fit 
 # interactive.depth: the maximum depth of variable interactions
@@ -91,6 +90,9 @@ hpdegbm <- function(
 # verbose: If TRUE, gbm prints out progress and performance indicators
 # trace: If TRUE, print out the training time
 # completeModel: If TRUE, add training time in the model 
+# samplingFlag: If true, call distributed sampling
+# nClass: a parameter used to determine the sampling ratio. For classification, it is the class number 
+# sampleThresh: sample threshold
 
 ### start of hpdegbm function
 {
@@ -113,7 +115,6 @@ hpdegbm <- function(
    		stop("'Y_train' must have same number of rows as 'X_train'")
    }
 
-
    if(!is.dframe(Y_train) & !is.data.frame(Y_train) & !is.darray(Y_train) & !is.matrix(Y_train) & !is.vector(Y_train))
        stop("'Y_train' must be a dframe or data.frame or darray or matrix or numeric vector")
 
@@ -130,22 +131,21 @@ hpdegbm <- function(
    if ((!(distribution=="gaussian")) && (!(distribution=="bernoulli")) && (!(distribution=="adaboost")) && (!(distribution=="multinomial")))
        stop("'distribution' must be gaussian or bernoulli or adaboost or multinomial")
 
-  if (!((n.trees%%1 == 0) & (n.trees > 0) & (is.numeric(n.trees)) & (length(n.trees)==1))) 
+  if (!( (is.numeric(n.trees)) && (length(n.trees)==1) && (n.trees%%1 == 0) && (n.trees > 0) )) 
         stop("'n.trees' must be a positive integer")
 
-   if (!( (is.numeric(interaction.depth)) & (length(interaction.depth)==1) & (interaction.depth%%1 == 0) & (interaction.depth > 0) )) 
-        stop("'interaction.depth' must be at least 1")
+   if (!( (is.numeric(interaction.depth)) && (length(interaction.depth)==1) && (interaction.depth%%1 == 0) && (interaction.depth > 0) )) 
+        stop("'interaction.depth' must be a positive integer")
 
-   if (!( (is.numeric(n.minobsinnode)) & (length(n.minobsinnode)==1) & (n.minobsinnode%%1 == 0) & (n.minobsinnode > 0) )) 
+   if (!( (is.numeric(n.minobsinnode)) && (length(n.minobsinnode)==1) && (n.minobsinnode%%1 == 0) && (n.minobsinnode > 0) )) 
         stop("'n.minobsinnode' must be a positive integer")
 
-   if ( !((shrinkage >= 0.001) & (shrinkage <= 1) & (is.numeric(shrinkage)) & (length(shrinkage)==1)))
+   if ( !( (is.numeric(shrinkage)) && (length(shrinkage)==1) && (shrinkage >= 0.001) && (shrinkage <= 1) ))
         stop("'shrinkage' must be a number in the interval [0.001,1]")
 
-   if (!( (is.numeric(bag.fraction)) & (length(bag.fraction)==1) & (bag.fraction <= 1) & (bag.fraction > 0) )) 
+   if (!( (is.numeric(bag.fraction)) && (length(bag.fraction)==1) && (bag.fraction <= 1) && (bag.fraction > 0) )) 
         stop("'bag.fraction' must be a number in the interval (0,1]")
 
-   # if trace=TRUE, print out running time
    if(trace) {
         cat("Start model training\n")
         starttime <- Sys.time()
@@ -157,11 +157,11 @@ hpdegbm <- function(
    if ( (missing(nClass)) & ((is.dframe(X_train))) | ((is.darray(X_train))) )
 	stop("'nClass' is a required argument for X_train as dframe or darray")
 
-   if (!( (is.numeric(nClass)) & (length(nClass)==1) & (nClass%%1 == 0) & (nClass > 0) )) 
+   if (!( (is.numeric(nClass)) && (length(nClass)==1) && (nClass%%1 == 0) && (nClass > 0) )) 
         stop("'nClass' must be a positive integer")
 
   
-   if (!( (is.numeric(sampleThresh)) & (length(sampleThresh)==1) & (sampleThresh > 0) ))
+   if (!( (is.numeric(sampleThresh)) && (length(sampleThresh)==1) && (sampleThresh > 0) ))
         stop("'sampleThresh' must be a positive number")
 
 
@@ -195,7 +195,7 @@ hpdegbm <- function(
          bag.fraction = bag.fraction, 
          nTrain = NULL,
          train.fraction = NULL, 
-         keep.data = TRUE,
+         keep.data = FALSE,
          verbose = TRUE,
          var.names = NULL,
          response.name = "y",
@@ -257,7 +257,7 @@ hpdegbm <- function(
             bag.fraction = bag.fraction, 
             nTrain = NULL,
             train.fraction = NULL,
-            keep.data = TRUE,
+            keep.data = FALSE,
             verbose = TRUE,
             var.names = NULL,
             #response.name = "y",
@@ -269,7 +269,8 @@ hpdegbm <- function(
               overlay = FALSE, 
               method="OOB")
 
-       
+          if (best.iter0 <50) best.iter0 <- 50
+
           best.iter <- as.matrix(best.iter0)
 
           dGBM_modeli <- list(dGBM_model) 
