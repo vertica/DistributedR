@@ -110,25 +110,27 @@ hpdegbm <- function(
           if (nSamples == 0) stop("X_train has 0 rows")
    }
 
-   if (is.vector(Y_train)) {
-      if(nrow(X_train) != length(Y_train))
-   		stop("'Y_train' must have same number of rows as 'X_train'")
-   }
-
-   if(!is.dframe(Y_train) & !is.data.frame(Y_train) & !is.darray(Y_train) & !is.matrix(Y_train) & !is.vector(Y_train))
+   if(!is.dframe(Y_train) & !is.data.frame(Y_train) & !is.darray(Y_train) & !is.matrix(Y_train) & !is.vector(Y_train)) 
        stop("'Y_train' must be a dframe or data.frame or darray or matrix or numeric vector")
+
+   if ( (is.vector(Y_train))  & !(nrow(X_train) == length(Y_train)) ) 
+       stop("'Y_train' must be non-empty and have same number of rows as 'X_train'")
+
+  # if ( (is.dframe(Y_train)) || (is.data.frame(Y_train)) || (is.darray(Y_train)) || (is.matrix(Y_train)) && (!(nrow(X_train)==nrow(Y_train))) ) {
+  #    stop("'Y_train' must be non-empty and have same number of rows as 'X_train'")
+  # }
+
 
    if (missing(nExecutor))   
        nExecutor <- sum(distributedR_status()$Inst)
 
-   nExecutor <- round(nExecutor)
-   if(nExecutor <= 0)
-        stop("nExecutor should be a positive integer number")
+   if (!( (is.numeric(nExecutor)) && (length(nExecutor)==1) && (nExecutor%%1 == 0) && (nExecutor > 0) )) 
+        stop("'nExecutor' must be a positive integer number")
 
    if(missing(distribution))
 	stop("'distribution' is a required argument")
 
-   if ((!(distribution=="gaussian")) && (!(distribution=="bernoulli")) && (!(distribution=="adaboost")) && (!(distribution=="multinomial")))
+   if ( !(is.na(distribution)) && (!(distribution=="gaussian")) && (!(distribution=="bernoulli")) && (!(distribution=="adaboost")) && (!(distribution=="multinomial"))  )
        stop("'distribution' must be gaussian or bernoulli or adaboost or multinomial")
 
   if (!( (is.numeric(n.trees)) && (length(n.trees)==1) && (n.trees%%1 == 0) && (n.trees > 0) )) 
@@ -154,8 +156,9 @@ hpdegbm <- function(
    if (!((samplingFlag == TRUE) | (samplingFlag == FALSE)))
          stop("'samplingFlag' must be TRUE or FALSE")
 
-   if ( (missing(nClass)) & ((is.dframe(X_train))) | ((is.darray(X_train))) )
-	stop("'nClass' is a required argument for X_train as dframe or darray")
+   if ( !(distribution=="gaussian") & (missing(nClass)) & ((is.dframe(X_train))) | ((is.darray(X_train))) )
+	stop("'nClass' is a required argument for X_train as dframe or darray and non-gaussian distribution")
+
 
    if (!( (is.numeric(nClass)) && (length(nClass)==1) && (nClass%%1 == 0) && (nClass > 0) )) 
         stop("'nClass' must be a positive integer")
@@ -164,6 +167,8 @@ hpdegbm <- function(
    if (!( (is.numeric(sampleThresh)) && (length(sampleThresh)==1) && (sampleThresh > 0) ))
         stop("'sampleThresh' must be a positive number")
 
+   if (distribution == "gaussian")
+       nClass = 1
 
    # store trained gbm model
    dl_GBM_model <- dlist(nExecutor)

@@ -802,7 +802,7 @@ test_that("The inputs are validated for AdaBoost", {
 
     expect_error(hpdegbm(X_train=X_train,  nExecutor=4, n.trees=1000, distribution = "adaboost", nClass=2), "'Y_train' is a required argument")  
     
-    expect_error(hpdegbm(X_train, Y_train, nExecutor=-4, Y_train, n.trees=1000,  distribution = "adaboost", nClass=2), "nExecutor should be a positive integer number") 
+    expect_error(hpdegbm(X_train, Y_train, nExecutor=-4, Y_train, n.trees=1000,  distribution = "adaboost", nClass=2), " 'nExecutor' must be a positive integer number") 
 })
 
 
