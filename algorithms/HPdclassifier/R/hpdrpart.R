@@ -114,9 +114,16 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 		cutoff = 0
 
 
-
-
 	DR_status = distributedR_status()
+
+
+	if(missing(nExecutor))
+	{
+		dataset_size = nrow(observations)*ncol(observations)*8
+		dataset_size = dataset_size/1024/1024/1024 #dataset size in GB
+		dataset_size = max(as.integer(dataset_size),1)
+		nExecutor = min(dataset_size,sum(DR_status$Inst))
+	}
 
 	free_sh_mem = (DR_status$DarrayQuota - 
 		 DR_status$DarrayUsed)/
@@ -222,6 +229,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	model$numresp = 0
 	model$numresp = length(classes)
 	model$classes = classes
+	model$nExecutor = nExecutor
 	class(model) <- c("hpdrpart","rpart")
 
 	if(is.data.frame(data))
