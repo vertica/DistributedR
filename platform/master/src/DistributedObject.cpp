@@ -230,8 +230,19 @@ bool DistributedObject::Create(const string& name,
     int32_t id = GenerateSplitId();
     arr->set_name(BuildSplitName(name_, id, version_));
     arr->mutable_dim()->Clear();
+    arr->mutable_psizes()->Clear();
     for (int k = 0; k < blocks.size(); ++k) {
       arr->mutable_dim()->add_val(blocks[k]);
+    }
+    
+    if(dobject_subtype_ == FLEX_DECLARED) { 
+      for (int k = 0; k < blocks.size(); ++k) {
+          arr->mutable_psizes()->add_val(0);
+      }
+    } else {
+      for (int k = 0; k < blocks.size(); ++k) {
+       arr->mutable_psizes()->add_val(blocks[k]);
+      }
     }
 
     for (int k = 0; k < arr->dim().val_size(); ++k) {
@@ -388,6 +399,8 @@ void DistributedObject::PutSplitWithId(uint32_t split_id,
   // different version.
   // The worker picks the version for the split, while the master
   // controls the version for the entire darray.
+    
+    
 
   unique_lock<mutex> d_lock(*mutex_);
 
@@ -458,8 +471,10 @@ void DistributedObject::PutSplitWithId(uint32_t split_id,
     new_split->array->mutable_dim()->set_val(1, arr.dim().val(1));
   }
 
-
-  
+  // Update psizes. Again, separate variable is not needed, but currently using it 
+  // to get around dim_size "hack" for flex variable
+  new_split->array->mutable_psizes()->set_val(0, arr.psizes().val(0));
+  new_split->array->mutable_psizes()->set_val(1, arr.psizes().val(1));
 
   // Get the random access iterator by projecting the iterator from
   // name
@@ -513,6 +528,26 @@ void DistributedObject::PutSplitWithId(uint32_t split_id,
 #ifdef FAST_UPDATE
   version_--;
 #endif
+}
+
+Rcpp::NumericMatrix DistributedObject::GetPartitionSizes() {
+    ::int64_t split_id, split_rdim, split_cdim;
+    DistributedObjectSplit *ret;
+    int numDims = dobject_type_ == DLIST ? 1 : 2;
+    
+    // Store the results in a matrix
+    Rcpp::NumericMatrix partitionSizes(NumSplitsDflt(), numDims);
+    
+    for(split_id = 0; split_id < NumSplitsDflt(); split_id++) {
+        ret = version_split_map[version_].get<id>().find(split_id)->get();
+        split_rdim = ret->array->psizes().val(0);
+        split_cdim = ret->array->psizes().val(1);
+        partitionSizes(split_id,0) = split_rdim;
+      
+        if(numDims > 1) partitionSizes(split_id,1) = split_cdim;
+    }
+    
+    return partitionSizes;
 }
 
 /** Update the dimension and boundary field of flexible object. Used when the object is updated the first time.
@@ -618,6 +653,7 @@ RCPP_MODULE(dobject_module) {
     .method("dim", &DistributedObject::GetDims)
     .method("blocks", &DistributedObject::GetBlocks)
     .method("is_object_invalid", &DistributedObject::isObjectInvalid)
+    .method("parts_sizes", &DistributedObject::GetPartitionSizes)
       ;  // NOLINT(whitespace/semicolon)
 }
 

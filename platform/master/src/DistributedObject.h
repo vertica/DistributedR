@@ -225,6 +225,7 @@ class DistributedObject {
   Array* GetSplitFromId(uint32_t split_id, int32_t version = -1);
   Array* GetSplitFromPos(uint32_t split_pos, int32_t version = -1);
   int32_t GetSplitPosFromId(uint32_t split_id, int32_t version = -1);
+  Rcpp::NumericMatrix GetPartitionSizes();
   void PutSplitWithId(uint32_t split_id, const Array& arr);
   bool UpdateDimAndBoundary(int32_t version = -1);
 

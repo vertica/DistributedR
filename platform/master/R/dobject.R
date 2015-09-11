@@ -237,15 +237,10 @@ setMethod("partitionsize", signature("dobject","missing"),
   function(x, index) {
     if(is.null(x)) return (0)
     nparts<-npartitions(x)
+    
     if(x@subtype == "FLEX_DECLARED"){
-      #For flex objects let's go to the worker and figure out the current size
-      temp<-darray(dim=c(nparts,2), blocks=c(1,2))
-      foreach(i, 1:nparts, getSize<-function(y=splits(x,i), res=splits(temp,i)) {
-	     res<-matrix(dim(y), nrow=1)
-	     update(res)
-        }, progress=FALSE)
-      return (getpartition(temp))
-   }else{
+      return(x@dobject_ptr$parts_sizes())
+    } else {
      #For non-flex objects we will reuse information from dimensions
      temp<-NULL
      fulldim<-dim(x)
@@ -265,7 +260,7 @@ setMethod("partitionsize", signature("dobject","missing"),
      csizes<-c(rep(blockdim[2],(nblocks[2]-1)),lastcsize)
      temp<- (cbind(rep(rsizes,each=length(csizes)),rep(csizes,length(rsizes))))
      return (temp)
-   }
+    }
 })
 
 #Return the size of a partition
@@ -275,17 +270,10 @@ setMethod("partitionsize", signature("dobject","numeric"),
     index<-round(index)
     if(index<1) stop("Partition index should be a positive number")
     if(index>npartitions(x)) stop("Partition index should be less than total number of partitions (",npartitions(x),")")
-
     if(x@subtype == "FLEX_DECLARED"){
-        #We don't store the sizes of flexible objects. Therefore, go to the worker and determine size
-	temp<-darray(dim=c(1,2), blocks=c(1,2))
-	foreach(i, 1:1, getSize<-function(y=splits(x,index), res=splits(temp,1)) {
-	     res<-matrix(dim(y), nrow=1)
-	     update(res)
-        }, progress=FALSE)
-	return (getpartition(temp))
-    }else{
-	#Just return the size as per the declared value
+      return(t(as.matrix(x@dobject_ptr$parts_sizes()[index,])))
+    } else {
+      #Just return the size as per the declared value
       return (matrix(dobject.getdims(x@dim,x@blocks,index),nrow=1))
     }
 })

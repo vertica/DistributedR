@@ -8,8 +8,7 @@
 #################################################################################################
 ######################### generate testing scenarios for classification ######################### 
 library(gbm)
-#library(caTools)
-library(testthat)
+#library(testthat)
 library(HPdclassifier)
 
 
@@ -34,10 +33,13 @@ ind <- sample(2,nrow(iris),replace=TRUE,prob=c(0.7,0.3))
 train.iris <- iris[ind==1,]
 valid.iris <- iris[ind==2,]
 
-X_train <- train.iris
-Y_train <- train.iris$Species ### Y_train is a "factor" vector
-Y_train1 <- as.data.frame(Y_train) ### Y_train1 is a list (data.frame)
-Y_train2 <- unlist(Y_train1)       ### unlist: Y_train2 is a "factor" vector
+X_train0 <- train.iris
+Y_train0 <- train.iris$Species ### Y_train is a "factor" vector
+Y_train1 <- as.data.frame(Y_train0) ### Y_train1 is a data.frame
+Y_train2 <- unlist(Y_train1)       ### unlist or as.factor: Y_train2 is a "factor" vector
+
+rm(X_train0)
+rm(Y_train0)
   
 X_train1 <- as.data.frame(as.matrix(cbind(train.iris$Sepal.Length, train.iris$Sepal.Width,train.iris$Petal.Length,train.iris$Petal.Width))) 
 colnames(X_train1) <- c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width") 
@@ -162,7 +164,7 @@ test_that("Test classification accuracy: AdaBoost", {
        var.monotone = NULL,
        nTrain = NULL,
        train.fraction = NULL,
-       keep.data = TRUE,
+       keep.data = FALSE,
        verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
        var.names = NULL,
        #response.name = "y",
@@ -232,7 +234,7 @@ test_that("Test classification accuracy: AdaBoost", {
        var.monotone = NULL,
        nTrain = NULL,
        train.fraction = NULL,
-       keep.data = TRUE,
+       keep.data = FALSE,
        verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
        var.names = NULL,
        #response.name = "y",
@@ -302,7 +304,7 @@ test_that("Test classification accuracy: AdaBoost", {
        var.monotone = NULL,
        nTrain = NULL,
        train.fraction = NULL,
-       keep.data = TRUE,
+       keep.data = FALSE,
        verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
        var.names = NULL,
        #response.name = "y",
@@ -374,7 +376,7 @@ test_that("Test classification accuracy: bernoulli", {
        var.monotone = NULL,
        nTrain = NULL,
        train.fraction = NULL,
-       keep.data = TRUE,
+       keep.data = FALSE,
        verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
        var.names = NULL,
        #response.name = "y",
@@ -444,7 +446,7 @@ test_that("Test classification accuracy: bernoulli", {
        var.monotone = NULL,
        nTrain = NULL,
        train.fraction = NULL,
-       keep.data = TRUE,
+       keep.data = FALSE,
        verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
        var.names = NULL,
        #response.name = "y",
@@ -514,7 +516,7 @@ test_that("Test classification accuracy: bernoulli", {
        var.monotone = NULL,
        nTrain = NULL,
        train.fraction = NULL,
-       keep.data = TRUE,
+       keep.data = FALSE,
        verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
        var.names = NULL,
        #response.name = "y",
@@ -582,7 +584,7 @@ test_that("Test classification accuracy: multinomial", {
        var.monotone = NULL,
        nTrain = NULL,
        train.fraction = NULL,
-       keep.data = TRUE,
+       keep.data = FALSE,
        verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
        var.names = NULL,
        #response.name = "y",
@@ -724,7 +726,7 @@ test_that("Test regression accuracy: gaussian", {
        var.monotone = NULL,
        nTrain = NULL,
        train.fraction = NULL,
-       keep.data = TRUE,
+       keep.data = FALSE,
        verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
        var.names = NULL,
        #response.name = "y",
@@ -789,7 +791,7 @@ context("Checking the interface of hpdegbm")
 test_that("The tree hyper-parameters are validated for AdaBoost", {
     expect_error(hpdegbm(X_train, Y_train, nExecutor=4, n.trees=-1000, distribution = "adaboost", nClass=2), "'n.trees' must be a positive integer") 
 
-    expect_error(hpdegbm(X_train, Y_train,  nExecutor=4, n.trees= 1000, interaction.depth = -3, distribution = "adaboost", nClass=2), "'interaction.depth' must be at least 1") 
+    expect_error(hpdegbm(X_train, Y_train,  nExecutor=4, n.trees= 1000, interaction.depth = -3, distribution = "adaboost", nClass=2), "'interaction.depth' must be a positive integer") 
 
     expect_error(hpdegbm(X_train, Y_train,  nExecutor=4, n.trees= 1000, interaction.depth = 3,  n.minobsinnode = -10, distribution = "adaboost", nClass=2), "'n.minobsinnode' must be a positive integer")
 }) 
@@ -800,7 +802,7 @@ test_that("The inputs are validated for AdaBoost", {
 
     expect_error(hpdegbm(X_train=X_train,  nExecutor=4, n.trees=1000, distribution = "adaboost", nClass=2), "'Y_train' is a required argument")  
     
-    expect_error(hpdegbm(X_train, Y_train, nExecutor=-4, Y_train, n.trees=1000,  distribution = "adaboost", nClass=2), "nExecutor should be a positive integer number") 
+    expect_error(hpdegbm(X_train, Y_train, nExecutor=-4, Y_train, n.trees=1000,  distribution = "adaboost", nClass=2), " 'nExecutor' must be a positive integer number") 
 })
 
 

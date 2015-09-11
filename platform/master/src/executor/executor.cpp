@@ -161,8 +161,8 @@ ExecutorEvent Executor::GetNextEvent() {
   // write task result to send it to worker.
   std::pair<size_t, size_t> dims = newsplit->GetDims();
 
-  //TODO(R) Hack for obtaining size of dataframe splits, since GetDims() is 0 for dframes and lists
-  if(orig_class == DATA_FRAME){
+  //TODO(iR) Hack for obtaining size of dataframe splits, since GetDims() is 0 for dframes and lists
+  if(org_class == DATA_FRAME || org_class == LIST || org_class == EMPTY){
     dims = make_pair(obj_nrow,obj_ncol);
   }
 
@@ -903,7 +903,7 @@ int main(int argc, char *argv[]) {
 #endif
 
       LOG_INFO("*** No Task under execution. Waiting from Task from Worker **");
-      R.parseEvalQ("print(ls())");
+      //R.parseEvalQ("print(ls())");
 
       int result = -1;
       next = ex->GetNextEvent();
