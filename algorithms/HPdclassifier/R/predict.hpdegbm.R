@@ -83,7 +83,7 @@ predict.hpdegbm <- function(object, newdata, type="link", trace = FALSE)
 
      nTest <- nrow(newdata)
      daPredict <- darray(dim=c(nTest,1), blocks=c(ceiling(nTest/npartition_test),1), sparse=FALSE)
-
+     #daPredict <- darray(npartitions=c(npartition_test,1), sparse=FALSE, distribution_policy='roundrobin')
 
      # distributed prediction
      foreach(i, 1:nExecutor_test, function(GBM_model=model, best.iter=best.iter, predi=splits(daPredict,i), data2=splits(newdata,i), distributionGBM=distributionGBM, type=type) { 
@@ -140,6 +140,7 @@ predict.hpdegbm <- function(object, newdata, type="link", trace = FALSE)
                pred0 <- pred0 + (predict(GBM_modelk, data2, best.iterk, type="response")) # fusion of sub-models
            } 
            predi <- apply(pred0,1,which.max)
+           predi <- as.matrix(predi)
          }
 
         update(predi)
