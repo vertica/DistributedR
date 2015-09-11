@@ -6,8 +6,7 @@ varImportance function calculates the importance of each feature given a trained
 }
 
 \usage{ 
-\method{varImportance}(model, xtest, ytest,  ..., 
-			      distance_metric, trace = FALSE)
+varImportance(model, xtest, ytest, ..., distance_metric, trace = FALSE)
 }
 
 \arguments{

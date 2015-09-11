@@ -1,10 +1,10 @@
-Package: HPdclassifier
+Package: HPdutility
 Type: Package
 Title: Distributed classifiers for Big Data
 Version: 1.2.0
 Date: 2015-04-17
 Author: HP Vertica Analytics Team
 Maintainer: HP Vertica Analytics Team <distributedRTeam@external.groups.hp.com>
-Depends: R (>= 3.0.0), distributedR, HPdutility, randomForest (>= 4.6-10), rpart
-Description: Distributed algorithms for learning classifiers. Written using HP Vertica Distributed R package.
+Depends: R (>= 3.0.0), distributedR
+Description: General purpose distributed algorithms. Written using HP Vertica Distributed R package.
 License:  GPL (>= 2) | file LICENSE
