@@ -120,6 +120,9 @@ hpdegbm <- function(
    if ( ((distribution=="bernoulli") || (distribution=="adaboost") || (distribution=="gaussian")) && (is.dframe(Y_train)) )
       stop("'Y_train' cannot be dframe for regression and binary classification")
 
+   if ( (((is.dframe(X_train)) || (is.darray(X_train))) && ((!is.dframe(Y_train)) || (!is.darray(Y_train))))  || (((is.dframe(Y_train)) || (is.darray(Y_train))) && ((!is.dframe(X_train)) || (!is.darray(X_train)))) )
+       stop("Either both 'X_train' and 'Y_train' must be dobjects, or neither can be dobjects")
+
 
    if (missing(nExecutor))   
        nExecutor <- sum(distributedR_status()$Inst)
