@@ -61,7 +61,12 @@ hpdegbm <- function(
        interaction.depth = 1, 
        n.minobsinnode = 10,
        shrinkage = 0.050,     #[0.001, 1]
-       bag.fraction = 0.50, #0.5-0.8,
+       bag.fraction = 0.50, #0.5-0.8
+       samplingFlag = TRUE,  
+       nClass,
+       sampleThresh=100,
+       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
+       completeModel = FALSE,
        offset = NULL, 
        misc = NULL, 
        w = NULL,
@@ -71,13 +76,9 @@ hpdegbm <- function(
        keep.data = FALSE,
        verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
        var.names = NULL,
-       #response.name = "y",
-       group = NULL,
-       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE,
-       samplingFlag = TRUE,  
-       nClass,
-       sampleThresh=100) # default system parameters are defined here
+       response.name = "y",
+       group = NULL
+       ) # default system parameters are defined here
 
 # X_train: a dframe, darray, data frame, or data matrix containing the predictor variables
 # Y_train: a vector of outputs
@@ -155,8 +156,8 @@ hpdegbm <- function(
    if (!((samplingFlag == TRUE) | (samplingFlag == FALSE)))
          stop("'samplingFlag' must be TRUE or FALSE")
 
-   if ( !(distribution=="gaussian") & (missing(nClass)) & ((is.dframe(X_train))) | ((is.darray(X_train))) )
-	stop("'nClass' is a required argument for X_train as dframe or darray and non-gaussian distribution")
+   if ( (missing(nClass)) & (samplingFlag==TRUE)  & !(distribution=="gaussian")  & ((is.dframe(X_train))) | ((is.darray(X_train))) )
+	stop("'nClass' is a required argument for X_train as dframe or darray and non-gaussian distribution and samplingFlag==TRUE")
 
 
    if (!( (is.numeric(nClass)) && (length(nClass)==1) && (nClass%%1 == 0) && (nClass > 0) )) 
