@@ -342,26 +342,17 @@ hpdegbm <- function(
 }
 
 
-## print function for hpdegbm
 print.hpdegbm <- function(x, ...)
 {
-    cat("\n hpdegbm model:\n")
-    print(x$model, ...)
-
-    cat("\n distribution:\n")
-    print(x$distribution, ...)
-
-    cat("\n n.trees:\n")
-    print(x$n.trees, ...)
-
-    cat("\n number of GBM models:\n")
-    print(x$numGBMModel, ...)
-
-    cat("\n best iterations of GBM models:\n")
-    print(x$bestIterations, ...)
-
-
-    #invisible(x)
+    print(x$call)
+    cat(paste("\n Number of GBM models: ", x$numGBMModel, "\n"))
+    cat(paste("distribution: ", x$distribution, "\n"))    
+    cat(paste("n.trees: ", x$ n.trees, "\n"))
+    cat(paste("best iterations of GBM models: ", x$bestIterations, "\n"))
+    #print(x$model[[1]]) 
 }
+
+
+
 
 
