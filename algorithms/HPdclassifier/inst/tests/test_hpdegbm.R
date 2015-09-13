@@ -245,7 +245,7 @@ test_that("Test classification accuracy: AdaBoost", {
 
 
     newdata2 <- dfX_test     # test distributed big data
-    Predictions2 <- predict.hpdegbm(finalModel2, newdata2,  trace = FALSE)
+    Predictions2 <- getpartition(predict.hpdegbm(finalModel2, newdata2,  trace = FALSE))
     print(confusion(Predictions2 > 0, getpartition(daY_test) > 0)) 
     result2 <- confusion(Predictions2 > 0, getpartition(daY_test) > 0)
 
@@ -314,7 +314,7 @@ test_that("Test classification accuracy: AdaBoost", {
 
 
     newdata3 <- dfX_test     # test distributed big data
-    Predictions3 <- predict.hpdegbm(finalModel3, newdata3, trace = FALSE)
+    Predictions3 <- getpartition(predict.hpdegbm(finalModel3, newdata3, trace = FALSE))
     print(confusion(Predictions3 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
     result3 <- confusion(Predictions3 > 0, getpartition(daY_test) > 0)
 
@@ -454,7 +454,7 @@ test_that("Test classification accuracy: bernoulli", {
 
 
     newdata5 <- dfX_test     # test distributed big data
-    Predictions5 <- predict.hpdegbm(finalModel5, newdata5, trace = FALSE)
+    Predictions5 <- getpartition(predict.hpdegbm(finalModel5, newdata5, trace = FALSE))
     print(confusion(Predictions5 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
     result5 <- confusion(Predictions5 > 0, getpartition(daY_test) > 0)
 
@@ -523,7 +523,7 @@ test_that("Test classification accuracy: bernoulli", {
 
 
     newdata6 <- dfX_test     # test distributed big data
-    Predictions6 <- predict.hpdegbm(finalModel6, newdata6, trace = FALSE)
+    Predictions6 <- getpartition(predict.hpdegbm(finalModel6, newdata6, trace = FALSE))
     print(confusion(Predictions6 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
     result6 <- confusion(Predictions6 > 0, getpartition(daY_test) > 0)
 
@@ -804,7 +804,7 @@ a
 
 
 # distributed prediction of multi-class classification
-b <- predict.hpdegbm(dmod, dirisX_test)
+b <- getpartition(predict.hpdegbm(dmod, dirisX_test))
 b
 
 

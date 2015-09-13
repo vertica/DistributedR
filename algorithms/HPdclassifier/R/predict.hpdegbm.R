@@ -157,7 +157,8 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE)
           update(predi)
      }) 
 
-     Predictions <- getpartition(daPredict)
+    # Predictions <- getpartition(daPredict)
+     Predictions <- daPredict
    } else{
      # centralized prediction for small data (newdata). newdata is data.frame or matrix
      nTest <- nrow(newdata)
