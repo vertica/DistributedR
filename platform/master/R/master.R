@@ -187,7 +187,7 @@ start_workers <- function(cluster_conf, storage,
       }
       
       options("scipen"=sp_opt)
-      print(sprintf("cmd: %s",cmd))
+      #print(sprintf("cmd: %s",cmd))
       system(cmd, wait=FALSE, ignore.stdout=TRUE, ignore.stderr=TRUE)
     }
   }, error = handle_presto_exception)
