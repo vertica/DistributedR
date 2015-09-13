@@ -1,8 +1,135 @@
+#' Load a CSV file into a distributed data frame.
+#'
+#' @section Partitioning between executors:
+#'
+#' We generate as many partitions as files. If there are less files than executors we split each file further.
+#'
+#' E.g. let’s say we have 3 executors and we try to load /tmp/*.csv which expands to [/tmp/file1.csv (500MB) and /tmp/file2.csv (1MB)]. Initially we create 2 partitions (the number of files). As we have more executors (3) than partitions (2) we further divide the biggest file into 2. In the end we have 3 partitions (/tmp/file1.csv from 0 to 250MB, /tmp/file1.csv from 250MB to 500MB and /tmp/file2.csv.
+#'
+#' If globbing is not used we only load one file which will be divided in as many chunks as executors.
+#'
+#' @section Details:
+#'
+#' There is a limitation in the case where the number of lines is less than the number executors.
+#' In this case the load will fail. R's function \code{read.csv()} can be used instead.
+#'
+#' @param url File URL. Examples: '/tmp/file.csv', 'hdfs:///file.csv'.
+#'
+#'                      We also support globbing. Examples: '/tmp/*.csv', 'hdfs:///tmp/*.csv'.
+#'
+#'                      When globbing all CSV files need to have the same schema and delimiter.
+#' @param schema  Specifies the column names and types.
+#'
+#'                Syntax is: \code{<col0-name>:<col0_type>,<col1-name>:<col1_type>,...<colN-name>:<colN_type>}.
+#'
+#'                Supported types are: \code{logical}, \code{integer}, \code{int64}, \code{numeric} and \code{character}. 
+#'
+#'                Example: schema='age:int64,name:character'.
+#'
+#'                Note that due to R not having a proper int64 type we convert it to an R numeric. Type conversion work as follows:
+#'
+#'                \tabular{ll}{
+#'                    CSV type  |\tab R type    \cr
+#'                    -         |\tab -         \cr
+#'                    integer   |\tab integer   \cr
+#'                    numeric   |\tab numeric   \cr
+#'                    logical   |\tab logical   \cr
+#'                    int64     |\tab numeric   \cr
+#'                    character |\tab character
+#'                }
+#' @param delimiter Column separator. Example: delimiter='|'. By default delimiter is ','.
+#' @param commentCharacter Discard lines starting with this character. Leading spaces are ignored.
+#' @param fileType File type is determined automatically by the file extension.
+#'
+#'                 Users can use fileType to override it. Useful when files don't have extensions.
+#' @param hdfsConfigurationFile By default: \code{paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')}.
+#'
+#'                              Options are:
+#'                              \itemize{
+#'                                  \item webhdfsPort: webhdfs port, integer
+#'                                  \item hdfsPort: hdfs namenode port, integer
+#'                                  \item hdfsHost: hdfs namenode host, string
+#'                                  \item hdfsUser: hdfs username, string
+#'                              }
+#'
+#'                              An example file is:
+#'
+#'                                  \{ \cr
+#'                                  "webhdfsPort": 50070, \cr
+#'                                  "hdfsPort": 9000, \cr
+#'                                  "hdfsHost": "172.17.0.3", \cr
+#'                                  "hdfsUser": "jorgem" \cr
+#'                                  \}
+#'
+#' TODO explain helper script to copy hdfsConfigurationFile to all nodes.
+#'
+#' @return A distributed data frame representing the CSV file.
+#' @examples
+#' df <- csv2dframe(url=paste(system.file(package='HPdata'),'/tests/data/ex001.csv',sep=''), schema='a:int64,b:character')
+
 csv2dframe <- function(url, ...) {
     options = list(...)
     options['fileType'] = 'csv'
     .ddc_read(url, options)
 }
+
+#' Load an ORC file into a distributed data frame
+#'
+#' @section Partitioning between executors:
+#'
+#' We generate as many partitions as the total number of ORC stripes.
+#'
+#' E.g. let’s say the customer tries to load /tmp/*.orc which expands to /tmp/file1.orc with 2 stripes and /tmp/file2.orc with 3 stripes. We’ll end up with 2 + 3 = 5 partitions.
+#'
+#' If globbing is not used we only load one file and the number of partitions will be equal to the number of stripes.
+#'
+#' @section Details:
+#'
+#' Type conversions work as follows:
+#'                \tabular{ll}{
+#'                    ORC type          |\tab R type        \cr
+#'                    -                 |\tab -             \cr
+#'                    byte/short/int    |\tab integer       \cr
+#'                    float/double      |\tab numeric       \cr
+#'                    long              |\tab numeric       \cr
+#'                    bool              |\tab logical       \cr
+#'                    string/binary     |\tab character     \cr
+#'                    char/varchar      |\tab character     \cr
+#'                    decimal           |\tab character     \cr
+#'                    timestamp/date    |\tab character     \cr
+#'                    union             |\tab not supported \cr
+#'                    struct            |\tab dataframe     \cr
+#'                    map               |\tab dataframe     \cr
+#'                    list              |\tab list
+#'                }
+#'
+#' @param url File URL. Examples: '/tmp/file.orc', 'hdfs:///file.orc'.
+#' @param selectStripes ORC stripes to include. Stripes need to be consecutive.
+#' @param fileType File type is determined automatically by the file extension.
+#'
+#'                 Users can use fileType to override it. Useful when files don't have extensions.
+#' @param hdfsConfigurationFile By default: \code{paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')}.
+#'
+#'                              Options are:
+#'                              \itemize{
+#'                                  \item webhdfsPort: webhdfs port, integer
+#'                                  \item hdfsPort: hdfs namenode port, integer
+#'                                  \item hdfsHost: hdfs namenode host, string
+#'                                  \item hdfsUser: hdfs username, string
+#'                              }
+#'
+#'                              An example file is:
+#'
+#'                                  \{ \cr
+#'                                  "webhdfsPort": 50070, \cr
+#'                                  "hdfsPort": 9000, \cr
+#'                                  "hdfsHost": "172.17.0.3", \cr
+#'                                  "hdfsUser": "jorgem" \cr
+#'                                  \}
+#' @return A distributed data frame representing the ORC file.
+#' @examples
+#' df <- orc2dframe(url=paste(system.file(package='HPdata'),'/tests/data/TestOrcFile.test1.orc',sep=''))
+
 
 orc2dframe <- function(url, ...) {
     options = list(...)
@@ -68,5 +195,8 @@ orc2dframe <- function(url, ...) {
                 }
             }
     )
+    # TODO catch error when nlines < nexecutors and return a darray with a single partition using:
+    # d <- dframe(numpartitions=1)
+    # read.csv('../ddc/test/data/ex002.csv',header=FALSE,col.names=c('a','b','c','d'))
     d # return dframe
 }
