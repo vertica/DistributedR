@@ -66,7 +66,6 @@ hpdegbm <- function(
        nClass,
        sampleThresh=100,
        trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE,
        offset = NULL, 
        misc = NULL, 
        w = NULL,
@@ -90,7 +89,6 @@ hpdegbm <- function(
 # bag.fraction: the fraction of the training set observations randomly selected for the next tree in the expansion
 # verbose: If TRUE, gbm prints out progress and performance indicators
 # trace: If TRUE, print out the training time
-# completeModel: If TRUE, add training time in the model 
 # samplingFlag: If true, call distributed sampling
 # nClass: a parameter used to determine the sampling ratio. For classification, it is the class number 
 # sampleThresh: sample threshold
@@ -120,7 +118,7 @@ hpdegbm <- function(
    if ( ((distribution=="bernoulli") || (distribution=="adaboost") || (distribution=="gaussian")) && (is.dframe(Y_train)) )
       stop("'Y_train' cannot be dframe for regression and binary classification")
 
-   if ( (((is.dframe(X_train)) || (is.darray(X_train))) && ((!is.dframe(Y_train)) || (!is.darray(Y_train))))  || (((is.dframe(Y_train)) || (is.darray(Y_train))) && ((!is.dframe(X_train)) || (!is.darray(X_train)))) )
+   if ( (((is.dframe(X_train)) || (is.darray(X_train))) && ((!is.dframe(Y_train)) && (!is.darray(Y_train))))  || (((is.dframe(Y_train)) || (is.darray(Y_train))) && ((!is.dframe(X_train)) && (!is.darray(X_train)))) )
        stop("Either both 'X_train' and 'Y_train' must be dobjects, or neither can be dobjects")
 
 
@@ -159,7 +157,7 @@ hpdegbm <- function(
    if (!((samplingFlag == TRUE) | (samplingFlag == FALSE)))
          stop("'samplingFlag' must be TRUE or FALSE")
 
-   if ( (missing(nClass)) & (samplingFlag==TRUE)  & !(distribution=="gaussian")  & ((is.dframe(X_train))) | ((is.darray(X_train))) )
+   if ( (missing(nClass)) & (samplingFlag==TRUE)  & !(distribution=="gaussian")  & ( (is.dframe(X_train)) | (is.darray(X_train)) ) )
 	stop("'nClass' is a required argument for X_train as dframe or darray and non-gaussian distribution and samplingFlag==TRUE")
 
 
@@ -204,7 +202,7 @@ hpdegbm <- function(
          nTrain = NULL,
          train.fraction = NULL, 
          keep.data = FALSE,
-         verbose = TRUE,
+         verbose = FALSE,
          var.names = NULL,
          response.name = "y",
          group = NULL)
@@ -266,7 +264,7 @@ hpdegbm <- function(
             nTrain = NULL,
             train.fraction = NULL,
             keep.data = FALSE,
-            verbose = TRUE,
+            verbose = FALSE,
             var.names = NULL,
             #response.name = "y",
             group = NULL)
@@ -289,7 +287,7 @@ hpdegbm <- function(
     }
   
     if(trace) {
-	timing_info <- Sys.time() - timing_info
+	timing_info <- Sys.time() - starttime
 	print(timing_info)
     }
 
@@ -297,18 +295,9 @@ hpdegbm <- function(
     GBM_model1 <- getpartition(dl_GBM_model)
     best.iter1 <- getpartition(dbest.iter)
 
-   # if (completeModel) {
-   #    finalModel <- list(hpdegbm_Model="GBM_model1",bestIterations="best.iter1", trainingTime="timing_info")
-   # } else {
-   #    finalModel <- list(hpdegbm_Model="GBM_model1",bestIteration="best.iter1")
-   # }
 
-    if (completeModel) {
-       finalModel <- list(GBM_model1,best.iter1, timing_info)
-    } else {
-       finalModel <- list(GBM_model1, best.iter1)
-    }
-
+    finalModel <- list(GBM_model1, best.iter1)
+  
     cl <- match.call()
     cl[[1]] <- as.name("hpdegbm")
     finalModel$call <- cl
