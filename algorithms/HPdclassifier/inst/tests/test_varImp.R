@@ -121,9 +121,15 @@ data = generateData(100,2,TRUE,FALSE)
 data = getpartition(data)
 
 model <- rpart(X1 ~ ., data = data)
-variable.importance = varImportance(model, data, data.frame(data$X1))
-expect_true(variable.importance[2,] > 0)
-expect_true(variable.importance[3,] > 0)
+set.seed(1)
+variable.importance1 = varImportance(model, data, data.frame(data$X1))
+set.seed(1)
+variable.importance2 = varImportance(model, data, data.frame(data$X1))
+
+expect_equal(variable.importance1,variable.importance2)
+
+expect_true(variable.importance1[2,] > 0)
+expect_true(variable.importance1[3,] > 0)
 
 })
 
@@ -154,3 +160,4 @@ expect_true(variable.importance[2,] > 0)
 expect_true(variable.importance[3,] > 0)
 
 })
+
