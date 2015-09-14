@@ -71,6 +71,28 @@ csv2dframe <- function(url, ...) {
     options = list(...)
     options['fileType'] = 'csv'
     .ddc_read(url, options)
+#    tryCatch({
+#        .ddc_read(url, options)
+#    }, error = function(e){
+#        if (grepl('attempt to set partition',paste(e)) == TRUE) {
+#            # retry with read.csv
+#            warning('CSV file has less lines than executors. Trying with read.csv ...')
+#            if (grepl('hdfs://',url) == TRUE) {
+#                stop('Unable to read hdfs files with read.csv. Try starting Distributed R with only one executor (inst=1).')
+#            }
+#            d <- dframe(npartitions=c(1,1))
+#            foreach(i,
+#                1:npartitions(d),
+#                func <- function(dhs = splits(d,i),
+#                                 url = url) {
+#                    dhs <- read.csv(url)
+#                    update(dhs)
+#            })
+#        }
+#        else {
+#            stop(e)
+#        }
+#    })
 }
 
 #' Load an ORC file into a distributed data frame
@@ -148,7 +170,9 @@ orc2dframe <- function(url, ...) {
     # 1. Schedule file across workers. Handles globbing also.
     library(hdfsconnector)
     plan <- create_plan(url, options, pm$worker_map())
-    # print(plan)  # for debugging
+    if (Sys.getenv('DEBUG_DDC') != '') {
+        print(plan)  # for debugging
+    }
 
     hdfsConfigurationStr <- paste(readLines(as.character(options["hdfsConfigurationFile"])),collapse='\n')
     for (i in 1:length(plan$configs)) {
