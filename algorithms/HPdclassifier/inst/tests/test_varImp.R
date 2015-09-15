@@ -24,7 +24,7 @@ varImp.data.frame <- varImportance(model, xtest, ytest)
 varImp.dframe <- varImportance(model, as.dframe(xtest), as.dframe(ytest))
 
 
-expect_equal(nrow(model$variable.importance),ncol(xtest)+1)
+expect_equal(nrow(model$variable.importance),ncol(xtest))
 expect_equal(nrow(varImp.data.frame),ncol(xtest))
 expect_true(any(varImp.data.frame > 0))
 expect_equal(nrow(varImp.dframe),ncol(xtest))
@@ -110,8 +110,8 @@ data = getpartition(data)
 
 model <- rpart(X1 ~ ., data = data)
 variable.importance = varImportance(model, data, data.frame(data$X1),type = "class")
+expect_true(variable.importance[1,] > 0)
 expect_true(variable.importance[2,] > 0)
-expect_true(variable.importance[3,] > 0)
 })
 
 test_that("testing with regression trees", {
@@ -128,8 +128,8 @@ variable.importance2 = varImportance(model, data, data.frame(data$X1))
 
 expect_equal(variable.importance1,variable.importance2)
 
+expect_true(variable.importance1[1,] > 0)
 expect_true(variable.importance1[2,] > 0)
-expect_true(variable.importance1[3,] > 0)
 
 })
 
@@ -144,8 +144,8 @@ data = getpartition(data)
 
 model <- randomForest(formula = X1 ~ ., data = data, ntree = 10)
 variable.importance = varImportance(model, data, data.frame(data$X1))
+expect_true(variable.importance[1,] > 0)
 expect_true(variable.importance[2,] > 0)
-expect_true(variable.importance[3,] > 0)
 })
 
 test_that("testing with regression trees", {
@@ -156,8 +156,8 @@ data = getpartition(data)
 
 model <- randomForest(formula = X1 ~ ., data = data, ntree = 10)
 variable.importance = varImportance(model, data, data.frame(data$X1))
+expect_true(variable.importance[1,] > 0)
 expect_true(variable.importance[2,] > 0)
-expect_true(variable.importance[3,] > 0)
 
 })
 

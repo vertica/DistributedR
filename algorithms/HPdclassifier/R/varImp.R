@@ -34,6 +34,12 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 			print(Sys.time() - timing_info)
 		})
 	}
+	else if(is.data.frame(xtest))
+	{
+		permutation <- sample.int(nrow(xtest),nrow,replace = TRUE)
+		xtest = data.frame(xtest[permutation,])
+		ytest = data.frame(ytest[permutation,])
+	}
 
 	#determine if the output is categorical or not
 	#this is required to determine the default value of distance_metric
@@ -215,10 +221,13 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 		nrow = nrow)
 	{
 		shuffled_data = do.call(rbind,temp_data)
-		shuffled_data = data.frame(shuffled_data[1:min(nrow,nrow(shuffled_data)),])
+		copies = floor(nrow/nrow(shuffled_data))
+		remainder = nrow - copies * nrow(shuffled_data)
+		indices = rep(1:nrow(shuffled_data),copies)
+		indices = c(indices,1:remainder)
+		shuffled_data = data.frame(shuffled_data[indices,])
 		update(shuffled_data)
 	},progress = FALSE)
-
 
 	colnames(shuffled_data) <- colnames(data)
 	return(shuffled_data)
