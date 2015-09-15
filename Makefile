@@ -30,9 +30,23 @@ install:
 	R CMD INSTALL platform/executor
 	R CMD INSTALL platform/master
 
+install_algorithms:
+	R CMD INSTALL algorithms/HPdutility
+	R CMD INSTALL algorithms/HPdregression
+	R CMD INSTALL algorithms/HPdcluster
+	R CMD INSTALL algorithms/HPdclassifier
+	R CMD INSTALL algorithms/HPdgraph
+	R CMD INSTALL algorithms/HPdata
+
 uninstall:
 	R CMD REMOVE distributedR
 	R CMD REMOVE Executor
+	R CMD REMOVE HPdregression
+	R CMD REMOVE HPdcluster
+	R CMD REMOVE HPdclassifier
+	R CMD REMOVE HPdgraph
+	R CMD REMOVE HPdata
+	R CMD REMOVE HPdutility
 
 clean:
 	cd platform/master/src; make -f Makevars clean; cd ../../../

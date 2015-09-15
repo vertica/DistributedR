@@ -47,10 +47,10 @@ hpdsampling <- function(dfX,daY, nClass, sampleThresh=100)
 	stop("'nClass' is a required argument")
 
    if(nrow(dfX) != nrow(daY))
-  		stop("'daY' must have same number of rows as 'dfX'")
+  	stop("'daY' must have same number of rows as 'dfX'")
 
    if(npartitions(dfX) != npartitions(daY))
-		stop("'daY' must have same number of partitions as 'dfX'")
+	stop("'daY' must have same number of partitions as 'dfX'")
 
 
    if(!is.dframe(dfX) && !is.darray(dfX))
@@ -88,8 +88,13 @@ hpdsampling <- function(dfX,daY, nClass, sampleThresh=100)
       Ns <- ceiling(0.9*nTrain/npartition)
 
    ### distributed sampling of X_train, Y_train
-   dfSX <- dframe(c(Ns*npartition,p), blocks=c(Ns,p))  
-   dfRX <- dframe(c(Ns*npartition*npartition,p), blocks=c(Ns*npartition,p)) 
+   if (is.darray(dfX)) {
+       dfSX <- darray(c(Ns*npartition,p), blocks=c(Ns,p))  
+       dfRX <- darray(c(Ns*npartition*npartition,p), blocks=c(Ns*npartition,p)) 
+   } else {
+       dfSX <- dframe(c(Ns*npartition,p), blocks=c(Ns,p))  
+       dfRX <- dframe(c(Ns*npartition*npartition,p), blocks=c(Ns*npartition,p))
+   } 
 
    if (is.darray(daY)) {
         daSY <- darray(c(Ns*npartition,1), blocks=c(Ns,1)) 
@@ -102,7 +107,6 @@ hpdsampling <- function(dfX,daY, nClass, sampleThresh=100)
   for ( k in 1: npartition) { # npartition
       # distributed sampling: The input and output have the same npartition 
       foreach(i, 1:npartition, function(X_train2=splits(dfX,i),Y_train2=splits(daY,i),SX_train=splits(dfSX,i),SY_train=splits(daSY,i), Ns=Ns ) {
-        #  if (Ns < nrow(X_train2)) {
              index <- sample(1:nrow(X_train2), Ns)
              SX_train <- X_train2[index,]
 
