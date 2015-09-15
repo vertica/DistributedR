@@ -600,11 +600,9 @@ test_that("Test classification accuracy: multinomial", {
     Predictions7 <- predict.hpdegbm(finalModel7, newdata7, type="response", trace = FALSE)
     print(Predictions7)
     as.factor(valid.iris$Species)
-    print(table (Predictions7, as.numeric(valid.iris$Species)))
-    result7 <- table (Predictions7, as.numeric(valid.iris$Species))
-    aa7 <- Predictions7 - as.numeric(valid.iris$Species)
-    correctCount7 <- sum(aa7 == 0)
-    errorRate7 <- 1 - correctCount7/(nrow(newdata7))
+    print(table ((Predictions7), (valid.iris$Species)))
+    result7 <- table ((Predictions7), (valid.iris$Species))
+    errorRate7 <- 1 - sum(diag(result7))/sum(result7)
     print(errorRate7)
 
 

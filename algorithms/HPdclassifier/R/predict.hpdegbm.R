@@ -205,10 +205,14 @@ predict.hpdegbm <- function(object, newdata, type="link", trace = FALSE)
             best.iterk <- best.iter[k,1]
             pred0 <- pred0 + (predict(GBM_modelk, newdata, best.iterk, type="response")) # fusion of sub-models
         } 
-        predi <- apply(pred0,1,which.max)
+        predi <- apply(pred0,1,which.max) # output: {1,2,3,...}
       }
-
-      Predictions <- predi
+      
+      if (distributionGBM == "multinomial") {
+             Predictions <- sapply(predi, function(x) colnames(pred0)[x])
+      } else {
+             Predictions <- predi
+      }
   } # end of else
 
   return(Predictions)
