@@ -158,7 +158,7 @@ setMethod("getpartition", signature("dframe", "missing", "missing"),
                 stop(paste("Cannot perform getpartition on a dframe with dimension larger than",.Machine$integer.max))
             }
 	    if(is.invalid(x)){ return (data.frame())}
-            darr <- dframe(dim(x), dim(x))
+            darr <- dframe(npartitions=1)
             foreach(i, 1:1,
                     createcomposite <- function(comp = splits(x),
                                                 da = splits(darr,1)) {
@@ -193,7 +193,7 @@ setMethod("getpartition", signature("dlist", "missing", "missing"),
             if(all(x@dim<=.Machine$integer.max) == FALSE) {
                 stop(paste("Cannot perform getpartition on a matrix with dimension larger than",.Machine$integer.max))
             }
-            darr <- dlist(x@dim[1])
+            darr <- dlist(1)
             foreach(i, 1:1,
                     createcomposite <- function(comp = splits(x),
                                                 da = splits(darr,1)) {
