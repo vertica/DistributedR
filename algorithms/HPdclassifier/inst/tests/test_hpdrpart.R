@@ -168,7 +168,7 @@ set.seed(1)
 data = generateData(1000,2,TRUE,TRUE)
 model <- hpdrpart(X1 ~ ., data = data)
 data <- generateData(1000,2,TRUE,TRUE)
-predictions = predict(model, data, type = "vector")
+predictions = predict(model, data, type = "class")
 predictions = getpartition(predictions)$predictions
 responses = getpartition(data)$X1
 expect_equal(predictions,responses)
@@ -180,7 +180,7 @@ set.seed(1)
 data = generateData(1000,2,FALSE,TRUE)
 model <- hpdrpart(X1 ~ ., data = data)
 data <- generateData(1000,2,FALSE,TRUE)
-predictions = predict(model, data,type = "vector")
+predictions = predict(model, data,type = "class")
 predictions = getpartition(predictions)$predictions
 responses = getpartition(data)$X1
 expect_equal(predictions,responses)
