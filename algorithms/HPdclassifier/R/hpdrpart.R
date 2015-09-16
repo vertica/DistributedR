@@ -228,7 +228,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	model$na.action = na.action
 	model$numresp = 0
 	model$numresp = length(classes)
-	model$classes = classes
+	attr(model,"ylevels") <- classes
 	model$nExecutor = nExecutor
 	class(model) <- c("hpdrpart","rpart")
 
@@ -279,14 +279,7 @@ predict.hpdrpart <- function(model, newdata,do.trace = FALSE, ...)
 			library(rpart)	
 			class(model) <- class(model)[-1]
 			args = c(list(object = model, newdata = newdata),args)
-			print(args)
 			predictions = do.call(predict,args)
-			print(predictions)
-	
-			if(model$method=="gini")
-			predictions = factor(model$classes[predictions], 
-				    levels = model$classes)
-			
 			predictions = data.frame(predictions)
 			update(predictions)
 		},progress = do.trace)
