@@ -785,6 +785,39 @@ test_that("Test regression accuracy: gaussian", {
 
 
 
+
+###############################################################################################
+context("centralized and distributed prediction of iris real data")
+data(iris)
+irisX       <- iris[which(names(iris) != "Species")]
+irisY       <- as.character(iris$Species)
+trainPerc   <- 0.8
+trainIdx    <- sample(1:nrow(irisX), ceiling(trainPerc * nrow(irisX)))
+irisX_train <- irisX[trainIdx,]
+irisY_train <- irisY[trainIdx]
+irisX_test  <- irisX[-trainIdx,]
+irisY_test  <- irisY[-trainIdx]
+ 
+dirisX_train <- as.dframe(irisX_train)
+dirisY_train <- as.dframe(as.data.frame(irisY_train))
+dirisX_test  <- as.dframe(irisX_test)
+dirisY_test  <- as.dframe(as.data.frame(irisY_test))
+
+# Big data case
+dmod <- hpdegbm(dirisX_train, dirisY_train, distribution = 'multinomial',
+                   nClass = 3)
+
+# centralized prediction of multi-class classification
+a <- predict.hpdegbm(dmod, irisX_test, type="response")
+a
+
+
+# distributed prediction of multi-class classification
+b <- predict.hpdegbm(dmod, dirisX_test, type="response")
+b
+
+
+
 context("Checking the interface of hpdegbm")
 test_that("The tree hyper-parameters are validated for AdaBoost", {
     expect_error(hpdegbm(X_train, Y_train, nExecutor=4, n.trees=-1000, distribution = "adaboost", nClass=2), "'n.trees' must be a positive integer") 
