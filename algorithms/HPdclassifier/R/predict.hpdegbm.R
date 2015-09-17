@@ -98,7 +98,7 @@ predict.hpdegbm <- function(object, newdata, type="link", trace = FALSE)
            # Prediction by the first sub-model: AdaBoost, Bernoulli distribution for binary classification
            GBM_modeli <- GBM_model[[1]]
            best.iteri <- best.iter[1,1]
-           predi <- predict(GBM_modeli, newdata, best.iteri, type="link")  
+           predi <- predict(GBM_modeli, data2, best.iteri, type="link")  
 
            # fusion with other sub-models
            npartition_train <- nrow(best.iter)
@@ -106,11 +106,11 @@ predict.hpdegbm <- function(object, newdata, type="link", trace = FALSE)
            for (k in 2: npartition_train) {
                GBM_modelk <- GBM_model[[k]]
                best.iterk <- best.iter[k,1]
-               predi <- predi + predict(GBM_modelk, newdata, best.iterk, type="link")
+               predi <- predi + predict(GBM_modelk, data2, best.iterk, type="link")
            }
         } 
            predi <- predi/npartition_train # average of regressions from sub-models
-         }
+        }
 
          # bernoulli or AdaBoost distribution for binary classification
         if ((distributionGBM == "bernoulli") | (distributionGBM == "adaboost") ) {
@@ -185,7 +185,7 @@ predict.hpdegbm <- function(object, newdata, type="link", trace = FALSE)
         predi <- predi/npartition_train # average of regressions from sub-models
       }
 
-     # bernoulli or AdaBoost distribution for binary classification
+    # bernoulli or AdaBoost distribution for binary classification
     if ((distributionGBM == "bernoulli") | (distributionGBM == "adaboost")) {
         # Prediction by the first sub-model: AdaBoost, Bernoulli distribution for binary classification
         GBM_modeli <- GBM_model[[1]]
