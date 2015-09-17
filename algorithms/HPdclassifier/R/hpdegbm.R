@@ -293,13 +293,29 @@ hpdegbm <- function(
     GBM_model1 <- getpartition(dl_GBM_model)
     best.iter1 <- getpartition(dbest.iter)
 
+   # if (completeModel) {
+   #    finalModel <- list(hpdegbm_Model="GBM_model1",bestIterations="best.iter1", trainingTime="timing_info")
+   # } else {
+   #    finalModel <- list(hpdegbm_Model="GBM_model1",bestIteration="best.iter1")
+   # }
+
     if (completeModel) {
        finalModel <- list(GBM_model1,best.iter1, timing_info)
     } else {
-       finalModel <- list(GBM_model1,best.iter1)
+       finalModel <- list(GBM_model1, best.iter1)
     }
 
+    cl <- match.call()
+    cl[[1]] <- as.name("hpdegbm")
+    finalModel$call <- cl
     class(finalModel) <- c("hpdegbm", "gbm")
+
+    finalModel$model <- finalModel[[1]]
+    finalModel$distribution <- finalModel[[1]][[1]]$distribution
+    finalModel$n.trees <- n.trees
+    finalModel$numGBMModel <- nExecutor
+    finalModel$bestIterations <- finalModel[[2]]
+
     return (finalModel)
 
 } # end of hpdegbm for model training
@@ -326,6 +342,26 @@ hpdegbm <- function(
 }
 
 
+## print function for hpdegbm
+print.hpdegbm <- function(x, ...)
+{
+    cat("\n hpdegbm model:\n")
+    print(x$model, ...)
 
+    cat("\n distribution:\n")
+    print(x$distribution, ...)
+
+    cat("\n n.trees:\n")
+    print(x$n.trees, ...)
+
+    cat("\n number of GBM models:\n")
+    print(x$numGBMModel, ...)
+
+    cat("\n best iterations of GBM models:\n")
+    print(x$bestIterations, ...)
+
+
+    #invisible(x)
+}
 
 
