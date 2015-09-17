@@ -63,7 +63,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	{
 		if(nrow(weights) != nrow(data))
 			stop("'weights' must have same number of rows as data") 
-		if(partitionsize(weights)[,1] != parititionsize(data)[,1])
+		if(!identical(partitionsize(weights)[,1],partitionsize(data)[,1]))
 			stop("'weights' must be partitioned similarly to data")
 	}
 
@@ -187,7 +187,6 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	if(do.trace)
 		print(paste("max_nodes_per_iteration",
 			toString(max_nodes_per_iteration),sep=" = "))
-
 
 	suppressWarnings({
 	tree <- .hpdRF_distributed(observations, responses, ntree = 1L, 
