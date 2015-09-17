@@ -209,3 +209,87 @@ predictions = getpartition(predictions)$predictions
 responses = getpartition(data)$X1
 expect_equal(predictions,responses)
 })
+
+context("Testing deploy.hpdrpart function")
+expect_no_error <- function(x) {
+expect_that(x,not(throws_error()))
+expect_that(x,not(gives_warning()))
+}
+
+test_that("testing valid rpart model", {
+model <- rpart(Species ~ ., iris)
+expect_no_error(deploy.hpdrpart(model))
+})
+
+test_that("testing invalid rpart models", {
+model <- rpart(Species ~ ., iris)
+model$frame <- NULL
+expect_error(deploy.hpdrpart(model), 
+	"'model' does not have an element called 'frame'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$frame$var <- NULL
+expect_error(deploy.hpdrpart(model), 
+	"'model$frame' does not have an element called 'var'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$frame$n <- NULL
+expect_error(deploy.hpdrpart(model), 
+	"'model$frame' does not have an element called 'n'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$frame$wt <- NULL
+expect_error(deploy.hpdrpart(model), 
+	"'model$frame' does not have an element called 'wt'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$frame$dev <- NULL
+expect_error(deploy.hpdrpart(model), 
+	"'model$frame' does not have an element called 'dev'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$frame$yval <- NULL
+expect_error(deploy.hpdrpart(model), 
+	"'model$frame' does not have an element called 'yval'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$frame$complexity <- NULL
+expect_error(deploy.hpdrpart(model), 
+	"'model$frame' does not have an element called 'complexity'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$splits <- NULL
+expect_error(deploy.hpdrpart(model), 
+	"'model' does not have an element called 'splits'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$splits <- model$splits[,colnames(model$splits) != "count"] 
+expect_error(deploy.hpdrpart(model), 
+	"'model$splits' does not have column 'count'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$splits <- model$splits[,colnames(model$splits) != "ncat"] 
+expect_error(deploy.hpdrpart(model), 
+	"'model$splits' does not have column 'ncat'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$splits <- model$splits[,colnames(model$splits) != "improve"] 
+expect_error(deploy.hpdrpart(model), 
+	"'model$splits' does not have column 'improve'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$splits <- model$splits[,colnames(model$splits) != "index"] 
+expect_error(deploy.hpdrpart(model), 
+	"'model$splits' does not have column 'index'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$splits <- model$splits[,colnames(model$splits) != "adj"] 
+expect_error(deploy.hpdrpart(model), 
+	"'model$splits' does not have column 'adj'",fixed = TRUE)
+
+model <- rpart(Species ~ ., iris)
+model$csplit <- NULL
+expect_warning(deploy.hpdrpart(model), 
+	"'model' does not have an element called 'csplit'")
+
+})

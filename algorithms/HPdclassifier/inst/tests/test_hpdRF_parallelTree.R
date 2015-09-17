@@ -318,3 +318,16 @@ responses = getpartition(data)$X1
 expect_equal(predictions,responses)
 
 })
+
+context("Testing deployment function of hpdRF_parallelTree")
+test_that("training with normal ", {
+set.seed(1)
+data = generateData(100,2,TRUE,TRUE)
+model <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE)
+expect_no_error({old_rf_model <- deploy.hpdRF_parallelTree(model)})
+data = generateData(100,2,TRUE,TRUE)
+predictions = predict(old_rf_model, getpartition(data))
+responses = getpartition(data)$X1
+expect_equal(as.character(predictions),as.character(responses))
+})
