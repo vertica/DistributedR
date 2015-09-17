@@ -349,7 +349,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			forest = oob_predictions$dforest
 			},error = function(e)
 			{
-				print(paste("aborting oob computations. received error:", e))
+				warning(paste("aborting oob computations. received error:", e))
 			})
 	}
 

@@ -257,3 +257,64 @@ responses = getpartition(data)$X1
 expect_equal(predictions,responses)
 })
 
+context("Model reduction with hpdRF_parallelTree")
+expect_no_error <- function(x) {
+expect_that(x,not(throws_error()))
+expect_that(x,not(gives_warning()))
+}
+
+test_that("training with regression trees", {
+data = generateData(1000,2,TRUE,FALSE)
+expect_no_error({model1 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE,reduceModel = TRUE,ntree = 1)})
+data = generateData(100,2,TRUE,FALSE)
+predictions = predict(model1, data)
+predictions = getpartition(predictions)$predictions
+responses = getpartition(data)$X1
+expect_equal(predictions,responses)
+
+
+expect_no_error({model2 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE,reduceModel = TRUE,ntree = 10)})
+data = generateData(100,2,TRUE,FALSE)
+predictions = predict(model2, data)
+predictions = getpartition(predictions)$predictions
+responses = getpartition(data)$X1
+expect_equal(predictions,responses)
+
+expect_no_error({model3 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE,reduceModel = TRUE)})
+data = generateData(100,2,TRUE,FALSE)
+predictions = predict(model3, data)
+predictions = getpartition(predictions)$predictions
+responses = getpartition(data)$X1
+expect_equal(predictions,responses)
+
+})
+test_that("training with classification trees", {
+data = generateData(1000,2,TRUE,TRUE)
+expect_no_error({model1 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE,reduceModel = TRUE,ntree = 1)})
+data = generateData(100,2,TRUE,TRUE)
+predictions = predict(model1, data)
+predictions = getpartition(predictions)$predictions
+responses = getpartition(data)$X1
+expect_equal(predictions,responses)
+
+expect_no_error({model2 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE,reduceModel = TRUE,ntree = 10)})
+data = generateData(100,2,TRUE,TRUE)
+predictions = predict(model2, data)
+predictions = getpartition(predictions)$predictions
+responses = getpartition(data)$X1
+expect_equal(predictions,responses)
+
+expect_no_error({model3 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE,reduceModel = TRUE)})
+data = generateData(100,2,TRUE,TRUE)
+predictions = predict(model3, data)
+predictions = getpartition(predictions)$predictions
+responses = getpartition(data)$X1
+expect_equal(predictions,responses)
+
+})

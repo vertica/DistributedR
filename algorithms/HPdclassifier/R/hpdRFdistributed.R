@@ -623,7 +623,7 @@
 		 cutoff = cutoff,classes = classes, reduceModel = reduceModel)
 	new_treeIDs <- reducedModel$subsetForest
 	votes <- reducedModel$new_votes
-	new_treeIDs <- split(new_treeIDs,1:npartitions(dforest))
+	new_treeIDs <- split(new_treeIDs,1:min(length(new_treeIDs),npartitions(dforest)))
 	if(reduceModel)
 		dforest <- .redistributeForest(dforest,new_treeIDs)
 	attr(dforest,"ntree") <- length(unlist(new_treeIDs))
