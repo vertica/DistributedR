@@ -20,8 +20,8 @@ context("Valid Inputs to Variable Importance")
 xtest = iris
 xtest$Species = NULL
 ytest = data.frame(iris$Species)
-varImp.data.frame <- varImportance(model, xtest, ytest)
-varImp.dframe <- varImportance(model, as.dframe(xtest), as.dframe(ytest))
+varImp.data.frame <- varImportance(model, xtest, ytest,type = "class")
+varImp.dframe <- varImportance(model, as.dframe(xtest), as.dframe(ytest), type = "class")
 
 
 expect_equal(nrow(model$variable.importance),ncol(xtest))
