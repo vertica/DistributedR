@@ -46,7 +46,7 @@ deploy.model <- function(model, dsn, modelName, modelComments="", localTmpFilePa
 
    # Get model to be deployed to Vertica
    model_to_deploy <- NULL
-   if (inherits(model, "hpdglm") || inherits(model, "hpdkmeans") || inherits(model, "hpdrandomForest")) {
+   if (inherits(model, "hpdglm") || inherits(model, "hpdkmeans") || inherits(model, "hpdrandomForest") || inherits(model, "hpdrpart") || inherits(model, "hpdegbm")) {
      tryCatch({
         model_to_deploy <- .getDeployableModel(model)
      }, error=function(e) {
@@ -149,7 +149,9 @@ deploy.model <- function(model, dsn, modelName, modelComments="", localTmpFilePa
 .get.modeltype <- function(model_type) {
     supported_models <- c("glm", "hpdglm",
                           "kmeans", "hpdkmeans",
-                          "randomForest", "hpdrandomForest")
+                          "randomForest", "hpdrandomForest",
+                          "rpart", "hpdrpart",
+                          "gbm", "hpdegbm")
     model_type_str <- paste(model_type, collapse=", ")
 
     if(! any(model_type %in% supported_models)) 

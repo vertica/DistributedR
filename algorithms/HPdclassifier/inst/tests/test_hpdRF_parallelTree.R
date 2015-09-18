@@ -54,7 +54,7 @@ generateData <- function(nrow, ncol,
 data = generateData(100,2,TRUE,TRUE)
 
 
-context("Invalid Inputs to Training Function")
+context("Invalid Inputs to Training Function hpdRF_parallelTree")
 test_that("testing formula parameter", {
 expect_error(hpdRF_parallelTree(data = data),
 				   "'formula' is a required argument")
@@ -134,7 +134,7 @@ expect_error(hpdRF_parallelTree(X1 ~ .,data = data, na.action = 0),
 })
 
 
-context("Invalid Inputs to Predict Function")
+context("Invalid Inputs to Predict Function of hpdRF_parallelTree")
 
 model <- hpdRF_parallelTree(X1 ~ .,data = data)
 test_that("invalid newdata input to predict function",{
@@ -159,7 +159,7 @@ expect_error(predict(model,newdata = data, na.action = 0), "'na.action' must be 
 
 
 
-context("Validating Outputs of Training Function")
+context("Validating Outputs of Training Function hpdRF_parallelTree")
 test_that("testing output for categorical trees", {
 
 data = generateData(100,2,TRUE,TRUE)
@@ -185,7 +185,7 @@ expect_false(is.null(model$mse))
 expect_false(is.null(model$rsq))
 })
 
-context("Validating Outputs of Predict Function")
+context("Validating Outputs of Predict Function of hpdRF_parallelTree")
 data = generateData(100,2,TRUE,TRUE)
 model = hpdRF_parallelTree(X1 ~ .,data = data, completeModel =TRUE)
 test_that("testing output of predict function",{
@@ -198,7 +198,7 @@ expect_false(any(is.na(predictions)))
 })
 
 
-context("Accuracy Results for Training Simple Models")
+context("Accuracy Results for Training Simple Models of hpdRF_parallelTree")
 test_that("basic training with categorical/categorical", {
 set.seed(1)
 data = generateData(1000,2,TRUE,TRUE)
@@ -257,3 +257,77 @@ responses = getpartition(data)$X1
 expect_equal(predictions,responses)
 })
 
+context("Model reduction with hpdRF_parallelTree")
+expect_no_error <- function(x) {
+expect_that(x,not(throws_error()))
+expect_that(x,not(gives_warning()))
+}
+
+test_that("training with regression trees", {
+data = generateData(1000,2,TRUE,FALSE)
+expect_no_error({model1 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE,reduceModel = TRUE,ntree = 1)})
+data = generateData(100,2,TRUE,FALSE)
+predictions = predict(model1, data)
+predictions = getpartition(predictions)$predictions
+responses = getpartition(data)$X1
+expect_equal(predictions,responses)
+
+
+expect_no_error({model2 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE,reduceModel = TRUE,ntree = 10)})
+data = generateData(100,2,TRUE,FALSE)
+predictions = predict(model2, data)
+predictions = getpartition(predictions)$predictions
+responses = getpartition(data)$X1
+expect_equal(predictions,responses)
+
+expect_no_error({model3 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE,reduceModel = TRUE)})
+data = generateData(100,2,TRUE,FALSE)
+predictions = predict(model3, data)
+predictions = getpartition(predictions)$predictions
+responses = getpartition(data)$X1
+expect_equal(predictions,responses)
+
+})
+test_that("training with classification trees", {
+data = generateData(1000,2,TRUE,TRUE)
+expect_no_error({model1 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE,reduceModel = TRUE,ntree = 1)})
+data = generateData(100,2,TRUE,TRUE)
+predictions = predict(model1, data)
+predictions = getpartition(predictions)$predictions
+responses = getpartition(data)$X1
+expect_equal(predictions,responses)
+
+expect_no_error({model2 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE,reduceModel = TRUE,ntree = 10)})
+data = generateData(100,2,TRUE,TRUE)
+predictions = predict(model2, data)
+predictions = getpartition(predictions)$predictions
+responses = getpartition(data)$X1
+expect_equal(predictions,responses)
+
+expect_no_error({model3 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE,reduceModel = TRUE)})
+data = generateData(100,2,TRUE,TRUE)
+predictions = predict(model3, data)
+predictions = getpartition(predictions)$predictions
+responses = getpartition(data)$X1
+expect_equal(predictions,responses)
+
+})
+
+context("Testing deployment function of hpdRF_parallelTree")
+test_that("training with normal ", {
+set.seed(1)
+data = generateData(100,2,TRUE,TRUE)
+model <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
+      completeModel = TRUE)
+expect_no_error({old_rf_model <- deploy.hpdRF_parallelTree(model)})
+data = generateData(100,2,TRUE,TRUE)
+predictions = predict(old_rf_model, getpartition(data))
+responses = getpartition(data)$X1
+expect_equal(as.character(predictions),as.character(responses))
+})

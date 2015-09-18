@@ -89,10 +89,14 @@
 	dforest = dlist(npartitions = npartitions(observations))
 	oob_indices = dlist(npartitions = npartitions(observations))
 
+	if(is.null(weights))
+		weights = dframe(npartitions = npartitions(observations))
+
 
 	foreach(i,1:npartitions(observations),
 		function(observations = splits(observations,i),
 			responses = splits(responses,i),
+			weights = splits(weights,i),
 			ntree = ntree, bin_max = bin_max,
 			features_min = features_min, 
 			features_max = features_max,
@@ -107,14 +111,18 @@
 			init_seed = sample.int(1000,i))
 		{
 			set.seed(init_seed)
-			if(replacement)
-				weights = lapply(1:ntree, function(treeID) 
-					return(matrix(rpois(nrow(observations),
-						1),ncol = 1)))
-			else
-				weights = lapply(1:ntree,function(i) 
-					as.double(rnorm(nrow(observations))<.632))
-						
+			if(nrow(weights) == 0)
+			{
+				if(replacement)
+					weights = lapply(1:ntree, function(treeID) 
+						return(matrix(rpois(nrow(observations),1),
+							ncol = 1)))
+				else
+					weights = lapply(1:ntree,function(i) 
+						as.double(rnorm(nrow(observations))<.632))
+			}
+
+			
 			observation_indices = lapply(weights,
 				function(tree_weights)
 				which(tree_weights > 0))
@@ -615,7 +623,7 @@
 		 cutoff = cutoff,classes = classes, reduceModel = reduceModel)
 	new_treeIDs <- reducedModel$subsetForest
 	votes <- reducedModel$new_votes
-	new_treeIDs <- split(new_treeIDs,1:npartitions(dforest))
+	new_treeIDs <- split(new_treeIDs,1:min(length(new_treeIDs),npartitions(dforest)))
 	if(reduceModel)
 		dforest <- .redistributeForest(dforest,new_treeIDs)
 	attr(dforest,"ntree") <- length(unlist(new_treeIDs))

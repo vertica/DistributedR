@@ -177,6 +177,7 @@ ExecutorEvent Executor::GetNextEvent() {
   }
 
   AppendUpdate(new_dobj_name, newsplit->GetSize(), false, dims.first, dims.second, out);
+  delete newsplit;
   LOG_INFO("Variable %s (%s in R) updated successfully.", new_dobj_name.c_str(), varname.c_str());
 }
 

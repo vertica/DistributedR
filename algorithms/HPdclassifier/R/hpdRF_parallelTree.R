@@ -349,7 +349,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			forest = oob_predictions$dforest
 			},error = function(e)
 			{
-				print(paste("aborting oob computations. received error:", e))
+				warning(paste("aborting oob computations. received error:", e))
 			})
 	}
 
@@ -553,18 +553,17 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 
 .parse_formula <- function(formula, data, na.action=na.fail, weights = NULL, trace = FALSE) 
 {
-
 	timing_info <- Sys.time()
 
 	y <- dframe(npartitions = npartitions(data))
 	x <- dframe(npartitions = npartitions(data))
-	w <- dframe(npartitions = npartitions(data))
 	
 	if(trace)
 	print("processing formula")
 	
 	if(is.null(weights))
 		weights = clone(data,ncol = 1, data = 1)
+
 
 	terms = dlist(npartitions = npartitions(x))
 	x_colnames = dlist(npartitions = npartitions(x))
@@ -657,7 +656,7 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 	print(timing_info)
 
 
-    return(list(x=x,y=y, w = w, terms = terms,
+    return(list(x=x,y=y, weights = weights, terms = terms,
     		  x_cardinality = x_cardinality, 
 		  y_cardinality = y_cardinality,
 		  y_classes = y_levels$Levels,

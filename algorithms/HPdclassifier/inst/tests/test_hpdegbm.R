@@ -600,11 +600,9 @@ test_that("Test classification accuracy: multinomial", {
     Predictions7 <- predict.hpdegbm(finalModel7, newdata7, type="response", trace = FALSE)
     print(Predictions7)
     as.factor(valid.iris$Species)
-    print(table (Predictions7, as.numeric(valid.iris$Species)))
-    result7 <- table (Predictions7, as.numeric(valid.iris$Species))
-    aa7 <- Predictions7 - as.numeric(valid.iris$Species)
-    correctCount7 <- sum(aa7 == 0)
-    errorRate7 <- 1 - correctCount7/(nrow(newdata7))
+    print(table ((Predictions7), (valid.iris$Species)))
+    result7 <- table ((Predictions7), (valid.iris$Species))
+    errorRate7 <- 1 - sum(diag(result7))/sum(result7)
     print(errorRate7)
 
 
@@ -784,6 +782,39 @@ test_that("Test regression accuracy: gaussian", {
 
     expect_true(abs(result8 - result8_1) < 5000)
 })
+
+
+
+
+###############################################################################################
+context("centralized and distributed prediction of iris real data")
+data(iris)
+irisX       <- iris[which(names(iris) != "Species")]
+irisY       <- as.character(iris$Species)
+trainPerc   <- 0.8
+trainIdx    <- sample(1:nrow(irisX), ceiling(trainPerc * nrow(irisX)))
+irisX_train <- irisX[trainIdx,]
+irisY_train <- irisY[trainIdx]
+irisX_test  <- irisX[-trainIdx,]
+irisY_test  <- irisY[-trainIdx]
+ 
+dirisX_train <- as.dframe(irisX_train)
+dirisY_train <- as.dframe(as.data.frame(irisY_train))
+dirisX_test  <- as.dframe(irisX_test)
+dirisY_test  <- as.dframe(as.data.frame(irisY_test))
+
+# Big data case
+dmod <- hpdegbm(dirisX_train, dirisY_train, distribution = 'multinomial',
+                   nClass = 3)
+
+# centralized prediction of multi-class classification
+a <- predict.hpdegbm(dmod, irisX_test, type="response")
+a
+
+
+# distributed prediction of multi-class classification
+b <- predict.hpdegbm(dmod, dirisX_test, type="response")
+b
 
 
 

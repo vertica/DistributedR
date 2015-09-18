@@ -116,9 +116,8 @@ hpdegbm <- function(
    if ( (is.vector(Y_train))  & !(nrow(X_train) == length(Y_train)) ) 
        stop("'Y_train' must be non-empty and have same number of rows as 'X_train'")
 
-  # if ( (is.dframe(Y_train)) || (is.data.frame(Y_train)) || (is.darray(Y_train)) || (is.matrix(Y_train)) && (!(nrow(X_train)==nrow(Y_train))) ) {
-  #    stop("'Y_train' must be non-empty and have same number of rows as 'X_train'")
-  # }
+   if ( ((distribution=="bernoulli") || (distribution=="adaboost") || (distribution=="gaussian")) && (is.dframe(Y_train)) )
+      stop("'Y_train' cannot be dframe for regression and binary classification")
 
 
    if (missing(nExecutor))   
@@ -294,13 +293,29 @@ hpdegbm <- function(
     GBM_model1 <- getpartition(dl_GBM_model)
     best.iter1 <- getpartition(dbest.iter)
 
+   # if (completeModel) {
+   #    finalModel <- list(hpdegbm_Model="GBM_model1",bestIterations="best.iter1", trainingTime="timing_info")
+   # } else {
+   #    finalModel <- list(hpdegbm_Model="GBM_model1",bestIteration="best.iter1")
+   # }
+
     if (completeModel) {
        finalModel <- list(GBM_model1,best.iter1, timing_info)
     } else {
-       finalModel <- list(GBM_model1,best.iter1)
+       finalModel <- list(GBM_model1, best.iter1)
     }
 
+    cl <- match.call()
+    cl[[1]] <- as.name("hpdegbm")
+    finalModel$call <- cl
     class(finalModel) <- c("hpdegbm", "gbm")
+
+    finalModel$model <- finalModel[[1]]
+    finalModel$distribution <- finalModel[[1]][[1]]$distribution
+    finalModel$n.trees <- n.trees
+    finalModel$numGBMModel <- nExecutor
+    finalModel$bestIterations <- finalModel[[2]]
+
     return (finalModel)
 
 } # end of hpdegbm for model training
@@ -324,6 +339,17 @@ hpdegbm <- function(
     list(withCallingHandlers(tryCatch(expr, error = function(e) e),
                                      warning = w.handler),
          warnings = list_of_Warnings)
+}
+
+
+print.hpdegbm <- function(x, ...)
+{
+    print(x$call)
+    cat(paste("\n Number of GBM models: ", x$numGBMModel, "\n"))
+    cat(paste("distribution: ", x$distribution, "\n"))    
+    cat(paste("n.trees: ", x$ n.trees, "\n"))
+    cat(paste("best iterations of GBM models: ", x$bestIterations, "\n"))
+    #print(x$model[[1]]) 
 }
 
 

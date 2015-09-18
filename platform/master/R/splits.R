@@ -193,7 +193,6 @@ setMethod("getpartition", signature("dlist", "missing", "missing"),
             if(all(x@dim<=.Machine$integer.max) == FALSE) {
                 stop(paste("Cannot perform getpartition on a matrix with dimension larger than",.Machine$integer.max))
             }
-            #darr <- dlist(x@dim[1])
             darr <- dlist(1)
             foreach(i, 1:1,
                     createcomposite <- function(comp = splits(x),

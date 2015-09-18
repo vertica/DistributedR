@@ -71,6 +71,28 @@ csv2dframe <- function(url, ...) {
     options = list(...)
     options['fileType'] = 'csv'
     .ddc_read(url, options)
+#    tryCatch({
+#        .ddc_read(url, options)
+#    }, error = function(e){
+#        if (grepl('attempt to set partition',paste(e)) == TRUE) {
+#            # retry with read.csv
+#            warning('CSV file has less lines than executors. Trying with read.csv ...')
+#            if (grepl('hdfs://',url) == TRUE) {
+#                stop('Unable to read hdfs files with read.csv. Try starting Distributed R with only one executor (inst=1).')
+#            }
+#            d <- dframe(npartitions=c(1,1))
+#            foreach(i,
+#                1:npartitions(d),
+#                func <- function(dhs = splits(d,i),
+#                                 url = url) {
+#                    dhs <- read.csv(url)
+#                    update(dhs)
+#            })
+#        }
+#        else {
+#            stop(e)
+#        }
+#    })
 }
 
 #' Load an ORC file into a distributed data frame
@@ -138,15 +160,24 @@ orc2dframe <- function(url, ...) {
 }
 
 .ddc_read <- function(url, options) {
-    if(!("hdfsConfigurationFile" %in% options)) {
+    if(!("hdfsConfigurationFile" %in% names(options))) {
         # set default hdfsConfigurationFile
         options["hdfsConfigurationFile"] = paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')
     }
+
+
     pm <- get_pm_object()
     # 1. Schedule file across workers. Handles globbing also.
     library(hdfsconnector)
     plan <- create_plan(url, options, pm$worker_map())
-    # print(plan)  # for debugging
+    if (Sys.getenv('DEBUG_DDC') != '') {
+        print(plan)  # for debugging
+    }
+
+    hdfsConfigurationStr <- paste(readLines(as.character(options["hdfsConfigurationFile"])),collapse='\n')
+    for (i in 1:length(plan$configs)) {
+        plan$configs[[i]]["hdfsConfigurationStr"] = hdfsConfigurationStr
+    }
 
     # set chunk_worker_map in master so dframe partitions are created on the right workers
     pm$ddc_set_chunk_worker_map(plan$chunk_worker_map)
@@ -177,17 +208,13 @@ orc2dframe <- function(url, ...) {
                                          chunkEnd=config$chunk_end,
                                          delimiter=config$delimiter,
                                          commentCharacter=config$comment_character,
-                                         hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),
-                                                                     '/conf/hdfs.json',
-                                                                     sep=''))
+                                         hdfsConfigurationStr=config$hdfsConfigurationStr)
                     update(dhs)
                 }
                 else if (config$file_type == "orc") {
                     dhs <- orc2dataframe(url,
                                          selectedStripes=config$selected_stripes,
-                                         hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),
-                                                                     '/conf/hdfs.json',
-                                                                     sep=''))
+                                         hdfsConfigurationStr=config$hdfsConfigurationStr)
                     update(dhs)
                 }
                 else {

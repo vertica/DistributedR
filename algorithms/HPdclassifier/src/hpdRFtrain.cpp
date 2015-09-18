@@ -79,17 +79,27 @@ extern "C"
 	  {
 	    SEXP features;
 	    PROTECT(features = allocVector(INTSXP,forest->features_num));
-	    for(int j = 0; j < forest->features_num; j++)
+
+	    int temp_feature;
+	    int nFeatures = length(observations);
+	      int* features_permutation=(int *)malloc(nFeatures*sizeof(int));
+	    for(int j = 0; j < nFeatures; j++)
+	      features_permutation[j] = j+1;
+	    for(int j = nFeatures-1; j > 0; j--)
 	      {
-		int feature = rand()%(length(observations) - j)+1;
-		for(int k = 0; k < j; k++)
-		  if(INTEGER(features)[k] <= feature)
-		    feature++;
-		INTEGER(features)[j] = feature;
+		int random_feature = rand()%j;
+		temp_feature = features_permutation[j];
+		features_permutation[j] = features_permutation[random_feature];
+		features_permutation[random_feature] = temp_feature;
 	      }
+	    
+	    for(int j = 0; j < forest->features_num; j++)
+	      INTEGER(features)[j] = features_permutation[j];
+	    
 	    SET_VECTOR_ELT(random_features,i,features);
 	    UNPROTECT(1);
 	  }
+
 
 	printf("building histograms\n");
 	SEXP temp_hist;

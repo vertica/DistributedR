@@ -3,7 +3,7 @@
 ##Also required is the a distance_metric function that can compare the loss in accuracy
 ##between predictions. 
 
-varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FALSE)
+varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FALSE, nrow = 1000)
 {
 	if(!is.dframe(xtest) & !is.data.frame(xtest))
 		stop("'xtest' must be a dframe or data.frame")
@@ -28,11 +28,17 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 		if(trace)
 			print("shuffling data")
 		timing_info <- Sys.time()
-		xtest <- .shuffle_dframe(xtest,permutation)
-		ytest <- .shuffle_dframe(ytest,permutation)
+		xtest <- .shuffle_dframe(xtest,permutation, nrow = nrow)
+		ytest <- .shuffle_dframe(ytest,permutation, nrow = nrow)
 		if(trace)
 			print(Sys.time() - timing_info)
 		})
+	}
+	else if(is.data.frame(xtest))
+	{
+		permutation <- sample.int(nrow(xtest),nrow,replace = TRUE)
+		xtest = data.frame(xtest[permutation,])
+		ytest = data.frame(ytest[permutation,])
 	}
 
 	#determine if the output is categorical or not
@@ -66,10 +72,17 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 			distance_metric <- meanSquared
 	}
 
+	features = 1:ncol(xtest)
+
+	if(is.element("terms",names(model)))
+	{
+		features <-names(which(apply(attr(model$terms,"factors"),1,any)))
+		features <-match(features,colnames(xtest)) 	
+	}
 
 	#this loop will shuffle the column locally and predict and 
 	#compute the difference in errors
-	importance = sapply(1:ncol(xtest), function(var)
+	importance = sapply(features, function(var)
 	{
 		if(trace)
 		print(paste("Calculating Importance for feature: ",
@@ -80,6 +93,7 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 		shuffled_data <- shuffle_column(xtest, var)
 		if(trace)
 		print(Sys.time() - timing_info)
+
 
 		if(trace)
 		print("predicting shuffled data")
@@ -107,7 +121,7 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 		print(Sys.time() - timing_info)
 		return(var_imp)
 	})
-	names(importance) <- colnames(xtest)
+	names(importance) <- colnames(xtest)[features]
 
 
 	#compute the errors without any shuffling
@@ -145,8 +159,10 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 	foreach(i,1:npartitions(data), 
 		function(data = splits(data,i), 
 		shuffled_data = splits(shuffled_data,i), 
-		column = column)
+		column = column, nrow = nrow,
+		random_seed = sample.int(1000,1))
 		{
+			set.seed(random_seed)
 			shuffled_data = data
 			shuffled_data[,column] = 
 				data[sample.int(nrow(data)),column]
@@ -161,7 +177,7 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 ##The idea of this is to reduce correlation between samples within the same split
 ##so that within each split we can shuffle locally  
 
-.shuffle_dframe <- function(data,permutation)
+.shuffle_dframe <- function(data,permutation, nrow = 1000)
 {
 	
 	rows_partition = partitionsize(data)[,1]
@@ -201,12 +217,17 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 	function(temp_data = splits(temp_data,
 			as.list(npartitions(data)*(i-1)+1:npartitions(data))),
 		shuffled_data = splits(shuffled_data,i),
-		data = splits(data,i))
+		data = splits(data,i),
+		nrow = nrow)
 	{
 		shuffled_data = do.call(rbind,temp_data)
+		copies = floor(nrow/nrow(shuffled_data))
+		remainder = nrow - copies * nrow(shuffled_data)
+		indices = rep(1:nrow(shuffled_data),copies)
+		indices = c(indices,1:remainder)
+		shuffled_data = data.frame(shuffled_data[indices,])
 		update(shuffled_data)
 	},progress = FALSE)
-
 
 	colnames(shuffled_data) <- colnames(data)
 	return(shuffled_data)
