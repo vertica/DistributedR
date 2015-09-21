@@ -123,7 +123,6 @@ deploy.model <- function(model, dsn, modelName, modelComments="", localTmpFilePa
        unlink(local_tmp_file)
        odbcClose(db_connect)
        stop(.Call("HandleUDxError", deploy_model))
-       FALSE
      }
      unlink(local_tmp_file)
 
@@ -142,7 +141,6 @@ deploy.model <- function(model, dsn, modelName, modelComments="", localTmpFilePa
    }
    
    odbcClose(db_connect)
-   TRUE
 }
 
 
