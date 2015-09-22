@@ -305,6 +305,8 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 	model = data.frame(var = model[[2]], n = 0, wt = 0, 
 	      dev = model[[3]], yval = model[[4]], complexity = model[[5]])
 	colnames(model) <- c("var", "n","wt","dev", "yval", "complexity")
+	print(leaf_ids)
+	print(nrow(model))
 	rownames(model) <- leaf_ids
 	model <- cbind(model, ncompete = 0, nsurrogate = 0)
 	colnames(splits) <- c("count","ncat", "improve","index","adj")

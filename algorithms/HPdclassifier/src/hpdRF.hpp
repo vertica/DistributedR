@@ -87,7 +87,7 @@ void destroyTree(hpdRFnode *tree);
 int calculateBufferSize(hpdRFnode* tree);
 int* serializeTree(hpdRFnode *tree, int* buffer);
 int* unserializeTree(hpdRFnode *tree, int* buffer, hpdRFnode**leaf_nodes);
-int countSubTree(hpdRFnode *tree);
+int countSubTree(hpdRFnode *tree, int remaining_depth);
 void reformatTree(hpdRFnode* tree, SEXP forest, int* index, 
 		  int *features_cardinality, int nrow, int treeID);
 
@@ -102,7 +102,8 @@ int convertTreetoRpart(hpdRFnode* tree, int* indices,
 		       double* yval, double* complexity,
 		       double* split_index, int* ncat, 
 		       int rowID, double parent_cp, int node_index,
-		       int* features_cardinality, int* csplit_count);
+		       int* features_cardinality, int* csplit_count,
+		       int current_depth);
 
 
 void populateCsplit(hpdRFnode* tree, int* features_cardinality, 
