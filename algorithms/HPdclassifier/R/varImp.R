@@ -5,8 +5,43 @@
 
 varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FALSE, nrow = 1000)
 {
+
 	if(!is.dframe(xtest) & !is.data.frame(xtest))
 		stop("'xtest' must be a dframe or data.frame")
+
+	if(missing(ytest) & is.element("terms",names(model)))
+	{
+		model_terms = model$terms
+		if(attr(model_terms,"response") == 1)
+ 		{
+			response_name = all.vars(model_terms)[1]
+			if(response_name %in% colnames(xtest))
+			{
+				if(is.dframe(xtest))
+				{
+				ytest = dframe(npartitions = npartitions(xtest))
+				foreach(i,1:npartitions(ytest), function(ytest = splits(ytest,i),
+								xtest = splits(xtest,i),
+								response_name = response_name)
+				{
+					ytest <- data.frame(xtest[,response_name])
+					update(y)
+				},progress = FALSE)
+				}
+				if(is.data.frame(xtest))
+				{
+					ytest <- data.frame(xtest[,response_name])
+				}
+			}
+			else
+				stop("dependant variable must be a unmodified column in the data")
+		}
+		else
+			stop("could not detect response variable from model$terms")
+	}
+	else if(missing(ytest))
+		stop("model$terms and 'ytest' both are missing") 
+
 	if(!is.dframe(ytest) & !is.data.frame(ytest))
 		stop("'ytest' must be a dframe or data.frame")
 	if((is.dframe(xtest) & !is.dframe(ytest)) | 
