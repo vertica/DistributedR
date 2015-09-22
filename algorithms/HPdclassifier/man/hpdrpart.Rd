@@ -7,7 +7,7 @@ Rpart Models over Distributed Data
 Distributed alternative for rpart package that uses distributedR framework
 }
 \usage{
-hpdRF_parallelTree (formula, data, weights, subset , na.action = na.omit, model = TRUE, x = FALSE, y = FALSE, params = NULL, control = NULL, cost = NULL, completeModel = FALSE, nBins = 256L, nExecutor = 1, do.trace = FALSE)
+hpdrpart(formula, data, weights, subset , na.action = na.omit, model = TRUE, x = FALSE, y = FALSE, params = NULL, control = NULL, cost = NULL, completeModel = FALSE, nBins = 256L, nExecutor = 1, do.trace = FALSE)
 
 
 

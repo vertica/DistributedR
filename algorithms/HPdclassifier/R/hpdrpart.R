@@ -256,7 +256,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	return(model)
 }
 
-predict.hpdrpart <- function(model, newdata,do.trace = FALSE, ...)
+predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 {
 	if(missing(newdata))
 		stop("'newdata' is a required argument")
@@ -278,6 +278,12 @@ predict.hpdrpart <- function(model, newdata,do.trace = FALSE, ...)
 			library(rpart)	
 			class(model) <- class(model)[-1]
 			args = c(list(object = model, newdata = newdata),args)
+			if(!is.element("type",names(args)))
+			{
+				args$type = "vector"
+				if(model$method == "gini")
+					args$type = "class"
+			}	
 			predictions = do.call(predict,args)
 			predictions = data.frame(predictions)
 			update(predictions)

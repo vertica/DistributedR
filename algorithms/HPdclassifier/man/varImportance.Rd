@@ -12,7 +12,7 @@ varImportance(model, xtest, ytest, ..., distance_metric, trace = FALSE)
 \arguments{
   \item{model}{a model that can be used to predict inputs xtest}
   \item{xtest}{a dframe or data.frame with observations of features required by model}
-  \item{ytest}{a dframe or data.frame with observations of responses corresponding to xtest}
+  \item{ytest}{a dframe or data.frame with observations of responses corresponding to xtest. If this parameter is missing, varImportance will try to infer ytest based upon model$terms and xtest.}
   \item{...}{optional parameters to be passed to the predict function.}
   \item{distance_metric}{a model that can be used to predict inputs xtest}
   \item{trace}{when this argument is true, intermediate steps of the progress are displayed.}
