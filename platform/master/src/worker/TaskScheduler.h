@@ -52,8 +52,8 @@ struct SplitUpdate {
 };
 
 struct ExecStat {
-   int64_t persist_load;
-   int64_t exec_load;
+   ::int64_t persist_load;
+   ::int64_t exec_load;
    size_t mem_used;
 };
 
@@ -73,19 +73,19 @@ class TaskScheduler {
 
   ~TaskScheduler();
 
-  void ForeachComplete(uint64_t id, uint64_t uid, bool status);
-  void StageUpdatedPartition(const std::string& split_name, size_t size, int executor_id, uint64_t exec_taskid);
-  void AddUpdatedPartition(const std::string& split_name, size_t size, int executor_id, uint64_t exec_taskid);
+  void ForeachComplete(::uint64_t id, ::uint64_t uid, bool status);
+  void StageUpdatedPartition(const std::string& split_name, size_t size, int executor_id, ::uint64_t exec_taskid);
+  void AddUpdatedPartition(const std::string& split_name, size_t size, int executor_id, ::uint64_t exec_taskid);
 
-  int32_t ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid);
-  int64_t AddParentTask(const std::vector<NewArg>& task_args, uint64_t parenttaskid, uint64_t taskid);
+  int32_t ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, ::uint64_t taskid);
+  int AddParentTask(const std::vector<NewArg>& task_args, ::uint64_t parenttaskid, ::uint64_t taskid);
 
   void DeleteSplit(const std::string& splitname);
   void PersistDone(std::string splitname, int executor_id); 
 
 protected:
-  int64_t GetBestExecutor(const std::vector<NewArg>& partitions, uint64_t taskid);
-  int64_t ExecutorToPersistFrom(const std::string& split_name);
+  int GetBestExecutor(const std::vector<NewArg>& partitions, ::uint64_t taskid);
+  int ExecutorToPersistFrom(const std::string& split_name);
   bool IsSplitAvailable(const std::string& split_name, int executor_id=-1); //If executor_id is -1, then persist to worker.
   bool IsBeingPersisted(const std::string& split_name);
 
@@ -94,7 +94,7 @@ protected:
  private:
   void AddExecutor(int id);
   boost::unordered_map<std::string, ExecSplit*> executor_splits; //map<name, split_info>
-  boost::unordered_map<uint64_t, int> parent_tasks;   //map<parent_task, exec_id>//to keep track of executor on which execution will happen.
+  boost::unordered_map< ::uint64_t, int > parent_tasks;   //map<parent_task, exec_id>//to keep track of executor on which execution will happen.
   boost::unordered_map<int, ExecStat*> executor_stat;  //which executor has how much memory
   boost::unordered_set<std::string> *shmem_arrays;
 
@@ -102,8 +102,8 @@ protected:
   boost::unordered_set<SplitUpdate*> updated_splits;
 
   //persist_sync
-  boost::unordered_map<uint64_t, boost::interprocess::interprocess_semaphore*> sync_persist;
-  boost::unordered_map<std::string, boost::unordered_set<uint64_t>> persist_tasks;
+  boost::unordered_map< ::uint64_t, boost::interprocess::interprocess_semaphore* > sync_persist;
+  boost::unordered_map<std::string, boost::unordered_set< ::uint64_t >> persist_tasks;
   boost::recursive_mutex persist_mutex;
 
   //Process Communication

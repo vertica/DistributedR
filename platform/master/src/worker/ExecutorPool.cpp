@@ -734,7 +734,7 @@ void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
 }                                  
 
 
-void ExecutorPool::persist(std::string split_name, int executor, uint64_t taskid) {
+void ExecutorPool::persist(std::string split_name, int executor, ::uint64_t taskid) {
   LOG_DEBUG("PERSIST TaskID %18zu - Waiting for the Executor Id %d to persist Split %s", taskid, executor, split_name.c_str());
 
   unique_lock<mutex> lock(executors[executor].executor_mutex);

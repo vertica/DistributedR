@@ -190,7 +190,7 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
   }
 
   std::pair<int, int> GetClusterInfo() {
-    return std::make_pair<int, int>(num_workers_, num_executors_);
+    return std::pair<int, int>(num_workers_, num_executors_);
   }
 
   VerticaColocation verticaColocationDetails;

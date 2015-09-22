@@ -366,14 +366,14 @@ class Scheduler {
   uint64_t GetNewTaskID();
 
   // execute an exec task on a worker
-  uint64_t Exec(Worker *worker, TaskArg *task, int64_t parentid=-1);
+  uint64_t Exec(Worker *worker, TaskArg *task, ::uint64_t parentid=0);
 
   // createa a composite array from splits on a worker
   uint64_t CreateComposite(Worker *worker,
                            const std::string &name,
                            const Arg &arg,
                            const std::vector<Arg>* task_args = NULL,
-                           int64_t parentid=-1);
+                           ::uint64_t parentid=0);
 
   // execute a fetch task on a worker
   uint64_t Fetch(Worker *to, Worker *from, Split *split);

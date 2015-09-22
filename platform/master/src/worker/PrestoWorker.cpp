@@ -491,7 +491,7 @@ void PrestoWorker::clear(ClearRequest req) {
   LOG_DEBUG("CLEAR Task                     - Sent TASKDONE message to Master.");
 }
 
-void PrestoWorker::prepare_persist(const std::string& name, int executor, uint64_t taskid) {
+void PrestoWorker::prepare_persist(const std::string& name, int executor, ::uint64_t taskid) {
 
   LOG_DEBUG("TaskID %zu - Preparing PERSIST task for Split %s from Executor ID %d", taskid, name.c_str(), executor);
 
@@ -1069,7 +1069,7 @@ void PrestoWorker::HandleRequests(int type) {
             }
             
             if(DATASTORE == RINSTANCE) {
-              uint64_t taskid = worker_req.fetch().uid();
+              ::uint64_t taskid = worker_req.fetch().uid();
 
               NewArg arg;
               arg.set_arrayname(worker_req.fetch().name());
@@ -1103,18 +1103,18 @@ void PrestoWorker::HandleRequests(int type) {
             if(DATASTORE == WORKER) {
               createcomposite(worker_req.createcomposite());
             } else {
-              uint64_t taskid = worker_req.createcomposite().uid();
+              ::uint64_t taskid = worker_req.createcomposite().uid();
               //Commented for future use
               /*vector<NewArg> task_args;
               task_args.clear();
-              uint64_t taskid = worker_req.createcomposite().uid();
-              uint64_t parenttaskid = worker_req.createcomposite().parenttaskid();
+              ::uint64_t taskid = worker_req.createcomposite().uid();
+              ::uint64_t parenttaskid = worker_req.createcomposite().parenttaskid();
 
               get_vector_from_repeated_field
                 <RepeatedPtrField<NewArg>::const_iterator,
                  NewArg>(worker_req.createcomposite().task_args().begin(),
                        worker_req.createcomposite().task_args_size(), &task_args);
-              int64_t executor_id = executorscheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());*/
+              int executor_id = executorscheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());*/
 
               vector<NewArg> cc_args;
               cc_args.clear();
@@ -1194,10 +1194,10 @@ void PrestoWorker::HandleRequests(int type) {
                                    worker_req.newexecr().uid(),
                                    &worker_resp);
             } else {
-              uint64_t taskid = worker_req.newexecr().uid();
-              uint64_t parenttaskid = worker_req.newexecr().parenttaskid();
+              ::uint64_t taskid = worker_req.newexecr().uid();
+              ::uint64_t parenttaskid = worker_req.newexecr().parenttaskid();
 
-              int64_t executor_id = executorscheduler_->AddParentTask(new_args, parenttaskid, taskid);
+              int executor_id = executorscheduler_->AddParentTask(new_args, parenttaskid, taskid);
               LOG_DEBUG("EXECUTE TaskID %18zu - Assigned to Executor Id %d. Validating input splits.", taskid, executor_id);
 
               if(new_args.size() > 0)

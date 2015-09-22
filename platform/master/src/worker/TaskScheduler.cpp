@@ -140,7 +140,7 @@ int TaskScheduler::GetDeterministicExecutor(int32_t split_id) {
   * Evaluates and assigns best executor to a task based on input task arguments
   *
   **/
-int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& task_args, uint64_t taskid) {
+int TaskScheduler::GetBestExecutor(const std::vector<NewArg>& task_args, ::uint64_t taskid) {
     int target_executor = -1;
 
     // Extract all splits in the task
@@ -245,8 +245,8 @@ int64_t TaskScheduler::GetBestExecutor(const std::vector<NewArg>& task_args, uin
   * Fetch or assign an executor to the task
   *
   **/
-int64_t TaskScheduler::AddParentTask(const std::vector<NewArg>& task_args, uint64_t parenttaskid, uint64_t taskid) {
-  ::uint64_t executor_id = -1;
+int TaskScheduler::AddParentTask(const std::vector<NewArg>& task_args, ::uint64_t parenttaskid, ::uint64_t taskid) {
+  int executor_id = -1;
   unique_lock<mutex> parentlock(parent_mutex);
   if(parent_tasks.find(parenttaskid) != parent_tasks.end()) {
     executor_id = parent_tasks[parenttaskid];
@@ -276,9 +276,9 @@ void TaskScheduler::PersistDone(std::string splitname, int executor_id) {
   executor_stat[executor_id]->persist_load--;
   metalock.unlock();
 
-  boost::unordered_set<uint64_t>::iterator itr = persist_tasks[splitname].begin();
+  boost::unordered_set< ::uint64_t >::iterator itr = persist_tasks[splitname].begin();
   for(; itr != persist_tasks[splitname].end(); ++itr) {
-    uint64_t taskid = *itr;
+    ::uint64_t taskid = *itr;
     sync_persist[taskid]->post();
   }
   persist_tasks.erase(splitname);
@@ -339,7 +339,7 @@ bool TaskScheduler::IsBeingPersisted(const std::string& split_name) {
   * Assign an executor from which a split should be persisted
   *
   **/
-int64_t TaskScheduler::ExecutorToPersistFrom(const std::string& split_name) {
+int TaskScheduler::ExecutorToPersistFrom(const std::string& split_name) {
    int executor_id = -1; 
    unique_lock<recursive_mutex> metalock(metadata_mutex);
    if(executor_splits.find(split_name) == executor_splits.end()) {
@@ -372,7 +372,7 @@ int64_t TaskScheduler::ExecutorToPersistFrom(const std::string& split_name) {
   * Launch PERSIST tasks if it needs to be persisted from another Executor on the Worker
   *
   **/
-int32_t TaskScheduler::ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, uint64_t taskid) {
+int32_t TaskScheduler::ValidatePartitions(const std::vector<NewArg>& task_args, int executor_id, ::uint64_t taskid) {
    int needs_persist = 0;
    std::vector<std::string> all_partitions;
 
@@ -486,7 +486,7 @@ void TaskScheduler::AddUpdatedPartition(const std::string &name, size_t size, in
   * If foreach is unsuccessful, clear newly created splits
   *
   */
-void TaskScheduler::ForeachComplete(uint64_t id, uint64_t uid, bool status) {
+void TaskScheduler::ForeachComplete(::uint64_t id, ::uint64_t uid, bool status) {
   boost::unordered_map<int, std::vector<std::string>> clear_map;
 
   unique_lock<recursive_mutex> metalock(metadata_mutex);

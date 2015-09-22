@@ -110,7 +110,7 @@ std::pair<void*, int64_t> TransferServer::transfer_blob(const string &name, Work
        ("Master failed to fetch data from Worker. Check master logs for more information."));
   }
 
-  return std::make_pair<void*, int64_t>(dest_, bytes_fetched_);
+  return std::pair<void*, int64_t>(dest_, bytes_fetched_);
   // TODO(erik): error handling
 
 // } else {

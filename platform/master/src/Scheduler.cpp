@@ -748,7 +748,7 @@ void Scheduler::DeleteSplit(const string& split_name) {
  * @param taskarg Arguments that are needed to perform this task
  * @return an ID of this task
  */
-::uint64_t Scheduler::Exec(Worker *worker, TaskArg *taskarg, int64_t parentid) {
+::uint64_t Scheduler::Exec(Worker *worker, TaskArg *taskarg, ::uint64_t parentid) {
   if (worker->workerinfo->IsRunning() == false) {
     forward_exception_to_r(PrestoWarningException("a scheduled node is not running"));
 //    throw PrestoWarningException("a scheduled node is not running");
@@ -781,7 +781,7 @@ void Scheduler::DeleteSplit(const string& split_name) {
                                     const std::string &name,
                                     const Arg &arg,
                                     const std::vector<Arg> *task_args,
-                                    int64_t parentid) {
+                                    ::uint64_t parentid) {
   ::uint64_t id = GetNewTaskID();
   LOG_DEBUG("CREATECOMPOSITE Task %6d Initializing", static_cast<int>(id));
 
@@ -1141,7 +1141,7 @@ SEXP Scheduler::GetSplitToMaster(const string &name) {
   pair<int, int> port_range = presto_master_->GetMasterPortRange(); 
 
   TransferServer tw(WORKER, RINSTANCE, port_range.first, port_range.second);
-  pair<void*, int64_t> ret = tw.transfer_blob(name, wi, hostname_, store);
+  pair<void*, ::int64_t> ret = tw.transfer_blob(name, wi, hostname_, store);
 
   SEXP data = Deserialize(ret.first, ret.second);
   return data;
