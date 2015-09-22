@@ -169,7 +169,7 @@ orc2dframe <- function(url, ...) {
     pm <- get_pm_object()
     # 1. Schedule file across workers. Handles globbing also.
     library(hdfsconnector)
-    plan <- create_plan(url, options, pm$worker_map())
+    plan <- hdfsconnector::create_plan(url, options, pm$worker_map())
     if (Sys.getenv('DEBUG_DDC') != '') {
         print(plan)  # for debugging
     }
@@ -225,5 +225,11 @@ orc2dframe <- function(url, ...) {
     # TODO catch error when nlines < nexecutors and return a darray with a single partition using:
     # d <- dframe(numpartitions=1)
     # read.csv('../ddc/test/data/ex002.csv',header=FALSE,col.names=c('a','b','c','d'))
+
+    c <- NULL
+    if("schema" %in% names(options)) {
+        c <- hdfsconnector::schema2colnames(as.character(options['schema']))
+    }
+    colnames(d) <- c;
     d # return dframe
 }
