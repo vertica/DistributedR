@@ -50,6 +50,7 @@
 #include "ExecutorPool.h"
 #include "ArrayStore.h"
 #include "DataLoader.h"
+#include "TaskScheduler.h"
 
 #include "Observer.h"
 #include <google/protobuf/message.h>
@@ -82,9 +83,10 @@ enum TASK_TYPE {
   IO,
   SEND,
   RECV,
+  PERSISTSPLIT,
   HELLO,
   MISC,
-  VERTICALOAD,
+  METADATAUPDATE,
   TASK_TYPE_NUM
 };
 
@@ -103,15 +105,19 @@ struct VerticaColocation{
 #endif
 #define SEND_THREAD_NUM 4  // network sends
 #define RECV_THREAD_NUM 4  // network receives
+#define PERSIST_THREAD_NUM 0
 #define MISC_THREAD_NUM 2  // misc (composite creation, logging)
 #define HELLO_THREAD_NUM 1
+#define METADATA_THREAD_NUM 1
 // The sequence of this variable has to comply with TASK_TYPE enum
 static int NUM_THREADS[NUM_THREADPOOLS] = {EXEC_THREAD_NUM,
                                     IO_THREAD_NUM,
                                     SEND_THREAD_NUM,
                                     RECV_THREAD_NUM,
+                                    PERSIST_THREAD_NUM,
                                     HELLO_THREAD_NUM,
-                                    MISC_THREAD_NUM};
+                                    MISC_THREAD_NUM,
+                                    METADATA_THREAD_NUM};
 
 class PrestoWorker : public ISubject<google::protobuf::Message> {
  public:
@@ -127,8 +133,9 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
   void Run(string master_ip, int master_port, string worker_addr);
 
   void hello(ServerInfo master_location,
-              ServerInfo worker_location,
-              bool is_heartbeat, int attr_flag);
+             ServerInfo worker_location,
+             bool is_heartbeat, int attr_flag,
+             int num_workers);
 
   void shutdown();
 
@@ -144,9 +151,14 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
                 vector<CompositeArg> composite_args,
                 uint64_t id, uint64_t uid, Response* res);
   void createcomposite(CreateCompositeRequest req);
+  void metadataupdate(MetadataUpdateRequest req);
   void verticaload(VerticaDLRequest req);
+  void prepare_persist(const std::string& split_name, int executor, uint64_t taskid);
 
   WorkerInfo* getClient(const ServerInfo& location);
+  boost::shared_ptr<MasterClient> getMaster() {
+    return master_;
+  }
 
   void send_update_array(const std::string& darray_name);
   void HandleRequests(int type);
@@ -173,6 +185,14 @@ class PrestoWorker : public ISubject<google::protobuf::Message> {
     return data_loader_;
   }
 
+  TaskScheduler* GetScheduler() {
+    return executorscheduler_;
+  }
+
+  std::pair<int, int> GetClusterInfo() {
+    return std::pair<int, int>(num_workers_, num_executors_);
+  }
+
   VerticaColocation verticaColocationDetails;
 
 protected:
@@ -193,6 +213,7 @@ protected:
   boost::timed_mutex exec_pool_del_mutex_;
 
   int num_executors_;  // total number of executors
+  int num_workers_;
   size_t shm_total_;   // total available shared memory size
   ExecutorPool *executorpool_;
 
@@ -240,11 +261,12 @@ protected:
   };
   boost::unordered_map<std::string, worker_stats> worker_stats_;
   boost::mutex worker_stat_mutex_;
+  
 
   DataLoader* data_loader_;
+  TaskScheduler* executorscheduler_;
 
   RequestLogger *mRequestLogger;
-
 };
 
 }  // namespace presto

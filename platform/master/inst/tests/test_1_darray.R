@@ -213,8 +213,8 @@ test_that("Dense darrays: works", {
 
   expect_equal(is.invalid(da), FALSE, info="check validity of empty dense darray after writing content")
   expect_equal(getpartition(da), mat, info="check uninitialized darray")
-  expect_equal(nrow(da), r, info="check darray nrow")
-  expect_equal(ncol(da), c, info="check darray col")
+  expect_equal(nrow(da), r, info="check darray nrow") 
+  expect_equal(ncol(da), c, info="check darray col") 
 })
 
 test_that("Sparse darrays: works", {

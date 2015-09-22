@@ -115,7 +115,7 @@ db2darray <- function(tableName, dsn, features = list(...), except=list(...), np
     }
 
     if(norelation) {
-      stop(paste("Table/View ", tableName, " does not exist", sep=""))
+      stop(paste("Table/View ", schema, ".", table, " does not exist", sep=""))
     }
 
     # excluding the elements in the except list

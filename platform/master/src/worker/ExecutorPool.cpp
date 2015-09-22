@@ -28,6 +28,7 @@
 #include "common.h"
 #include "UpdateUtils.h"
 #include "timer.h"
+#include "PrestoWorker.h"
 #include "ExecutorPool.h"
 
 #ifdef PERF_TRACE
@@ -50,28 +51,28 @@ namespace presto {
  * @param spill_dir a directory name that will be used when shared memory is full
  * @return Executor pool class object
  */
-ExecutorPool::ExecutorPool(int n_, ServerInfo *my_location_,
+ExecutorPool::ExecutorPool(PrestoWorker* worker_, int n_, ServerInfo *my_location_,
                            MasterClient* master_,
                            timed_mutex *shmem_arrays_mutex,
                            boost::unordered_set<string> *shmem_arrays,
                            const string &spill_dir,
                            int log_level,
                            string master_ip, int master_port)
-    : num_executors(n_), my_location(my_location_), master(master_),
+    : worker(worker_), num_executors(n_), my_location(my_location_), master(master_),
       shmem_arrays_mutex_(shmem_arrays_mutex),
-      shmem_arrays_(shmem_arrays),
-      spill_dir_(spill_dir) {
+      shmem_arrays_(shmem_arrays), spill_dir_(spill_dir) {
   
   int unique_worker_id = static_cast<int>(getpid());  // determine worker pid
-
   sema = new boost::interprocess::interprocess_semaphore(num_executors);
-  // a structure that contains information about each executor
   executors = new ExecutorData[num_executors];
   exec_index = 0;
+  
   for (int i = 0; i < num_executors; i++) {
+
     child_proc_ids_.push_back(0);  // initialize the child process ID
     int sendpipe[2];  // to send commands to executor
     int recvpipe[2];  // to receive result from executor
+
     int ret;
     ret = pipe(sendpipe);
     if (ret != 0) {
@@ -97,7 +98,7 @@ ExecutorPool::ExecutorPool(int n_, ServerInfo *my_location_,
 #else
       sprintf(logname, "/tmp/R_executor_%s_%s.%d_%d.log", getenv("USER"), master_ip.c_str(), master_port, i);
       open_flag |= O_TRUNC;
-#endif      
+#endif
       int fd = open(logname, open_flag, S_IRUSR | S_IWUSR);
       if (fd < 0) {
         LOG_ERROR("Failed to open Executor logfile: %s\n", logname);
@@ -122,29 +123,31 @@ ExecutorPool::ExecutorPool(int n_, ServerInfo *my_location_,
       if (!file) {
         fname = "./bin/R-executor-bin";
       }
+
       char log_level_[10];
       sprintf(log_level_, "%d", log_level);
       execl(fname.c_str(), fname.c_str(),
             int_to_string(recvpipe[1]).c_str(),
             spill_dir_.c_str(), logname,
-            log_level_,
+            log_level_, int_to_string(presto::DATASTORE).c_str(),
             reinterpret_cast<char*>(NULL));
     } else {
       // keep child process id to kill child process upon exit
       child_proc_ids_[i] = pid;
       executors[i].send = fdopen(sendpipe[1], "w");  // prepare for pipes
       executors[i].recv = fdopen(recvpipe[0], "r");
+      executors[i].pid = pid;
       close(sendpipe[0]);
       close(recvpipe[1]);
       if (executors[i].send != NULL && executors[i].recv != NULL) {
         executors[i].ready = true;
       }
-      
+
 #ifdef PERF_TRACE
       fprintf(executors[i].send, "%d \n", i);
 #endif
-      
-      LOG_INFO("Created new Executor %d with Process ID %jd", i,(::intmax_t)pid);
+
+      LOG_INFO("Created new Executor %d Process ID %jd", i,(::intmax_t)pid);
     }
   }
 
@@ -161,6 +164,7 @@ ExecutorPool::~ExecutorPool() {
   for (int i = 0; i < child_proc_ids_.size(); ++i) {
     kill(child_proc_ids_[i], SIGKILL);  // upon exit, kill all child processes
   }
+
   int child_status = 1, loop_count = 5;
   LOG_DEBUG("Executorpool destructor: Waiting for child processes to join");
   do {
@@ -171,6 +175,7 @@ ExecutorPool::~ExecutorPool() {
     }
     sleep(1);
   } while (--loop_count > 0); 
+
   LOG_DEBUG("Executorpool destructor: Closing pipe descriptor");
   if (executors != NULL) {
     for (int i = 0; i < num_executors; i++) {
@@ -186,6 +191,7 @@ ExecutorPool::~ExecutorPool() {
     delete[] executors;
     executors = NULL;
   }
+ 
   LOG_DEBUG("Executorpool destructor: Closing semaphores");
   if (sema != NULL) {
     delete sema;
@@ -197,6 +203,221 @@ ExecutorPool::~ExecutorPool() {
     delete i->second;
   }
   composites_.clear();
+}
+
+
+int ExecutorPool::GetExecutorInRndRobin() {
+    unique_lock<mutex> lock(exec_mutex);
+    int idx = exec_index%num_executors;
+    exec_index++;
+    return idx;
+    lock.unlock();
+}
+
+/** executes a task from a worker
+ * @param func the string of function to execute
+ * @param args arguments about splits
+ * @param raw_args argument not-related to splits or composite array
+ * @param composite_args arguments related to composite arrays
+ * @param id ID of a task (are we really using it??) leeky
+ * @param uid real task id from a master
+ * @param res  response... are we using it?? leeky
+ * @return NULL
+ */
+void ExecutorPool::execute(std::vector<std::string> func,
+                           std::vector<NewArg> args,
+                           std::vector<RawArg> raw_args,
+                           std::vector<NewArg> composite_args,
+                           ::uint64_t id, ::uint64_t uid, 
+                           Response* res, int executor_id,
+                           bool stage_updates) {
+  int target_executor = executor_id;
+
+  LOG_DEBUG("EXECUTE TaskID %18zu - Waiting for the Executor Id %d to be available", uid, target_executor);
+
+  unique_lock<mutex> lock(executors[target_executor].executor_mutex);
+  while(executors[target_executor].ready==false) { executors[target_executor].sync.wait(lock);}
+  executors[target_executor].ready = false;
+  lock.unlock();
+  
+  LOG_DEBUG("EXECUTE TaskID %18zu - Will be executed at Executor Id %d", uid, target_executor);
+  fprintf(executors[target_executor].send, "%d\n", EXECR);
+
+  // write arguments about splits
+  // split argument format
+  // number_of_splits\n
+  // split_name_in_presto variable_name_in_R\n
+  // repeati_until_number_of_splits!
+
+  if (args.size() > 0)
+     LOG_DEBUG("EXECUTE TaskID %18zu - Sending dobject Arguments to Executor.", uid);
+      
+  fprintf(executors[target_executor].send, "%zu\n", args.size());
+  for (int j = 0; j < args.size(); j++) {
+     std::string arrayname(args[j].arrayname().c_str());
+          
+     fprintf(executors[target_executor].send, "%s %s\n",
+            arrayname.c_str(),
+            args[j].varname().c_str());
+
+     //send over split array names separately if list_type
+     if(arrayname == "list_type..."){
+        //send number of splits in this list_type arg
+        fprintf(executors[target_executor].send, "%d\n",args[j].list_arraynames_size());
+        //send split names
+        for(int k = 0; k < args[j].list_arraynames_size(); k++){
+           fprintf(executors[target_executor].send, "%s\n", args[j].list_arraynames(k).c_str());
+        }
+     }
+  }
+      
+  fflush(executors[target_executor].send);
+
+  // write raw arguments (not splits or composite arrays)
+  // raw argument format
+  // number_of_raw_arguments \n
+  // name_of_argument_in_R size_of_the_value: value_of_the_variable\n
+  // repeat_until_number_of_raw_args
+  if (raw_args.size() > 0)
+     LOG_DEBUG("EXECUTE TaskID %18zu - Sending Raw Arguments to Executor.", uid);
+      
+  fprintf(executors[target_executor].send, "%zu\n", raw_args.size());
+  for (int j = 0; j < raw_args.size(); j++) {
+     // if the raw variable is embedded in the protobuf message value field
+     if (raw_args[j].has_value() == true) {
+        fprintf(executors[target_executor].send, "%s %zu:", raw_args[j].name().c_str(), raw_args[j].value().size());
+        for (int k = 0; k < raw_args[j].value().size(); k++)
+              fprintf(executors[target_executor].send, "%c", raw_args[j].value()[k]);
+     } else if (raw_args[j].fetch_need() == true) {
+        // we need to fetch the raw variable from a master
+        fprintf(executors[target_executor].send, "%s 0:", raw_args[j].name().c_str());
+        fprintf(executors[target_executor].send, "%s %d %s %zu", raw_args[j].server_addr().c_str(), raw_args[j].server_port(),
+                                                raw_args[j].fetch_id().c_str(), raw_args[j].data_size());
+     }
+     fprintf(executors[target_executor].send, "\n");
+  }
+  fflush(executors[target_executor].send);
+
+  // write array arguments
+  // composite array argument format
+  // number_of_composite_arguments \n
+  // variable_name_in_R name_of_composite_array_in_presto
+  // number_of_splits_in_the_composite_array:
+  // split_name x_offset_of_split_from_00 y_offset_of_split_from_00
+  // x_dim_of_split y_dim_of_split
+  // repeat till the number of splits
+  if (composite_args.size() > 0)
+     LOG_DEBUG("EXECUTE TaskID %18zu - Sending Composite Arguments to Executor.", uid);
+       
+  fprintf(executors[target_executor].send, "%zu\n", composite_args.size());      
+  for (int j = 0; j < composite_args.size(); j++) {
+     // the composite array is already created in the worker
+     Composite *composite = composites_[composite_args[j].arrayname()];
+     fprintf(executors[target_executor].send, "%s %s %d %d ",
+             composite_args[j].varname().c_str(),
+             composite_args[j].arrayname().c_str(),
+             composite->dobjecttype,
+             static_cast<int>(composite->offsets.size())
+            );
+     for (int k = 0; k < composite->offsets.size(); k++) {
+        fprintf(executors[target_executor].send, " %s %zu %zu %zu %zu ",
+                composite->splitnames[k].c_str(),
+                composite->offsets[k].first,
+                composite->offsets[k].second,
+                composite->dims[k].first,
+                composite->dims[k].second);
+     }                
+     fprintf(executors[target_executor].send, "\n");
+  }
+  fflush(executors[target_executor].send);  // send the arguments to an executor
+
+
+  // write function
+  // in func, each line is separate strings and we have to get the size first
+  size_t fun_str_length = 0;
+  for (int j = 0; j < func.size(); j++) {
+     fun_str_length += func[j].size();
+     ++fun_str_length; // get space for \n
+  }
+  // write function length followed by string
+  LOG_DEBUG("EXECUTE TaskID %18zu - Sending Function body to Executor.", uid);
+  fprintf(executors[target_executor].send, "%zu\n", fun_str_length);
+  for (int j = 0; j < func.size(); j++) {
+     fprintf(executors[target_executor].send, "%s\n", func[j].c_str());
+  }
+  // write end
+  fflush(executors[target_executor].send);
+  LOG_INFO("EXECUTE TaskID %18zu - Executing Function sent to Executor Id %d", uid, target_executor);
+
+  TaskDoneRequest req;
+
+  bool first = true;
+  char task_msg[EXCEPTION_MSG_SIZE];
+  while (true) {   // waiting for a result from executors
+
+     char cname[100];  // to keep a resultant split name
+     size_t size;
+     size_t rdim, cdim;
+     int empty;
+     memset(task_msg, 0x00, sizeof(task_msg));
+     // This function blocks as it is waiting for fscanf from executor.
+     int32_t ret = ParseUpdateLine(executors[target_executor].recv, cname, &size,
+                                   &empty, &rdim, &cdim, task_msg);
+     if (ret != 5) {
+         // we are using size field to indicate the task result
+         req.set_task_result(TASK_EXCEPTION);
+         ostringstream msg;
+         msg << "Error from worker " << server_to_string(*my_location) 
+             << check_out_of_memory(child_proc_ids_) << endl << "Failed to parse function execution result from executor";
+         req.set_task_message(msg.str());
+         LOG_ERROR(msg.str());
+         break;
+     }
+        
+     // & means the task is complete
+     // After a task is done, all update() variables are processed first.
+     // After all updates are propagated, the task completes.
+     if (strncmp(cname, "&", 100) == 0) {
+        // we are using size field to indicate the task result
+        LOG_INFO("EXECUTE TaskID %18zu - Task Execution complete.", uid);
+        req.set_task_result(size);
+        req.set_task_message(string(task_msg));
+      	if (size==TASK_EXCEPTION){
+      	   ostringstream msg;
+           msg << "TASK_EXCEPTION : TaskID "<< uid << " execution failed at Executor " << target_executor << " with message: " << task_msg;
+           LOG_ERROR(msg.str());  
+	}
+        break;
+     } 
+
+     string name(cname);  // the name of a split after task completion
+     if(stage_updates)
+       worker->GetScheduler()->StageUpdatedPartition(name, size, target_executor, uid);
+     else //direct updates
+       worker->GetScheduler()->AddUpdatedPartition(name, size, target_executor, uid);
+     req.add_update_names(name);
+     req.add_update_sizes(size);
+     req.add_update_empties(empty);
+     req.add_row_dim(rdim);
+     req.add_col_dim(cdim);
+     if (size < INMEM_UPDATE_SIZE_LIMIT) {
+        req.add_update_stores(string());
+     } else {
+        req.add_update_stores(spill_dir_);
+     }
+  }
+
+  lock.lock();
+  executors[target_executor].ready = true;
+  executors[target_executor].sync.notify_one();
+  lock.unlock();
+
+  req.set_id(id);
+  req.set_uid(uid);
+  req.mutable_location()->CopyFrom(*my_location);
+  LOG_DEBUG("EXECUTE TaskID %18zu - Updated variables read.", uid);
+  master->TaskDone(req);  // send a task done message to master
+  LOG_INFO("EXECUTE TaskID %18zu - Sent TASKDONE message to Master", uid);
 }
 
 /** executes a task from a worker
@@ -218,7 +439,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
 
   //Timer timer;
   //timer.start();
-  
+
   sema->wait();  // the semaphore is posted when a task is done
 
   Timer total_worker_exec;
@@ -240,6 +461,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
       exec_index = (exec_index + 1) % num_executors;
       lock.unlock();
 
+
 //Sending over trace and span information      
 #ifdef PERF_TRACE
       struct blkin_trace_info info;
@@ -248,19 +470,20 @@ void ExecutorPool::execute(std::vector<std::string> func,
       fprintf(executors[target_executor].send, "%ld\n", info.span_id);
       fprintf(executors[target_executor].send, "%ld\n", info.trace_id);   
 #endif
-      
+
+      fprintf(executors[target_executor].send, "%d\n", EXECR);
       // write arguments about splits
       // split argument format
       // number_of_splits\n
       // split_name_in_presto variable_name_in_R\n
       // repeat_until_number_of_splits!
       if (args.size() > 0)
-      	LOG_DEBUG("EXECUTE TaskID %18zu - Sending dobject Arguments to Executor.", uid);
-      
+        LOG_DEBUG("EXECUTE TaskID %18zu - Sending dobject Arguments to Executor.", uid);
+
       fprintf(executors[target_executor].send, "%zu\n", args.size());
       for (int j = 0; j < args.size(); j++) {
         std::string arrayname(args[j].arrayname().c_str());
-          
+
         fprintf(executors[target_executor].send, "%s %s\n",
                 arrayname.c_str(),
                 args[j].varname().c_str());
@@ -275,9 +498,9 @@ void ExecutorPool::execute(std::vector<std::string> func,
                     args[j].list_arraynames(k).c_str());
             }
         }
-        
+
         shmem_arrays_mutex_->lock();
-        
+
         //if it's a list-type arg, don't add the arrayname to shmem_arrays. instead, add all of the splits associated with it
         if(arrayname=="list_type..."){
             for(int l = 0; l < args[j].list_arraynames_size(); l++){
@@ -289,7 +512,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
         }
         shmem_arrays_mutex_->unlock();
       }
-      
+
       fflush(executors[target_executor].send);
 
       // write raw arguments (not splits or composite arrays)
@@ -298,7 +521,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
       // name_of_argument_in_R size_of_the_value: value_of_the_variable\n
       // repeat_until_number_of_raw_args
       if (raw_args.size() > 0)
-	      LOG_DEBUG("EXECUTE TaskID %18zu - Sending Raw Arguments to Executor.", uid);
+              LOG_DEBUG("EXECUTE TaskID %18zu - Sending Raw Arguments to Executor.", uid);
       fprintf(executors[target_executor].send, "%zu\n", raw_args.size());
       for (int j = 0; j < raw_args.size(); j++) {
         // if the raw variable is embedded in the protobuf message value field
@@ -326,8 +549,8 @@ void ExecutorPool::execute(std::vector<std::string> func,
       // x_dim_of_split y_dim_of_split
       // repeat till the number of splits
       if (composite_args.size() > 0)
-     	LOG_DEBUG("EXECUTE TaskID %18zu - Sending Composite Arguments to Executor.", uid);
-      fprintf(executors[target_executor].send, "%zu\n", composite_args.size());      
+        LOG_DEBUG("EXECUTE TaskID %18zu - Sending Composite Arguments to Executor.", uid);
+      fprintf(executors[target_executor].send, "%zu\n", composite_args.size());
       for (int j = 0; j < composite_args.size(); j++) {
         // the composite array is already created in the worker
         Composite *composite = composites_[composite_args[j].arrayname()];
@@ -343,13 +566,13 @@ void ExecutorPool::execute(std::vector<std::string> func,
                   composite->offsets[k].first,
                   composite->offsets[k].second,
                   composite->dims[k].first,
-                  composite->dims[k].second);          
+                  composite->dims[k].second);
     // keep track of shared memory segment
     // later we need to clean them up
           shmem_arrays_mutex_->lock();
           shmem_arrays_->insert(composite_args[j].arrayname());
           shmem_arrays_mutex_->unlock();
-        }                
+        }
         fprintf(executors[target_executor].send, "\n");
       }
       fflush(executors[target_executor].send);  // send the arguments to an executor
@@ -401,7 +624,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
           // we are using size field to indicate the task result
           req.set_task_result(TASK_EXCEPTION);
           ostringstream msg;
-          msg << "Error from worker " << server_to_string(*my_location) 
+          msg << "Error from worker " << server_to_string(*my_location)
             << check_out_of_memory(child_proc_ids_) << endl << "Failed to parse function execution result from executor";
           req.set_task_message(msg.str());
           LOG_ERROR(msg.str());
@@ -409,7 +632,7 @@ void ExecutorPool::execute(std::vector<std::string> func,
         }
 
         //timer.start();
-        
+
         // & means the task is complete
         // After a task is done, all update() variables are processed first.
         // After all updates are propagated, the task completes.
@@ -418,11 +641,11 @@ void ExecutorPool::execute(std::vector<std::string> func,
           LOG_INFO("EXECUTE TaskID %18zu - Task Execution complete.", uid);
           req.set_task_result(size);
           req.set_task_message(string(task_msg));
-      	  if (size==TASK_EXCEPTION){
-      		  ostringstream msg;
+          if (size==TASK_EXCEPTION){
+                  ostringstream msg;
             msg << "TASK_EXCEPTION : TaskID "<< uid << " execution failed at Executor " << target_executor << " with message: " << task_msg;
-            LOG_ERROR(msg.str());  
-	        }
+            LOG_ERROR(msg.str());
+                }
           break;
         }
 
@@ -454,6 +677,111 @@ void ExecutorPool::execute(std::vector<std::string> func,
       break;
     }
   }
+}
+
+
+
+void ExecutorPool::clear(std::vector<std::string> splits, int executor) {
+  LOG_DEBUG("CLEAR Task                     - Waiting for the Executor Id %d to clear %zu splits", executor, splits.size());
+
+  unique_lock<mutex> lock(executors[executor].executor_mutex);
+  while(executors[executor].ready==false) { executors[executor].sync.wait(lock); }
+  executors[executor].ready = false;
+  lock.unlock();
+
+  fprintf(executors[executor].send, "%d\n", CLEAR);
+  fprintf(executors[executor].send, "%zu\n", splits.size());
+  for (int i = 0; i < splits.size(); i++) {
+     fprintf(executors[executor].send, "%s\n", splits[i].c_str());
+  }
+  fflush(executors[executor].send);
+  LOG_INFO("CLEAR Task                        - CLEAR sent to Executor Id %d", executor);
+
+  /*char task_msg[EXCEPTION_MSG_SIZE];
+  while (true) {   // waiting for a result from executors 
+    char cname[100];  // to keep a resultant split name
+    size_t size;
+    size_t rdim, cdim;
+    int empty;
+    memset(task_msg, 0x00, sizeof(task_msg));
+
+    // This function blocks as it is waiting for fscanf from executor.
+    int32_t ret = ParseUpdateLine(executors[executor].recv, cname, &size,
+                                  &empty, &rdim, &cdim, task_msg);
+    if (ret != 5) {
+        ostringstream msg;
+        msg << "Error from worker " << server_to_string(*my_location) 
+            << check_out_of_memory(child_proc_ids_) << endl << "Failed to parse function execution result from executor";
+        LOG_ERROR(msg.str());
+        break;
+    }
+
+    if (strncmp(cname, "&", 100) == 0) {
+       LOG_INFO("Clear Task complete.");
+       if (size==TASK_EXCEPTION){
+          ostringstream msg;
+          msg << "TASK_EXCEPTION : Clear task execution failed at Executor " << executor << " with message: " << task_msg;
+          LOG_ERROR(msg.str());  
+       }
+       break;
+    }   
+  }*/
+
+  lock.lock();
+  executors[executor].ready = true;
+  executors[executor].sync.notify_one();
+  lock.unlock();
+}                                  
+
+
+void ExecutorPool::persist(std::string split_name, int executor, ::uint64_t taskid) {
+  LOG_DEBUG("PERSIST TaskID %18zu - Waiting for the Executor Id %d to persist Split %s", taskid, executor, split_name.c_str());
+
+  unique_lock<mutex> lock(executors[executor].executor_mutex);
+  while(executors[executor].ready==false) { executors[executor].sync.wait(lock); }
+  executors[executor].ready = false;
+  lock.unlock();
+
+  fprintf(executors[executor].send, "%d\n", PERSIST); 
+  fprintf(executors[executor].send, "%s\n", split_name.c_str());
+  fflush(executors[executor].send);
+  LOG_INFO("PERSIST TaskID %18zu - Split %s sent to Executor Id %d for persist", taskid, split_name.c_str(), executor);
+
+  char task_msg[EXCEPTION_MSG_SIZE];
+  while (true) {   // waiting for a result from executors 
+    char cname[100];  // to keep a resultant split name
+    size_t size, rdim, cdim;
+    int empty;
+    memset(task_msg, 0x00, sizeof(task_msg));
+
+    // This function blocks as it is waiting for fscanf from executor.
+    int32_t ret = ParseUpdateLine(executors[executor].recv, cname, &size,
+                                  &empty, &rdim, &cdim, task_msg);
+    if (ret != 5) {
+        ostringstream msg;
+        msg << "Error from worker " << server_to_string(*my_location) << ": Message(" << task_msg<< "). Ret("<< ret << ")"
+            << check_out_of_memory(child_proc_ids_) << endl << "Failed to parse function execution result from executor";
+        LOG_ERROR(msg.str());
+        break;
+    }
+
+    if (strncmp(cname, "&", 100) == 0) {
+       // we are using size field to indicate the task result
+       if (size==TASK_EXCEPTION){
+          ostringstream msg;
+          msg << "TASK_EXCEPTION : Persist task execution failed at Executor " << executor << " with message: " << task_msg;
+          LOG_ERROR(msg.str());
+       } else
+         LOG_DEBUG("PERSIST TaskID %18zu - Split %s persisted successfully", taskid, split_name.c_str());
+       break;
+    }
+  }
+
+  worker->GetScheduler()->PersistDone(split_name, executor);
+  lock.lock();
+  executors[executor].ready = true;
+  executors[executor].sync.notify_one();
+  lock.unlock();
 }
 
 void ExecutorPool::InsertCompositeArray(std::string name, Composite* comp) {

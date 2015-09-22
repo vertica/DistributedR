@@ -76,7 +76,7 @@ class PrestoMaster {
   explicit PrestoMaster(const string& config_file);
   ~PrestoMaster();
 
-  void Start(int loglevel);
+  void Start(int loglevel, std::string storage_layer);
   vector<string> WorkerHosts();
   vector<int32_t> WorkerPorts();
   vector<int32_t> WorkerStartPortRange();

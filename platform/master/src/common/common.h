@@ -50,6 +50,8 @@
 #include "shared.pb.h"
 #include "PrestoException.h"
 
+#define GC_DEFAULT_GEN 1
+
 #define MAX_FILENAME_LENGTH 200
 
 #define NUM_SERVER_THREADS 64
@@ -102,6 +104,17 @@ typedef enum {
   TASK_EXCEPTION
 } TaskStatus;
 
+enum StorageLayer {
+  WORKER = 1,
+  RINSTANCE
+};
+
+enum ExecutorEvent {
+  EXECR = 1,
+  CLEAR,
+  PERSIST
+};
+
 /** This enum indicates a bit index of each attribute
  * when HelloReply message is sent from a worker.
  */
@@ -115,6 +128,11 @@ typedef enum {
 } HelloReplyFlag;
 
 static string exception_prefix = "DistributedR Exception";
+extern StorageLayer DATASTORE;
+
+static std::string getStorageLayer() {
+  return ((DATASTORE == WORKER) ? "Worker" : "Executor");
+}
 
 /** Convert integer to string
  * @param i integer to convert to string

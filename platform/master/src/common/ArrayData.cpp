@@ -251,20 +251,30 @@ ArrayData* ParseShm(const string &name) {
   }
 }
 
-ArrayData* CreateDobjectData(RInside &R, ARRAYTYPE org_class, const string &varname, const string &newname) {
-   char cmd[CMD_BUF_SIZE];
-   snprintf(cmd, CMD_BUF_SIZE, "%s.serializedtmp... <- serialize(%s, NULL)",
-       varname.c_str(), varname.c_str());
-    R.parseEval(cmd);
-    snprintf(cmd, CMD_BUF_SIZE, "as.numeric(object.size(%s.serializedtmp...))", varname.c_str());
-    size_t size = Rcpp::as<size_t>(R.parseEval(cmd));
+ArrayData* CreateDobjectData(RInside &R, ARRAYTYPE org_class, const string &varname, const string &newname, StorageLayer store, size_t r_size) {
+   size_t size = 0;
 
-    if (org_class == DATA_FRAME) 
-       return new DistDataFrame(newname, R[varname+".serializedtmp..."], (size - SEXP_HEADER_SIZE));
-    else if (org_class == LIST) {
+   if(store == WORKER) {
+     char cmd[CMD_BUF_SIZE];
+     snprintf(cmd, CMD_BUF_SIZE, "`%s.serializedtmp...` <- serialize(`%s`, NULL)",
+         varname.c_str(), varname.c_str());
+      R.parseEval(cmd);
+      snprintf(cmd, CMD_BUF_SIZE, "as.numeric(object.size(`%s.serializedtmp...`))", varname.c_str());
+      size = Rcpp::as<size_t>(R.parseEval(cmd));
+    }
+
+    if (org_class == DATA_FRAME) {
+       if(store == WORKER) 
+         return new DistDataFrame(newname, store, r_size, R[varname+".serializedtmp..."], (size - SEXP_HEADER_SIZE));
+       else 
+         return new DistDataFrame(newname, store, r_size, NULL, size);
+    } else if (org_class == LIST) {
        SEXP sexp_from = R[varname];     // Extracting length of the list in the split.
        int split_len = LENGTH(sexp_from);
-       return new DistList(newname, R[varname+".serializedtmp..."], (size - SEXP_HEADER_SIZE), split_len);
+       if(store == WORKER) 
+         return new DistList(newname, store, r_size, R[varname+".serializedtmp..."], (size - SEXP_HEADER_SIZE), split_len);
+       else
+         return new DistList(newname, store, r_size, NULL, size, split_len);
     } else {
        ostringstream msg;
        msg << "Unhandled dobject: "<< org_class ;
@@ -279,15 +289,19 @@ ArrayData* CreateDobjectData(RInside &R, ARRAYTYPE org_class, const string &varn
  * @param newname a new darray name that will be used in the shared memory region
  * @return a pointer of ArrayData (R array serialization to shared memory) with appropriate type.
  */
-ArrayData* ParseVariable(RInside &R, const string &varname,
-    const string &newname, ARRAYTYPE org_class) {
+ArrayData* ParseVariable(RInside &R, const string &varname, const string &newname, ARRAYTYPE org_class,
+                         StorageLayer store) {
   char cmd[CMD_BUF_SIZE];
-  snprintf(cmd, CMD_BUF_SIZE, "class(%s)", varname.c_str());
+  snprintf(cmd, CMD_BUF_SIZE, "class(`%s`)", varname.c_str());
   vector<string> classname_vec = Rcpp::as<vector<string>> (R.parseEval(cmd));
   boost::unordered_set<string> classname(classname_vec.begin(), classname_vec.end());
 
-  snprintf(cmd, CMD_BUF_SIZE, "paste(class(%s), collapse=', ')", varname.c_str());
+  snprintf(cmd, CMD_BUF_SIZE, "paste(class(`%s`), collapse=', ')", varname.c_str());
   string classname_str = Rcpp::as<string>(R.parseEval(cmd));
+
+  snprintf(cmd, CMD_BUF_SIZE, "object.size(`%s`)", varname.c_str());
+  size_t data_size = Rcpp::as<size_t>(R.parseEval(cmd));
+
   LOG_INFO("org_class: %d, class: %s", org_class, classname_str.c_str());
 
   if (org_class == DENSE) {
@@ -301,14 +315,14 @@ ArrayData* ParseVariable(RInside &R, const string &varname,
     
     if (classname.find("matrix") == classname.end()){
         strcpy(cmd,"");
-        snprintf(cmd, CMD_BUF_SIZE, "%s <- as(%s, \"matrix\")", varname.c_str(),varname.c_str());
+        snprintf(cmd, CMD_BUF_SIZE, "`%s` <- as(`%s`, \"matrix\")", varname.c_str(),varname.c_str());
         R.parseEval(cmd);
         classname.insert("matrix");
         classname.erase("dsyMatrix");
         classname.erase("dgeMatrix");
     }
     
-    return new DenseArrayData(newname, R[varname], classname);
+    return new DenseArrayData(newname, store, data_size, R[varname], classname);
   } else if (org_class == SPARSE) { 
     if (classname.find("dgCMatrix") == classname.end() && classname.find("dsCMatrix") == classname.end()) {    
       ostringstream msg;
@@ -319,13 +333,13 @@ ArrayData* ParseVariable(RInside &R, const string &varname,
     
     if(classname.find("dsCMatrix") != classname.end()){
         strcpy(cmd,"");
-        snprintf(cmd, CMD_BUF_SIZE, "%s <- as(%s, \"dgCMatrix\")", varname.c_str(),varname.c_str());
+        snprintf(cmd, CMD_BUF_SIZE, "`%s` <- as(`%s`, \"dgCMatrix\")", varname.c_str(),varname.c_str());
         R.parseEval(cmd);
         classname.insert("dgCMatrix");
         classname.erase("dsCMatrix");
     }
     
-    return new SparseArrayData(newname, R[varname], classname);
+    return new SparseArrayData(newname, store, data_size, R[varname], classname);
   } else if (org_class == SPARSE_TRIPLET) {
     if (classname.find("dgTMatrix") == classname.end()) {
       ostringstream msg;
@@ -333,7 +347,8 @@ ArrayData* ParseVariable(RInside &R, const string &varname,
         "Variable '" << varname << "' should be a sparse matrix with triplet format instead of " << classname_str <<".";
       throw PrestoWarningException(msg.str().c_str());
     }
-    return new SparseArrayTripletData(newname, R[varname], classname);
+
+    return new SparseArrayTripletData(newname, store, data_size, R[varname], classname);
   } else if (org_class == DATA_FRAME) {
     if (classname.find("data.frame") == classname.end()) {  // for data.frame we give a serialized input
       ostringstream msg;
@@ -341,7 +356,7 @@ ArrayData* ParseVariable(RInside &R, const string &varname,
         "Variable '" << varname <<"' should be a data frame instead of " << classname_str <<".";
       throw PrestoWarningException(msg.str().c_str());
     }
-    return CreateDobjectData(R, DATA_FRAME, varname, newname);
+    return CreateDobjectData(R, DATA_FRAME, varname, newname, store, data_size);
   } else if (org_class == LIST) {
     if (classname.find("list") == classname.end()) {
       ostringstream msg;
@@ -349,18 +364,18 @@ ArrayData* ParseVariable(RInside &R, const string &varname,
         "Variable '" << varname <<"' should be a list instead of " << classname_str <<".";
       throw PrestoWarningException(msg.str().c_str());
     }
-    return CreateDobjectData(R, LIST, varname, newname);
+    return CreateDobjectData(R, LIST, varname, newname, store, data_size);
   } else if (org_class == EMPTY){
     if (classname.find("matrix") != classname.end() || classname.find("numeric") != classname.end())
-       return new DenseArrayData(newname, R[varname], classname);
+       return new DenseArrayData(newname, store, data_size, R[varname], classname);
     else if (classname.find("dgCMatrix") != classname.end()) 
-       return new SparseArrayData(newname, R[varname], classname);
+       return new SparseArrayData(newname, store, data_size, R[varname], classname);
     else if (classname.find("dgTMatrix") != classname.end())
-       return new SparseArrayTripletData(newname, R[varname], classname);
+       return new SparseArrayTripletData(newname, store, data_size, R[varname], classname);
     else if (classname.find("data.frame") != classname.end())
-       return CreateDobjectData(R, DATA_FRAME, varname, newname);
+       return CreateDobjectData(R, DATA_FRAME, varname, newname, store, data_size);
     else if (classname.find("list") != classname.end()) 
-       return CreateDobjectData(R, LIST, varname, newname);
+       return CreateDobjectData(R, LIST, varname, newname, store, data_size);
     else {
        ostringstream msg;
        msg << "Parse R variable to shm: wrong class \"" << classname_str
@@ -384,17 +399,18 @@ size_t CreateComposite(
     const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
     const std::vector<ArrayData*> &splits,
     std::pair<std::int64_t, std::int64_t> dims,
-    ARRAYTYPE type) {
+    ARRAYTYPE type,
+    StorageLayer store) {
     try {
     switch (type) {
       case DENSE:
-        delete new DenseArrayData(name, offsets, splits, dims);
+        delete new DenseArrayData(name, store, offsets, splits, dims);
         break;
       case SPARSE:
-        delete new SparseArrayData(name, offsets, splits, dims);
+        delete new SparseArrayData(name, store, offsets, splits, dims);
         break;
       case SPARSE_TRIPLET:
-        delete new SparseArrayTripletData(name, offsets, splits, dims);
+        delete new SparseArrayTripletData(name, store, offsets, splits, dims);
         break;
       default:
         char numstr[64];
@@ -415,6 +431,9 @@ size_t CreateComposite(
   return size;
 }
 
+/**
+ * Returns Type if data partitions is stored in workers
+ **/
 ARRAYTYPE GetClassType(const std::string& name) {
   SharedMemoryObject shm(
       boost::interprocess::open_only, name.c_str(),
@@ -430,8 +449,8 @@ ARRAYTYPE GetClassType(const std::string& name) {
  * @param type determines a type of the ArrayData (dense/sparse matrix)
  * @return an ArrayData object
  */
-ArrayData::ArrayData(const string &name_, int type_)
-    : name(name_), type(type_), shm(NULL) {
+ArrayData::ArrayData(const string &name_, int type_, StorageLayer store_, size_t size_)
+    : name(name_), type((ARRAYTYPE)type_), shm(NULL), store(store_), r_size(size_), header_region(NULL){
   install_symbols();
 }
 
@@ -453,7 +472,8 @@ void ArrayData::OpenShm(bool external) {
  *
  */
 ArrayData::~ArrayData() {
-  delete shm;
+  if(shm != NULL)
+    delete shm;
 }
 
 /** Compress the data structure to reduce network movement
@@ -476,28 +496,37 @@ string ArrayData::GetName() const {
   return name;
 }
 
+ARRAYTYPE ArrayData::GetClassType() {
+  return type;
+}
+
 /** Get the size of shared memory segment
  * @return the size of the shared memory segment
  */
 size_t ArrayData::GetSize() {
-  boost::interprocess::offset_t size;
-  if (!shm->get_size(size)) {
-    LOG_ERROR("Array GetSize: could not get shmem size");
-    return 0;
-  }
-  return (size_t)size;
+  if(store == WORKER) { 
+    boost::interprocess::offset_t size;
+    if (!shm->get_size(size)) {
+      LOG_ERROR("Array GetSize: could not get shmem size");
+      return 0;
+    }
+    return (size_t) size;
+  } else 
+    return r_size;
 }
 
 /** DenseArrayData constructor. It creates a shared memory segment object. It does not reserve space yet.
  * @param name the name of shared memory segment in the shared memory region
  */
-DenseArrayData::DenseArrayData(const string &name)
-  : ArrayData(name, DENSE), array_region(pair<void*, int>((void *)NULL, 0)) {
+DenseArrayData::DenseArrayData(const string &name, StorageLayer store)
+  : ArrayData(name, DENSE, store, 0), array_region(pair<void*, int>((void *)NULL, 0)), header(NULL) {
   //  header_region = new mapped_region(shm, read_only);
-  OpenShm(false);
-  header_region = new boost::interprocess::mapped_region(*shm,
-      boost::interprocess::read_write);
-  header = reinterpret_cast<dense_header_t*>(header_region->get_address());
+  if(store == WORKER) {
+    OpenShm(false);
+    header_region = new boost::interprocess::mapped_region(*shm,
+        boost::interprocess::read_write);
+    header = reinterpret_cast<dense_header_t*>(header_region->get_address());
+  }
 }
 
 /* Create shared memory segment and fill input R object into it. This function gets assigned memory on the shared memory
@@ -505,9 +534,9 @@ DenseArrayData::DenseArrayData(const string &name)
  * @param sexp_from a R object where we will read the value from. The value will be written into the shared memory region
  * @param classname the name of the class in R of the ArrayData
  */
-DenseArrayData::DenseArrayData(const string &name, const SEXP sexp_from,
-    const boost::unordered_set<std::string> &classname)
-  : ArrayData(name, DENSE), array_region(pair<void*, int>((void *)NULL, 0)) {
+DenseArrayData::DenseArrayData(const string &name, StorageLayer store, size_t r_size, 
+    const SEXP sexp_from, const boost::unordered_set<std::string> &classname)
+  : ArrayData(name, DENSE, store, r_size), array_region(pair<void*, int>((void *)NULL, 0)), header(NULL) {
   // Get dimensions, create array
   if (Rf_isNull(sexp_from)) {
     throw PrestoWarningException("DenseArray: updated value of split is NULL");
@@ -530,32 +559,43 @@ DenseArrayData::DenseArrayData(const string &name, const SEXP sexp_from,
     throw PrestoWarningException
       ("DenseArray supports only integer, logical, or numeric (real) values");
   }
-  // the size of input array (header + data size)
-  size_t data_size = x*y*(val_type==REALSXP ? sizeof(double) : sizeof(int));
-  size_t size = mapped_size(sizeof(*header)) + mapped_size(data_size);
-  if (size < INMEM_UPDATE_SIZE_LIMIT) {
-    OpenShm(false);
+
+  if (store == WORKER) {
+    // the size of input array (header + data size)
+    size_t data_size = x*y*(val_type==REALSXP ? sizeof(double) : sizeof(int));
+    size_t size = mapped_size(sizeof(*header)) + mapped_size(data_size);
+    if (size < INMEM_UPDATE_SIZE_LIMIT) {
+      OpenShm(false);
+    } else {
+      OpenShm(true);
+      LOG_DEBUG("Creating Dense array in external.");
+    }
+
+    shm->truncate(size);  // allocate the size in the shared memory region
+    header_region = new boost::interprocess::mapped_region(*shm,
+        boost::interprocess::read_write);
+    // header part
+    header = reinterpret_cast<dense_header_t*>(header_region->get_address());
+
+    header->type = type;
+    header->dims[0] = x;
+    header->dims[1] = y;
+    header->value_type = val_type;
+    header->store = store;
+    // data part (excluding header size)
+    void *data = reinterpret_cast<char*>(header)+mapped_size(sizeof(*header));
+    if (data == NULL) {
+      throw PrestoWarningException("DenseArray: data writable to shm is NULL");
+    }
+    memcpy(data, (val_type==REALSXP ? (void*)REAL(sexp_from) : (void*)INTEGER(sexp_from)), data_size);
   } else {
-    OpenShm(true);
-    LOG_DEBUG("Creating Dense array in external.");
+    header = new dense_header_t;
+    header->type = type;
+    header->dims[0] = x;
+    header->dims[1] = y;
+    header->value_type = val_type;
+    header->store = store;
   }
-
-  shm->truncate(size);  // allocate the size in the shared memory region
-  header_region = new boost::interprocess::mapped_region(*shm,
-      boost::interprocess::read_write);
-  // header part
-  header = reinterpret_cast<dense_header_t*>(header_region->get_address());
-
-  header->type = type;
-  header->dims[0] = x;
-  header->dims[1] = y;
-  header->value_type = val_type;
-  // data part (excluding header size)
-  void *data = reinterpret_cast<char*>(header)+mapped_size(sizeof(*header));
-  if (data == NULL) {
-    throw PrestoWarningException("DenseArray: data writable to shm is NULL");
-  }
-  memcpy(data, (val_type==REALSXP ? (void*)REAL(sexp_from) : (void*)INTEGER(sexp_from)), data_size);
 }
 
 /** Load shared memory segments into R-session
@@ -567,6 +607,7 @@ void DenseArrayData::LoadInR(RInside &R, const string &varname) {
   if (header == NULL) {
     throw PrestoWarningException("DenseArray::LoadInR: array/header is NULL");
   }
+
   // create an array in R-session
   SEXP arr = PrestoCreateArray(header->dims[0], header->dims[1], header->value_type);
   // freemap is filled in malloc_hook
@@ -606,11 +647,12 @@ void DenseArrayData::LoadInR(RInside &R, const string &varname) {
  */
 DenseArrayData::DenseArrayData(
     const std::string &name,
+    StorageLayer store,
     const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
     const std::vector<ArrayData*> &splits,
     std::pair<std::int64_t, std::int64_t> dims)
-    : ArrayData(name, DENSE),
-      array_region(pair<void*, int>((void *)NULL, 0)) {
+    : ArrayData(name, DENSE, store),
+      array_region(pair<void*, int>((void *)NULL, 0)), header(NULL) {
   OpenShm(false);  // create a object in the shm object
   if (splits.size() <= 0){
     throw PrestoWarningException("DenseArray composite: number of splits is less than 0");
@@ -752,7 +794,11 @@ DenseArrayData::DenseArrayData(
  *
  */
 DenseArrayData::~DenseArrayData() {
-  delete header_region;
+  if(store = WORKER) {
+    delete header_region;
+  } else {
+    delete header;
+  }
 }
 
 /** Get dimension of the dense array data (number of rows/columns)
@@ -766,8 +812,8 @@ pair<std::int64_t, std::int64_t> DenseArrayData::GetDims() const {
  * @param name name of the sparse array in the shared memory region
  * @return an object of sparse array data
  */
-SparseArrayData::SparseArrayData(const string &name)
-  : ArrayData(name, SPARSE) {
+SparseArrayData::SparseArrayData(const string &name, StorageLayer store)
+  : ArrayData(name, SPARSE, store, 0) {
   //  header_region = new mapped_region(shm, read_only);
   OpenShm(false);
   header_region = new boost::interprocess::mapped_region(*shm,
@@ -799,9 +845,9 @@ sprs_encoding_t SparseArrayData::ChooseEncoding(
  * @param classname a name of the class of input array
  * @return a SparseArrayData object
  */
-SparseArrayData::SparseArrayData(const string &name, const SEXP sexp_from,
-    const boost::unordered_set<std::string> &classname)
-  : ArrayData(name, SPARSE) {
+SparseArrayData::SparseArrayData(const string &name, StorageLayer store, size_t r_size, 
+    const SEXP sexp_from, const boost::unordered_set<std::string> &classname)
+  : ArrayData(name, SPARSE, store, r_size) {
   // Get dimensions*nnzs, create array
   int64_t dim0, dim1, nonzeros;
   if (Rf_isNull(sexp_from)) {
@@ -820,59 +866,72 @@ SparseArrayData::SparseArrayData(const string &name, const SEXP sexp_from,
     nonzeros = length(fromi);
   }
 
-  int *data_i, *data_p;  // in CSC format, we use i,p,x attributes
-  double *data_x;
-  size_t size = mapped_size(sizeof(*header)) +
-      mapped_size(nonzeros*sizeof(data_i[0])) +
-      mapped_size(nonzeros*sizeof(data_x[0])) +
-      mapped_size((dim1+1)*sizeof(data_p[0]));
+  if(store == WORKER) {
 
-  if (size < INMEM_UPDATE_SIZE_LIMIT) {
-    OpenShm(false);
-  } else {
-    OpenShm(true);
-    LOG_DEBUG("SparseArray: Creating sparse array in external");
-  }
+    int *data_i, *data_p;  // in CSC format, we use i,p,x attributes
+    double *data_x;
+    size_t size = mapped_size(sizeof(*header)) +
+        mapped_size(nonzeros*sizeof(data_i[0])) +
+        mapped_size(nonzeros*sizeof(data_x[0])) +
+        mapped_size((dim1+1)*sizeof(data_p[0]));
 
-  shm->truncate(size);  // allocate the given size into shared memory region
-  // beginning region of the shared memory region
-  header_region = new boost::interprocess::mapped_region(
-      *shm, boost::interprocess::read_write);
-  header = reinterpret_cast<sparse_header_t*>(header_region->get_address());
-  // Set header fields
-  header->type = type;
-  header->nnz = nonzeros;
-  header->dims[0] = dim0;
-  header->dims[1] = dim1;
-  header->encoding = CSC;
-
-  // Copy data, the sequence is i -> x -> p
-  data_i = reinterpret_cast<int*>(
-      reinterpret_cast<char*>(header)+
-      mapped_size(sizeof(*header)));
-  data_x =  reinterpret_cast<double*>(
-      reinterpret_cast<char*>(data_i)+
-      mapped_size(header->nnz*sizeof(data_i[0])));
-  data_p = reinterpret_cast<int*>(
-      reinterpret_cast<char*>(data_x)+
-      mapped_size(header->nnz*sizeof(data_x[0])));
-
-  if (classname.find("dgCMatrix") != classname.end()) {
-    SEXP fromi = getAttrib(sexp_from, RSymbol_i);
-    SEXP fromx = getAttrib(sexp_from, RSymbol_x);
-    SEXP fromp = getAttrib(sexp_from, RSymbol_p);
-
-    if (Rf_isNull(fromi) || Rf_isNull(fromx) || Rf_isNull(fromp)) {
-      throw PrestoWarningException
-        ("SparseArray: fromi/fromp/fromx read failure");
+    if (size < INMEM_UPDATE_SIZE_LIMIT) {
+      OpenShm(false);
+    } else {
+      OpenShm(true);
+      LOG_DEBUG("SparseArray: Creating sparse array in external");
     }
-    if (data_i == NULL || data_x == NULL || data_p == NULL) {
-      throw PrestoWarningException
-        ("SparseArray: data_i/data_x/data_p is NULL");
+
+    shm->truncate(size);  // allocate the given size into shared memory region
+    // beginning region of the shared memory region
+    header_region = new boost::interprocess::mapped_region(
+        *shm, boost::interprocess::read_write);
+    header = reinterpret_cast<sparse_header_t*>(header_region->get_address());
+    // Set header fields
+    header->type = type;
+    header->nnz = nonzeros;
+    header->dims[0] = dim0;
+    header->dims[1] = dim1;
+    header->encoding = CSC;
+    header->store = store;
+
+    // Copy data, the sequence is i -> x -> p
+    data_i = reinterpret_cast<int*>(
+        reinterpret_cast<char*>(header)+
+        mapped_size(sizeof(*header)));
+    data_x =  reinterpret_cast<double*>(
+        reinterpret_cast<char*>(data_i)+
+        mapped_size(header->nnz*sizeof(data_i[0])));
+    data_p = reinterpret_cast<int*>(
+        reinterpret_cast<char*>(data_x)+
+        mapped_size(header->nnz*sizeof(data_x[0])));
+
+    if (classname.find("dgCMatrix") != classname.end()) {
+      SEXP fromi = getAttrib(sexp_from, RSymbol_i);
+      SEXP fromx = getAttrib(sexp_from, RSymbol_x);
+      SEXP fromp = getAttrib(sexp_from, RSymbol_p);
+
+      if (Rf_isNull(fromi) || Rf_isNull(fromx) || Rf_isNull(fromp)) {
+        throw PrestoWarningException
+          ("SparseArray: fromi/fromp/fromx read failure");
+      }
+      if (data_i == NULL || data_x == NULL || data_p == NULL) {
+        throw PrestoWarningException
+          ("SparseArray: data_i/data_x/data_p is NULL");
+      }
+      memcpy(data_i, INTEGER(fromi), nonzeros*sizeof(data_i[0]));
+      memcpy(data_x, REAL(fromx), nonzeros*sizeof(data_x[0]));
+      memcpy(data_p, INTEGER(fromp), (dim1+1)*sizeof(data_p[0]));
     }
-    memcpy(data_i, INTEGER(fromi), nonzeros*sizeof(data_i[0]));
-    memcpy(data_x, REAL(fromx), nonzeros*sizeof(data_x[0]));
-    memcpy(data_p, INTEGER(fromp), (dim1+1)*sizeof(data_p[0]));
+  } else {    //StorageLayer == EXECUTOR
+
+    header = new sparse_header_t;
+    header->type = type;
+    header->nnz = nonzeros;
+    header->dims[0] = dim0;
+    header->dims[1] = dim1;
+    header->encoding = CSC;
+    header->store = store;
   }
 }
 
@@ -967,10 +1026,11 @@ void SparseArrayData::LoadInR(RInside &R, const string &varname) {
  */
 SparseArrayData::SparseArrayData(
     const std::string &name,
+    StorageLayer store,
     const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
     const std::vector<ArrayData*> &splits,
     std::pair<std::int64_t, std::int64_t> dims)
-    : ArrayData(name, SPARSE) {
+    : ArrayData(name, SPARSE, store) {
   // need to make sure that we go through splits in right order
   int nnz = 0;
 
@@ -1153,7 +1213,11 @@ int* SparseArrayData::ConvertJtoPVector(int* j_vector, int nnz, int num_col) {
  *
  */
 SparseArrayData::~SparseArrayData() {
-  delete header_region;
+  if(store = WORKER) {
+    delete header_region;
+  } else {
+    delete header;
+  }
 }
 
 /** Get the dimensions of the sparse array
@@ -1164,21 +1228,23 @@ pair<std::int64_t, std::int64_t> SparseArrayData::GetDims() const {
 }
 
 // SparseArrayTripletData
-SparseArrayTripletData::SparseArrayTripletData(const string &name)
-  : ArrayData(name, SPARSE_TRIPLET) {
-  OpenShm(false);
-  header_region = new boost::interprocess::mapped_region(*shm,
+SparseArrayTripletData::SparseArrayTripletData(const string &name, StorageLayer store)
+  : ArrayData(name, SPARSE_TRIPLET, store, 0) {
+  if(store == WORKER) {
+    OpenShm(false);
+    header_region = new boost::interprocess::mapped_region(*shm,
       boost::interprocess::read_write);
-  header = reinterpret_cast<sparse_triplet_header_t*>
-    (header_region->get_address());
+    header = reinterpret_cast<sparse_triplet_header_t*>
+      (header_region->get_address());
+  }
 }
 
-SparseArrayTripletData::SparseArrayTripletData(const string& name,
+SparseArrayTripletData::SparseArrayTripletData(const string& name, StorageLayer store, size_t r_size,
     const SEXP sexp_from,
     const boost::unordered_set<std::string> &classname, const int32_t startx, const int32_t starty,
     const int32_t endx, const int32_t endy, const int64_t nonzeros,
     bool is_row_split)
-  : ArrayData(name, SPARSE_TRIPLET) {
+  : ArrayData(name, SPARSE_TRIPLET, store, r_size) {
   throw PrestoWarningException
     ("SparseArrayTriplet: triplet partitioning is not supported\n");
 }
@@ -1189,10 +1255,10 @@ SparseArrayTripletData::SparseArrayTripletData(const string& name,
  * @param classname a name of the class of input array
  * @return a SparseArrayData object
  */
-SparseArrayTripletData::SparseArrayTripletData(const string &name,
+SparseArrayTripletData::SparseArrayTripletData(const string &name, StorageLayer store, size_t r_size,
     const SEXP sexp_from,
     const boost::unordered_set<std::string> &classname)
-  : ArrayData(name, SPARSE_TRIPLET) {
+  : ArrayData(name, SPARSE_TRIPLET, store, r_size) {
   // Get dimensions*nnzs, create array
   int64_t dim0, dim1, nonzeros;
   if (classname.find("dgTMatrix") == classname.end()) {
@@ -1208,53 +1274,64 @@ SparseArrayTripletData::SparseArrayTripletData(const string &name,
   SEXP fromi = getAttrib(sexp_from, RSymbol_i);
   nonzeros = length(fromi);
 
-  int *data_i, *data_j;
-  double *data_x;
-  size_t size = mapped_size(sizeof(*header)) +
-      mapped_size(nonzeros*sizeof(data_i[0])) +
-      mapped_size(nonzeros*sizeof(data_x[0])) +
-      mapped_size(nonzeros*sizeof(data_j[0]));
+  if(store == WORKER) {
 
-  // size needs to be a multiple of 512 for libaio to work
-  if (size % 512 != 0)
-    size = (size/512 + 1) * 512;
+    int *data_i, *data_j;
+    double *data_x;
+    size_t size = mapped_size(sizeof(*header)) +
+        mapped_size(nonzeros*sizeof(data_i[0])) +
+        mapped_size(nonzeros*sizeof(data_x[0])) +
+        mapped_size(nonzeros*sizeof(data_j[0]));
 
-  if (size < INMEM_UPDATE_SIZE_LIMIT) {
-    OpenShm(false);
+    // size needs to be a multiple of 512 for libaio to work
+    if (size % 512 != 0)
+      size = (size/512 + 1) * 512;
+
+    if (size < INMEM_UPDATE_SIZE_LIMIT) {
+      OpenShm(false);
+    } else {
+      OpenShm(true);
+      LOG_DEBUG("SparseArrayTriplet: creating sparse array triplet in external");
+    }
+
+    shm->truncate(size);  // allocate the size in the shared memory region
+    header_region = new boost::interprocess::mapped_region(*shm,
+        boost::interprocess::read_write);
+    // header part
+    header = reinterpret_cast<sparse_triplet_header_t*>
+    (header_region->get_address());
+
+    header->type = type;
+    header->nnz = nonzeros;
+    header->dims[0] = dim0;
+    header->dims[1] = dim1;
+    header->store = store;
+
+    // Copy data
+    data_i = reinterpret_cast<int*>(
+        reinterpret_cast<char*>(header)+
+        mapped_size(sizeof(*header)));
+    data_x =  reinterpret_cast<double*>(
+        reinterpret_cast<char*>(data_i)+
+        mapped_size(header->nnz*sizeof(data_i[0])));
+    data_j = reinterpret_cast<int*>(
+        reinterpret_cast<char*>(data_x)+
+        mapped_size(header->nnz*sizeof(data_x[0])));
+
+    SEXP fromj = getAttrib(sexp_from, RSymbol_j);
+    SEXP fromx = getAttrib(sexp_from, RSymbol_x);
+
+    memcpy(data_i, INTEGER(fromi), nonzeros*sizeof(data_i[0]));
+    memcpy(data_j, INTEGER(fromj), nonzeros*sizeof(data_j[0]));
+    memcpy(data_x, REAL(fromx), nonzeros*sizeof(data_x[0]));
   } else {
-    OpenShm(true);
-    LOG_DEBUG("SparseArrayTriplet: creating sparse array triplet in external");
+    header = new sparse_triplet_header_t;
+    header->type = type;
+    header->nnz = nonzeros;
+    header->dims[0] = dim0;
+    header->dims[1] = dim1;
+    header->store = store;
   }
-
-  shm->truncate(size);  // allocate the size in the shared memory region
-  header_region = new boost::interprocess::mapped_region(*shm,
-      boost::interprocess::read_write);
-  // header part
-  header = reinterpret_cast<sparse_triplet_header_t*>
-  (header_region->get_address());
-
-  header->type = type;
-  header->nnz = nonzeros;
-  header->dims[0] = dim0;
-  header->dims[1] = dim1;
-
-  // Copy data
-  data_i = reinterpret_cast<int*>(
-      reinterpret_cast<char*>(header)+
-      mapped_size(sizeof(*header)));
-  data_x =  reinterpret_cast<double*>(
-      reinterpret_cast<char*>(data_i)+
-      mapped_size(header->nnz*sizeof(data_i[0])));
-  data_j = reinterpret_cast<int*>(
-      reinterpret_cast<char*>(data_x)+
-      mapped_size(header->nnz*sizeof(data_x[0])));
-
-  SEXP fromj = getAttrib(sexp_from, RSymbol_j);
-  SEXP fromx = getAttrib(sexp_from, RSymbol_x);
-
-  memcpy(data_i, INTEGER(fromi), nonzeros*sizeof(data_i[0]));
-  memcpy(data_j, INTEGER(fromj), nonzeros*sizeof(data_j[0]));
-  memcpy(data_x, REAL(fromx), nonzeros*sizeof(data_x[0]));
 }
 
 void SparseArrayTripletData::LoadInR(RInside &R, const string &varname) {
@@ -1343,10 +1420,11 @@ void SparseArrayTripletData::LoadInR(RInside &R, const string &varname) {
 
 SparseArrayTripletData::SparseArrayTripletData(
     const std::string &name,
+    StorageLayer store,
     const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
     const std::vector<ArrayData*> &splits,
     std::pair<std::int64_t, std::int64_t> dims)
-    : ArrayData(name, SPARSE_TRIPLET) {
+    : ArrayData(name, SPARSE_TRIPLET, store) {
   int nnz = 0;
 
   // count total nnz
@@ -1425,6 +1503,11 @@ SparseArrayTripletData::SparseArrayTripletData(
 }
 
 SparseArrayTripletData::~SparseArrayTripletData() {
+  if(store = WORKER) {
+    delete header_region;
+  } else {
+    delete header;
+  }
 }
 
 pair<std::int64_t, std::int64_t> SparseArrayTripletData::GetDims() const {

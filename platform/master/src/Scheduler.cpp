@@ -50,11 +50,13 @@ static Scheduler *sch = NULL;
  * @return NULL
  */
 static void dispatch_task(WorkerInfo *wi, TaskArg *t,
-                          ::uint64_t id, ::uint64_t uid) {
+                          ::uint64_t id, ::uint64_t uid,
+                          ::uint64_t parentid) {
 
   NewExecuteRRequest req;
   req.set_id(id);
   req.set_uid(uid);
+  req.set_parenttaskid(parentid);
   for (int i = 0; i < t->func_str.size(); i++)
     req.add_func(t->func_str[i]);  // add function string
   for (int i = 0; i < t->args.size(); i++) {
@@ -93,10 +95,11 @@ static void dispatch_task(WorkerInfo *wi, TaskArg *t,
  * @param size the size of a split that will be sent
  * @param id id of this task (generally 0)
  * @param uid id of this fetch task.
+ * @param parentid parent id of this task
  * @return NULL
  */
 static void dispatch_fetch(WorkerInfo *to, const ServerInfo &from,
-                           const string &name, size_t size,
+                           const string &name, size_t size, 
                            ::uint64_t id, ::uint64_t uid) {
   FetchRequest req;
   req.set_name(name);
@@ -141,18 +144,45 @@ static void dispatch_io(WorkerInfo *wi, const string &array_name,
  */
 static void dispatch_createcomposite(WorkerInfo *wi,
                                      const string &name,
-                                     const Arg &arg,
+                                     const Arg &carg,
+                                     const std::vector<Arg>* task_args,
                                      ::uint64_t id,
-                                     ::uint64_t uid) {
+                                     ::uint64_t uid,
+                                     ::uint64_t parentid) {
   CreateCompositeRequest req;
   req.set_name(name);
-  for (int j = 0; j < arg.arrays_size(); j++) {
-    req.add_arraynames(arg.arrays(j).name());
-    req.add_offsets()->CopyFrom(arg.offsets(j));
+  for (int j = 0; j < carg.arrays_size(); j++) {
+    NewArg arg;
+    arg.set_varname(carg.name());
+    arg.set_arrayname(carg.arrays(j).name());
+    req.add_cargs()->CopyFrom(arg);
+    //req.add_arraynames(carg.arrays(j).name());
+    req.add_offsets()->CopyFrom(carg.offsets(j));
   }
-  req.mutable_dims()->CopyFrom(arg.dim());
+
+  req.mutable_dims()->CopyFrom(carg.dim());
+
+  if(task_args !=NULL && DATASTORE == RINSTANCE) {
+    for (int i = 0; i < task_args->size(); i++) {
+      if ((*task_args)[i].arrays_size() == 1 || (*task_args)[i].is_list()) {
+        NewArg arg;
+        arg.set_varname((*task_args)[i].name());
+        if((*task_args)[i].is_list()){
+            for(int j = 0; j < (*task_args)[i].arrays_size(); j ++){
+              arg.add_list_arraynames((*task_args)[i].arrays(j).name());
+            }
+            arg.set_arrayname("list_type...");
+        }else{
+            arg.set_arrayname((*task_args)[i].arrays(0).name());
+        }
+        req.add_task_args()->CopyFrom(arg);
+      }
+    }
+  }
+
   req.set_id(id);
   req.set_uid(uid);
+  req.set_parenttaskid(parentid);
   wi->CreateComposite(req);
   LOG_INFO("CREATECOMPOSITE Create TaskID %6d - Sent to Worker %s", static_cast<int>(uid), wi->hostname().c_str());
 }
@@ -273,13 +303,36 @@ void Scheduler::SetForeachError(bool value){
 /** Removes invalid splits created on worker in case of errored foreach.
  */
 void Scheduler::PurgeUpdates(TaskDoneRequest* req) {
-  for(int i=0; i<req->update_names_size(); i++) {
-     Split *split = new Split;
-     split->name=req->update_names(i);
-     Worker *worker = workers[server_to_string(req->location())];
-     //split->workers.insert(worker);
-     split->size=req->update_sizes(i);
-     Delete(split, worker, true);
+  // Do nothing if storage layer is RINSTANCE.
+  // Will be taken care by fault tolerance mechanism in worker itself.
+  if(DATASTORE == WORKER) {
+    for(int i=0; i<req->update_names_size(); i++) {
+       Split *split = new Split;
+       split->name=req->update_names(i);
+       Worker *worker = workers[server_to_string(req->location())];
+       split->size=req->update_sizes(i);
+       Delete(split, worker, true, true);
+       delete split;
+    }
+  }
+}
+
+/** This sends status of the foreach to all workers.
+  * Workers can start updating thier medatata including clearing old partitions
+  */
+
+void Scheduler::UpdateWorkerMetadata(bool success) {
+  boost::unordered_map<std::string, Worker*>::iterator wit;
+  for(wit=workers.begin(); wit != workers.end(); ++wit) {
+    WorkerInfo* wi = wit->second->workerinfo;
+    ::int64_t taskid = GetNewTaskID();
+    MetadataUpdateRequest req;
+    req.set_status(success);
+    req.set_id(000);
+    req.set_uid(taskid);
+
+    wi->MetadataUpdate(req);
+    LOG_INFO("METADATAUPDATE TaskID %7d - Sent to Worker %s", taskid, wi->hostname().c_str());
   }
 }
 
@@ -670,7 +723,11 @@ void Scheduler::AddSplit(const string &name, size_t size,
 
   if (splits.find(grandparent) != splits.end()) {
     LOG_DEBUG("AddSplit: garbage collecting %s", grandparent.c_str());
-    DeleteSplit(splits[grandparent]);
+    if(DATASTORE == WORKER) {
+      DeleteSplit(splits[grandparent]);
+    } else {
+      DeleteSplit(splits[grandparent], worker);
+    }
   }
 
   lock.unlock();
@@ -691,7 +748,7 @@ void Scheduler::DeleteSplit(const string& split_name) {
  * @param taskarg Arguments that are needed to perform this task
  * @return an ID of this task
  */
-::uint64_t Scheduler::Exec(Worker *worker, TaskArg *taskarg) {
+::uint64_t Scheduler::Exec(Worker *worker, TaskArg *taskarg, ::uint64_t parentid) {
   if (worker->workerinfo->IsRunning() == false) {
     forward_exception_to_r(PrestoWarningException("a scheduled node is not running"));
 //    throw PrestoWarningException("a scheduled node is not running");
@@ -716,13 +773,15 @@ void Scheduler::DeleteSplit(const string& split_name) {
   worker->exectasks.insert(exectask);
   lock.unlock();
 
-  dispatch_task(worker->workerinfo, taskarg, 000, id);
+  dispatch_task(worker->workerinfo, taskarg, 000, id, parentid);
   return id;
 }
 
 ::uint64_t Scheduler::CreateComposite(Worker *worker,
                                     const std::string &name,
-                                    const Arg &arg) {
+                                    const Arg &arg,
+                                    const std::vector<Arg> *task_args,
+                                    ::uint64_t parentid) {
   ::uint64_t id = GetNewTaskID();
   LOG_DEBUG("CREATECOMPOSITE Task %6d Initializing", static_cast<int>(id));
 
@@ -738,7 +797,7 @@ void Scheduler::DeleteSplit(const string& split_name) {
   worker->cctasks.insert(cctask);
   lock.unlock();
 
-  dispatch_createcomposite(worker->workerinfo, name, arg, 000, id);
+  dispatch_createcomposite(worker->workerinfo, name, arg, task_args, 000, id, parentid);
 
   return id;
 }
@@ -888,8 +947,8 @@ void Scheduler::DeleteSplit(const string& split_name) {
 }
 
 ::uint64_t Scheduler::Delete(Split *split, Worker *worker,
+                           bool delete_in_worker,
                            bool metadata_already_erased) {
-  ::uint64_t id = GetNewTaskID();
   LOG("delete from mem task %zu: %s on %s\n",
       id,
       split->name.c_str(),
@@ -903,11 +962,15 @@ void Scheduler::DeleteSplit(const string& split_name) {
   }
   lock.unlock();
 
-  ClearRequest req;
-  req.set_name(split->name);
-  req.set_uid(id);
-  req.set_id(000);
-  worker->workerinfo->Clear(req);
+  ::uint64_t id = 0;
+  if(delete_in_worker) {
+    id = GetNewTaskID();
+    ClearRequest req;
+    req.set_name(split->name);
+    req.set_uid(id);
+    req.set_id(000);
+    worker->workerinfo->Clear(req);
+  }
 
   return id;
 }
@@ -920,7 +983,7 @@ void Scheduler::DeleteSplit(const string& split_name) {
 bool Scheduler::IsSplitOnWorker(Split *split, Worker *worker) {
   bool ret;
   unique_lock<recursive_mutex> lock(metadata_mutex);
-  ret = split->size == 0 || contains_key(worker->splits_dram, split);
+  ret = (split->size == 0 || contains_key(worker->splits_dram, split));
   lock.unlock();
   return ret;
 }
@@ -975,7 +1038,7 @@ bool Scheduler::IsSplitOnWorker(Split *split, Worker *worker) {
   return 0;
 }
 
-void Scheduler::DeleteSplit(Split *split) {
+void Scheduler::DeleteSplit(Split *split, Worker* current_worker) {
   if (split == NULL) {
     LOG_ERROR("DeleteSplit: input split is null");
     throw PrestoWarningException("DeleteSplit: input split is null");
@@ -997,7 +1060,20 @@ void Scheduler::DeleteSplit(Split *split) {
   boost::unordered_set<Worker*> workers = split->workers;
   for (boost::unordered_set<Worker*>::iterator i = workers.begin();
        i != workers.end(); i++) {
-    Delete(split, *i);
+
+    if(DATASTORE == WORKER)
+      Delete(split, *i);
+    else {
+      // Delete_in_worker should be false only for the workers which updated the split.
+      // In that scenario, clear will be taken care by the fault-tolerance mechanism of the worker
+      bool delete_in_worker = true;
+      if(current_worker != NULL) {
+        delete_in_worker = (*i == current_worker) ? false : true;
+      }
+
+      Delete(split, *i, delete_in_worker);
+    }
+
   }
 
   boost::unordered_set<ArrayStore*> arraystores = split->arraystores;
@@ -1053,6 +1129,7 @@ string Scheduler::GetSplitLocation(const string &split_name) {
   return wi->hostname()+":"+int_to_string(wi->port());
 }
 
+
 SEXP Scheduler::GetSplitToMaster(const string &name) {
   // TODO(erik): handle case when split is in a store
   unique_lock<recursive_mutex> lock(metadata_mutex);
@@ -1060,15 +1137,14 @@ SEXP Scheduler::GetSplitToMaster(const string &name) {
   WorkerInfo *wi = (*split->workers.begin())->workerinfo;
   lock.unlock();
 
-  void *addr = malloc(split->size);
-  string store;
-  pair<int, int> port_range = presto_master_->GetMasterPortRange();
-  TransferServer tw (port_range.first, port_range.second);
-  tw.transfer_blob(addr, name, split->size, wi, hostname_, store);
+  std::string store;
+  pair<int, int> port_range = presto_master_->GetMasterPortRange(); 
 
-  SEXP ret = Deserialize(addr);
-  free(addr);
-  return ret;
+  TransferServer tw(WORKER, RINSTANCE, port_range.first, port_range.second);
+  pair<void*, ::int64_t> ret = tw.transfer_blob(name, wi, hostname_, store);
+
+  SEXP data = Deserialize(ret.first, ret.second);
+  return data;
 }
 
 /** Generate a composite darray name.

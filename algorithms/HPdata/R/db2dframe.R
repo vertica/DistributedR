@@ -81,7 +81,7 @@ db2dframe <- function(tableName, dsn, features = list(...), except=list(...), np
 
          if(nrow(view_columns) == 0) {
            norelation <- TRUE
-           stop(paste("Table/View ", schema, ".", tableName, " does not exist", sep=""))
+           stop(paste("Table/View ", schema, ".", table, " does not exist", sep=""))
          } else { 
            relation_type <- "view"
            feature_columns <- view_columns[[1]] 
@@ -104,7 +104,7 @@ db2dframe <- function(tableName, dsn, features = list(...), except=list(...), np
          isview <- sqlQuery(db_connect, paste("select data_type_id from view_columns where table_name ILIKE '", table, "' and table_schema ILIKE '", schema, "' and lower(column_name) in (", tolower(.toColumnString(features, TRUE)), ")", sep=""))
          if(nrow(isview) == 0) {
            norelation <- TRUE
-           stop(paste("Table/View ", schema, ".", tableName, " does not exist with specified 'features'", sep=""))
+           stop(paste("Table/View ", schema, ".", table, " does not exist with specified 'features'", sep=""))
          } else {
            relation_type <- "view"
            feature_data_type <- isview[[1]]

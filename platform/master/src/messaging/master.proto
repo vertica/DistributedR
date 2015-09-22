@@ -36,6 +36,7 @@ message MasterRequest {
     HELLOREPLY = 4;
     SHUTDOWN = 5;     // this shutdown is sent from master->master to commit suicide
     WORKERABORT = 6;  // notify master that a worker is terminating
+    METADATAUPDATEREPLY = 7;
   }
 
   required Type type = 1;
@@ -44,6 +45,7 @@ message MasterRequest {
   optional TaskDoneRequest taskdone = 4;
   optional HelloReplyRequest helloreply = 5; 
   optional WorkerAbortRequest workerabort = 6;
+  optional MetadataUpdateReply metadataupdate = 7;
 }
 
 message NewUpdateRequest {
@@ -92,4 +94,12 @@ message WorkerAbortRequest{
   required string reason = 2;
   optional int64 shared_memory = 3;
   optional int32 executors = 4;
+}
+
+message MetadataUpdateReply{
+  required int64 id = 1;
+  required int64 uid = 2;
+  optional ServerInfo location = 3;
+  optional string message = 4;
+  optional int64 status = 5;
 }

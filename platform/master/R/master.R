@@ -111,7 +111,7 @@ clean_string <- function(string) {
   clean <- gsub("\t","", clean, fixed=TRUE)
 }
 
-start_workers <- function(cluster_conf,
+start_workers <- function(cluster_conf, storage,
                           bin_path="./bin/start_proto_worker.sh",
                           inst=0, mem=0, rmt_home="", rmt_uid="", log=2) {
   if (rmt_home == ""){
@@ -171,7 +171,7 @@ start_workers <- function(cluster_conf,
       options("scipen"=100000)
 
       local_cmd <- paste("cd",rmt_home,";", bin_path,
-                   "-m", m, "-e", e, "-p", r$StartPortRange, "-q", r$EndPortRange, "-l", log, "-a", master_addr, "-b", master_port,
+                   "-m", m, "-e", e, "-s", storage, "-p", r$StartPortRange, "-q", r$EndPortRange, "-l", log, "-a", master_addr, "-b", master_port,
                    "-w", r$Hostname, env_variables, sep=" ")
       ssh_cmd <- paste("ssh -n", paste(rmt_uid,"@",r$Hostname,sep=""), "'", local_cmd,"'", sep=" ")
       # do not use SSH if worker is running on localhost
@@ -187,7 +187,7 @@ start_workers <- function(cluster_conf,
       }
       
       options("scipen"=sp_opt)
-      ##print(sprintf("cmd: %s",cmd))
+      #print(sprintf("cmd: %s",cmd))
       system(cmd, wait=FALSE, ignore.stdout=TRUE, ignore.stderr=TRUE)
     }
   }, error = handle_presto_exception)
@@ -196,7 +196,7 @@ start_workers <- function(cluster_conf,
 
 distributedR_start <- function(inst=0, mem=0,
                          cluster_conf="",
-                         log=2) {
+                         log=2, storage="worker") {
   
   gcinfo(FALSE)
   gc()
@@ -207,6 +207,8 @@ distributedR_start <- function(inst=0, mem=0,
   rmt_home=""
   rmt_uid=""
   yarn=FALSE
+
+  if (tolower(storage) != "executor" && tolower(storage) != "worker") stop("Argument 'storage' can either be worker or executor")
   if(!(is.numeric(inst) && floor(inst)==inst && inst>=0)) stop("Argument 'inst' should be a non-negative integral value")
   if(!(is.numeric(mem) && mem>=0)) stop("Argument 'mem' should be a non-negative number")
 
@@ -235,7 +237,7 @@ distributedR_start <- function(inst=0, mem=0,
   assign(".PrestoDobjectMap", dobject_map, envir = .GlobalEnv)
   tryCatch({
     if (workers) {
-      start_workers(cluster_conf=cluster_conf, bin_path=bin_path, 
+      start_workers(cluster_conf=cluster_conf, storage=storage, bin_path=bin_path, 
         inst=inst, mem=mem, rmt_home=rmt_home, rmt_uid=rmt_uid, log=log)
     }
     else if (yarn){
@@ -245,7 +247,7 @@ distributedR_start <- function(inst=0, mem=0,
 
     }
 
-    pm$start(log)
+    pm$start(log, storage)
   },error = function(excpt){    
     pm <- get_pm_object()
     distributedR_shutdown(pm)

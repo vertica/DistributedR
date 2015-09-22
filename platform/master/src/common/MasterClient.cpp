@@ -178,6 +178,18 @@ void MasterClient::WorkerAborting(const WorkerAbortRequest& workerabort) {
   req.mutable_workerabort()->CopyFrom(workerabort);
   SendZMQMessagePush(req);
 }
+
+/** Send message when worker has successfully updated metadata.
+ * @param metadataupdate
+ * @return NULL
+ */
+void MasterClient::MetadataUpdated(const MetadataUpdateReply& metadataupdate) {
+  MasterRequest req;
+  req.set_type(MasterRequest::METADATAUPDATEREPLY);
+  req.mutable_metadataupdate()->CopyFrom(metadataupdate);
+  SendZMQMessagePush(req);
+}
+
 // NOTE: Right now this does a simple blocking call using a thread-local
 // socket. We could try other ZMQ techniques like queues/routers here.
 // void MasterClient::SendZMQMessage(const MasterRequest& req, Response* res) {

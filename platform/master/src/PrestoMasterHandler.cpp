@@ -96,7 +96,7 @@ void PrestoMasterHandler::Run(context_t* ctx, int port_start, int port_end) {
           }
           break;
         case MasterRequest::TASKDONE:
-          {      
+          {
             TaskDoneRequest tdr = master_req.taskdone();
             if (scheduler_->IsValidWorker(server_to_string(*tdr.mutable_location())) == false) {
               break;
@@ -148,7 +148,11 @@ void PrestoMasterHandler::Run(context_t* ctx, int port_start, int port_end) {
             thr.detach();
           }
           break;
-
+        case MasterRequest::METADATAUPDATEREPLY:
+         {
+            scheduler_->MetadataUpdateReply(master_req.metadataupdate());
+         }
+         break;
         default:
           {
             LOG_ERROR("Unknown message received from Worker. Possible reasons - Check the correctness of the configuration - Either Hostname or Port of the Master and Workers has to be different");
@@ -233,7 +237,6 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
 
   if (scheduler_->IsExecTask(task_done->uid())) {
      LOG_INFO("EXECUTE TaskID %14d - Execution complete in Worker", task_done->uid());
-     
      bool validated = ValidateUpdates(task_done);
 
      // TaskResult is updated for each EXECUTE Task Done. In case of error, Foreach error flag is enabled.
@@ -248,10 +251,16 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
      bool foreach_error = foreach_result.second;
      
      if (foreach_complete){
+
+       if(DATASTORE == RINSTANCE) {
+         //Send status to all workers, so that they can update the metadata at their end.
+         scheduler_->UpdateWorkerMetadata(!foreach_error);
+       }
+
        boost::unordered_map< ::uint64_t, TaskDoneRequest*>::iterator itr = scheduler_->taskdones_.begin();
        int num_tasks = scheduler_->taskdones_.size();   
        int cur_task=1;
-       
+
        for(; itr != scheduler_->taskdones_.end(); ++itr, ++cur_task) {
           TaskDoneRequest* i_done = itr->second;
           if(foreach_error) {
@@ -274,6 +283,7 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
                req.set_col_dim(i_done->col_dim(j));
                req.mutable_location()->CopyFrom(i_done->location());
                if (NewUpdate(req) == false) {break; return false;}
+
                scheduler_->AddSplit(i_done->update_names(j), i_done->update_sizes(j),
                                  i_done->update_stores(j), server_to_string(i_done->location()),
                                  i_done->update_empties(j));
@@ -298,6 +308,7 @@ bool PrestoMasterHandler::HandleTaskDone(TaskDoneRequest done) {
     //(above case of calling scheduler->done
     success = scheduler_->Done(task_done);
   }
+
   return success;
 }
 

@@ -28,11 +28,14 @@ extern map<void*, size_t> *freemap;
 /** DistDataFrame constructor. It creates a shared memory segment object. It does not reserve space yet.
  * @param name the name of shared memory segment in the shared memory region
  */
-DistDataFrame::DistDataFrame(const std::string &name) : ArrayData(name, DATA_FRAME) {
-  OpenShm(false);
-  header_region = new boost::interprocess::mapped_region(*shm,
-      boost::interprocess::read_write);
-  header = reinterpret_cast<dframe_header_t*>(header_region->get_address());
+DistDataFrame::DistDataFrame(const std::string &name, StorageLayer store) 
+  : ArrayData(name, DATA_FRAME, store, 0), header(NULL) {
+  if(store == WORKER) {
+    OpenShm(false);
+    header_region = new boost::interprocess::mapped_region(*shm,
+        boost::interprocess::read_write);
+    header = reinterpret_cast<dframe_header_t*>(header_region->get_address());
+  }
 }
 
 /* Create shared memory segment and fill input R object into it. This function gets assigned memory on the shared memory
@@ -40,8 +43,11 @@ DistDataFrame::DistDataFrame(const std::string &name) : ArrayData(name, DATA_FRA
  * @param sexp_from a R object where we will read the value from. The value will be written into the shared memory region. The data frame object should be serialized.
  * @param size the size of serialized data frame to be written
  */
-DistDataFrame::DistDataFrame(const std::string &name, const SEXP sexp_from,
-      size_t size) : ArrayData(name, DATA_FRAME) {
+DistDataFrame::DistDataFrame(const std::string &name, StorageLayer store, size_t r_size,
+                             const SEXP sexp_from, size_t size) 
+  : ArrayData(name, DATA_FRAME, store, r_size), header(NULL) {
+
+  if(store == WORKER) {
   // Get dimensions, create array
   if (Rf_isNull(sexp_from)) {
     throw PrestoWarningException("DistDataFrame: updated value of split is NULL");
@@ -64,11 +70,20 @@ DistDataFrame::DistDataFrame(const std::string &name, const SEXP sexp_from,
   header->size = size;
   header->dims[0] = 0;  // We do not check the data frame # row, # col
   header->dims[1] = 0;
+  header->store = store;
   void* data = reinterpret_cast<unsigned char*>(header) + mapped_size(sizeof(*header));
   if (data == NULL) {
     throw PrestoWarningException("DistDataFrame: data writable to shm is NULL");
   }
   memcpy(data, RAW_POINTER(sexp_from), size);
+  } else {
+    header = new dframe_header_t;
+    header->type = DATA_FRAME;
+    header->size = r_size;
+    header->dims[0] = 0;
+    header->dims[1] = 0;
+    header->store = store;
+  }
 }
 
 /** Get dimension of the dense array data (number of rows/columns)
@@ -111,6 +126,10 @@ void DistDataFrame::LoadInR(RInside &R, const std::string &varname){
 }
 
 DistDataFrame::~DistDataFrame(){
-  delete header_region;
+  if(store = WORKER) {
+    delete header_region;
+  } else {
+    delete header;
+  }
 }
 }

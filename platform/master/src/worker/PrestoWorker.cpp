@@ -86,6 +86,8 @@ extern int shared_memory_sem;
 static bool skip_io = false;
 static int iobusy = 0;
 
+StorageLayer DATASTORE = WORKER;
+
 /** Send a WORKERABORT message to the master.
  * Upon receiving, the master will shutdown the session.
  * @param msg a message that will be sent to the master
@@ -285,21 +287,14 @@ static set<int> check_if_worker_running() {
 * @return NULL
 */
 void PrestoWorker::fetch(string name, ServerInfo location,
-                         size_t size, ::uint64_t id,
-                         ::uint64_t uid,
+                         size_t size, ::uint64_t id, ::uint64_t uid, 
                          string store) {
   master_last_contacted_.start();
   TaskDoneRequest req;
+  
   try {
     req.set_task_result(TASK_SUCCEED);
     req.set_task_message("Succeed");
-    SharedMemoryObject shm(
-      boost::interprocess::open_or_create, name.c_str(),
-      boost::interprocess::read_write);  // create shared memory region to write
-    shm.truncate(size);  // allocate region
-    boost::interprocess::mapped_region region(shm,
-      boost::interprocess::read_write);
-    void *addr = region.get_address();  // address where the data will be written
 
     shmem_arrays_mutex_.lock();
     shmem_arrays_.insert(name);
@@ -308,22 +303,20 @@ void PrestoWorker::fetch(string name, ServerInfo location,
     Timer t;
     t.start();
 
-    TransferServer tw(start_port_range_, end_port_range_);
+    TransferServer tw(WORKER, WORKER, start_port_range_, end_port_range_);
     // fetch data from remote worker and write it to shared memory region
-    tw.transfer_blob(addr, name, size, getClient(location),
-                     my_location_.name(), store);
-    ArrayData *ad = ParseShm(name);  // read the memory segment
-    ad->Decompress();  // decompress it if it is compressed
-    delete ad;
+    std::pair<void*, size_t> ret = tw.transfer_blob(name, getClient(location),
+                     my_location_.name(), store, uid);
+    size_t split_size = ret.second;
 
     t.stop();
     LOG_DEBUG("FETCH TaskID %20zu - Split %10s (size %zu) fetched to Worker %15s.",
-                    uid, name.c_str(), size, server_to_string(location).c_str());
+                    uid, name.c_str(), split_size, server_to_string(location).c_str());
 
-    total_bytes_fetched_ += size;
+    total_bytes_fetched_ += split_size;
     total_fetch_time_ += t.read();
     worker_stat_mutex_.lock();
-    worker_stats_[location.name().c_str()].bytes_fetched += size;
+    worker_stats_[location.name().c_str()].bytes_fetched += split_size;
     worker_stats_[location.name().c_str()].fetch_time += t.read();
     worker_stat_mutex_.unlock();
   } catch(std::exception& ex) {
@@ -339,8 +332,8 @@ void PrestoWorker::fetch(string name, ServerInfo location,
   req.mutable_location()->CopyFrom(my_location_);
   master_->TaskDone(req);  // send task done message
   LOG_DEBUG("FETCH TaskID %20zu - Sent TASKDONE message to Master", uid);
-
 }
+
 
 /** Handle fetch request from remote workers. This reads splits from shared memory and send them to a requester
  * @param name name of a split that is requested
@@ -351,7 +344,6 @@ void PrestoWorker::fetch(string name, ServerInfo location,
  */
 void PrestoWorker::newtransfer(string name, ServerInfo location,
                                size_t size, string store) {
-  // open connection to a requester
   int32_t sockfd = presto::connect(location.name(), location.presto_port());
   if (sockfd < 0) {
     ostringstream msg;
@@ -362,8 +354,10 @@ void PrestoWorker::newtransfer(string name, ServerInfo location,
     throw PrestoWarningException(msg.str());
     return;
   }
+
   Timer t;
   t.start();
+  size_t split_size = 0;
   if (store.empty()) {
     size_t bytes_written = 0;
     // addr is NULL means no compression is needed
@@ -375,16 +369,23 @@ void PrestoWorker::newtransfer(string name, ServerInfo location,
       shm, boost::interprocess::read_write);
     void* addr = region.get_address();
 
+    //Send size of the split
+    split_size = region.get_size();
+    char splitsize_buf[24];
+    memset(splitsize_buf, 0x00, 24);
+    snprintf(splitsize_buf, 24, "%zu", split_size);
+    bytes_written = send(sockfd, splitsize_buf, sizeof(splitsize_buf), 0);
+
     // TODO(shivaram): Test if this works correctly and add this
     // for compressed arrays as well
     // Write data to the socket
-    bytes_written = atomicio(vwrite, sockfd, addr, size);
+    bytes_written = atomicio(vwrite, sockfd, addr, split_size);
     int32_t new_transfer_retry = 0;
-    while (bytes_written != size &&
+    while (bytes_written != split_size &&
            new_transfer_retry < MAX_NEW_TRANSFER_RETRY) {
       new_transfer_retry++;
       LOG_ERROR("NEWTRANSFER Task - Atomicio failed for %s size %ld bytes_written %ld. Retry %d",
-                strerror(errno), size, bytes_written, new_transfer_retry);
+                strerror(errno), split_size, bytes_written, new_transfer_retry);
       int32_t sockfd = presto::connect(location.name(),
                                        location.presto_port());
       if (sockfd < 0) {
@@ -396,7 +397,7 @@ void PrestoWorker::newtransfer(string name, ServerInfo location,
         throw PrestoWarningException(msg.str());
         return;
       }
-      bytes_written = atomicio(vwrite, sockfd, addr, size);
+      bytes_written = atomicio(vwrite, sockfd, addr, split_size);
     }
   }
 
@@ -405,11 +406,11 @@ void PrestoWorker::newtransfer(string name, ServerInfo location,
   t.stop();
   // update stats at worker
   LOG_DEBUG("NEWTRANSFER Task               - Split %10s(size %zu) transferred to Worker %s",
-                  name.c_str(), size, server_to_string(location).c_str());
-  total_bytes_sent_ += size;
+                  name.c_str(), split_size, server_to_string(location).c_str());
+  total_bytes_sent_ += split_size;
   total_send_time_ += t.read();
   worker_stat_mutex_.lock();
-  worker_stats_[location.name().c_str()].bytes_sent += size;
+  worker_stats_[location.name().c_str()].bytes_sent += split_size;
   worker_stats_[location.name().c_str()].send_time += t.read();
   worker_stat_mutex_.unlock();
 }
@@ -466,6 +467,16 @@ void PrestoWorker::clear(ClearRequest req) {
   } else {
     LOG_DEBUG("CLEAR Task                     - Clearing %s from Shared memory", req.name().c_str());
     SharedMemoryObject::remove(req.name().c_str());
+
+    //clear from executors
+    if(DATASTORE == RINSTANCE) {
+      /*shmem_arrays_mutex_.lock();
+      if(shmem_arrays_.find(req.name()) != shmem_arrays_.end())
+        shmem_arrays_.remove(req.name());
+      shmem_arrays_mutex_.unlock();*/
+
+      executorscheduler_->DeleteSplit(req.name());
+    }
   }
 
  end:
@@ -476,8 +487,33 @@ void PrestoWorker::clear(ClearRequest req) {
   done.set_uid(req.uid());
   done.mutable_location()->CopyFrom(my_location_);
   master_->TaskDone(done);
-*/
+*/ 
   LOG_DEBUG("CLEAR Task                     - Sent TASKDONE message to Master.");
+}
+
+void PrestoWorker::prepare_persist(const std::string& name, int executor, ::uint64_t taskid) {
+
+  LOG_DEBUG("TaskID %zu - Preparing PERSIST task for Split %s from Executor ID %d", taskid, name.c_str(), executor);
+
+  PersistRequest persist_req;
+  persist_req.set_id(000);
+  persist_req.set_uid(taskid);
+  persist_req.set_split_name(name);
+  persist_req.set_executor(executor);
+  persist_req.set_parenttaskid(taskid);
+
+  WorkerRequest* wrk_req = new WorkerRequest;
+  wrk_req->Clear();
+  wrk_req->set_type(WorkerRequest::PERSIST);
+  wrk_req->mutable_persist()->CopyFrom(persist_req);
+
+  unique_lock<mutex> lock(requests_queue_mutex_[PERSISTSPLIT]);
+  bool notify = requests_queue_[PERSISTSPLIT].empty();
+  requests_queue_[PERSISTSPLIT].push_back(wrk_req);
+
+  if (notify)
+    requests_queue_empty_[PERSISTSPLIT].notify_all();
+  lock.unlock();
 }
 
 /* Create and send Execute Task to Worker to create
@@ -492,11 +528,12 @@ WorkerRequest* PrestoWorker::CreateListCcTask(CreateCompositeRequest& req){
   std::stringstream function_str;
   exec_req.set_id(req.id());
   exec_req.set_uid(req.uid());
+  exec_req.set_stage_updates(false);
 
   function_str << "composite_list <- c(";
 
-  for(int i = 0; i<req.arraynames_size(); i++) {
-    if(i == req.arraynames_size()-1)
+  for(int i = 0; i<req.cargs_size(); i++) {
+    if(i == req.cargs_size()-1)
       function_str << "split_"<< i;
     else
     function_str << "split_"<< i << ",";
@@ -504,12 +541,12 @@ WorkerRequest* PrestoWorker::CreateListCcTask(CreateCompositeRequest& req){
   function_str << ")\nupdate(composite_list)";
   exec_req.add_func(function_str.str());
 
-  for (int i = 0; i < req.arraynames_size(); i++) {
+  for (int i = 0; i < req.cargs_size(); i++) {
     NewArg arg;
     std::stringstream sname_stream;
     sname_stream << "split_" << i;
     arg.set_varname(sname_stream.str());
-    arg.set_arrayname(req.arraynames(i));
+    arg.set_arrayname(req.cargs(i).arrayname());
     exec_req.add_args()->CopyFrom(arg);
   }
 
@@ -532,7 +569,7 @@ WorkerRequest* PrestoWorker::CreateListCcTask(CreateCompositeRequest& req){
 WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
   vector<pair<int, int> > offsets;
   pair<int, int> dims = make_pair(req.dims().val(0), req.dims().val(1));
-  for (int i = 0; i < req.arraynames_size(); i++) {
+  for (int i = 0; i < req.cargs_size(); i++) {
     offsets.push_back(make_pair(req.offsets(i).val(0),
                                 req.offsets(i).val(1)));
   }
@@ -545,6 +582,7 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
   std::stringstream function_str;
   exec_req.set_id(req.id());
   exec_req.set_uid(req.uid());
+  exec_req.set_stage_updates(false);
   std::pair<int, int> block_dim (0,0);
 
   int num_r_split = offsets.size()>0 ? 1:0; //At least one split is present.
@@ -608,12 +646,12 @@ WorkerRequest* PrestoWorker::CreateDfCcTask(CreateCompositeRequest& req){
   exec_req.add_func(function_str.str());  // add function string
   // matching between R variable name and Presto darray name
   // Before executor runs this, it will load the shared darray into the R variable
-  for (int i = 0; i < req.arraynames_size(); i++) {
+  for (int i = 0; i < req.cargs_size(); i++) {
     NewArg arg;
     std::stringstream sname_stream;
     sname_stream << "split_" << i;
     arg.set_varname(sname_stream.str());
-    arg.set_arrayname(req.arraynames(i));
+    arg.set_arrayname(req.cargs(i).arrayname());
     exec_req.add_args()->CopyFrom(arg);
   }
 
@@ -644,7 +682,7 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
     done.set_task_result(TASK_SUCCEED);
     composite = new Composite;
     executorpool_->InsertCompositeArray(req.name(), composite);
-    arr_type = GetClassType(req.arraynames(0));
+    arr_type = GetClassType(req.cargs(0).arrayname());
   } catch(std::exception& ex) {
     ostringstream msg;
     msg << "CreateComposite preparation Error: " << ex.what()
@@ -666,18 +704,16 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
   if (arr_type == DATA_FRAME) {
     // deal with the data frame!!
     vector<pair<std::int64_t, std::int64_t> > offsets;
-    for (int i = 0; i<req.arraynames_size(); i++) {
-       ArrayData *ad = ParseShm(req.arraynames(i));
+    for (int i = 0; i<req.cargs_size(); i++) {
        offsets.push_back(make_pair(req.offsets(i).val(0), req.offsets(i).val(1)));
        composite->offsets.push_back(offsets.back());
-       composite->dims.push_back(ad->GetDims());
-       composite->splitnames.push_back(req.arraynames(i));
-       delete ad;
+       composite->dims.push_back(std::pair<std::int64_t, std::int64_t>(0,0));  //dummy dimensions
+       composite->splitnames.push_back(req.cargs(i).arrayname());
     }
     composite->dobjecttype = DFRAME;
 
     WorkerRequest* wrk_req = CreateDfCcTask(req);
-   #ifdef PERF_TRACE
+#ifdef PERF_TRACE
       struct blkin_trace_info info;
       worker_trace->get_trace_info(&info);
       wrk_req->set_parent_span_id(info.parent_span_id);
@@ -697,13 +733,11 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
   } else if (arr_type == LIST) {
     //Create Composite Array for lists
     vector<pair<std::int64_t, std::int64_t> > offsets;
-    for (int i = 0; i<req.arraynames_size(); i++) {
-       ArrayData* ad = ParseShm(req.arraynames(i));
+    for (int i = 0; i<req.cargs_size(); i++) {
        offsets.push_back(make_pair(req.offsets(i).val(0), req.offsets(i).val(1)));
        composite->offsets.push_back(offsets.back());
-       composite->dims.push_back(ad->GetDims());
-       composite->splitnames.push_back(req.arraynames(i));
-       delete ad;
+       composite->dims.push_back(std::pair<std::int64_t, std::int64_t>(0,0));  //dummy dimensions
+       composite->splitnames.push_back(req.cargs(i).arrayname()); 
     }
     composite->dobjecttype = DLIST;
 
@@ -728,13 +762,13 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
       vector<ArrayData*> splits;
       vector<pair<std::int64_t, std::int64_t> > offsets;
       pair<std::int64_t, std::int64_t> dims;
-      for (int i = 0; i < req.arraynames_size(); i++) {
-        splits.push_back(ParseShm(req.arraynames(i)));
+      for (int i = 0; i < req.cargs_size(); i++) {
+        splits.push_back(ParseShm(req.cargs(i).arrayname()));
         offsets.push_back(make_pair(req.offsets(i).val(0),
                                     req.offsets(i).val(1)));
         composite->offsets.push_back(offsets.back());
         composite->dims.push_back(splits.back()->GetDims());
-        composite->splitnames.push_back(req.arraynames(i));
+        composite->splitnames.push_back(req.cargs(i).arrayname());
       }
       if (arr_type == DENSE) {
         composite->dobjecttype = DARRAY_DENSE;
@@ -742,7 +776,12 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
         composite->dobjecttype = DARRAY_SPARSE;
       }
       dims = make_pair(req.dims().val(0), req.dims().val(1));
-      size = CreateComposite(req.name(), offsets, splits, dims, arr_type);
+      size = CreateComposite(req.name(), offsets, splits, dims, arr_type, WORKER);
+    
+      shmem_arrays_mutex_.lock();
+      shmem_arrays_.insert(req.name());
+      shmem_arrays_mutex_.unlock();
+
       for (int i = 0; i < splits.size(); i++) {
         delete splits[i];
       }
@@ -754,6 +793,7 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
       done.set_task_result(TASK_EXCEPTION);
       done.set_task_message(msg.str());
     }
+    
     done.set_id(req.id());
     done.set_uid(req.uid());
     done.add_update_sizes(size);
@@ -766,6 +806,7 @@ void PrestoWorker::createcomposite(CreateCompositeRequest req) {
   total_cc_time_ += t.read();
     // Send task done message
 }
+
 
 /** PrestoWorker constructor
  * @param zmq_ctx a context information of ZMQ library
@@ -788,7 +829,8 @@ PrestoWorker::PrestoWorker(
       array_stores_(array_stores),
       start_port_range_(start_port),
       end_port_range_(end_port),
-      running_(true) {
+      running_(true),
+      num_workers_(0) {
   my_location_.Clear();
   int log_level_=log_level;
   if (array_stores_.empty()) {
@@ -797,7 +839,7 @@ PrestoWorker::PrestoWorker(
   }
   LOG_INFO("Creating Executors in Worker");
 
-  executorpool_ = new ExecutorPool(num_executors_,
+  executorpool_ = new ExecutorPool(this, num_executors_,
                                    &my_location_,
                                    master_.get(),
                                    &shmem_arrays_mutex_,
@@ -805,6 +847,17 @@ PrestoWorker::PrestoWorker(
                                    array_stores_.begin()->first,
                                    log_level_,
                                    master_ip, master_port);
+
+  if(DATASTORE == WORKER) {
+    executorscheduler_ = NULL;
+  } else {
+    LOG_INFO("Creating Task Scheduler");
+    executorscheduler_ = new TaskScheduler(this, executorpool_, 
+                                           &shmem_arrays_,
+                                           &shmem_arrays_mutex_,
+                                           num_executors_);
+  }
+  
   // Create multiple HandleRequest threads
   for (int i = 0; i < NUM_THREADPOOLS; i++) {
     NUM_THREADS[i] = NUM_THREADS[i] <= 0 ? num_executors_ : NUM_THREADS[i];
@@ -841,13 +894,19 @@ PrestoWorker::~PrestoWorker() {
     }
   } catch(...) {}
 
+  LOG_INFO("Worker shutdown - Closing Worker scheduler");
+  if(executorscheduler_ != NULL) {
+    delete executorscheduler_;
+    executorscheduler_ = NULL;
+  }
+
   try {
     bool ret = shmem_arrays_mutex_.timed_lock(boost::get_system_time()+boost::posix_time::milliseconds(2000));
     if(ret  == true) {
       for (boost::unordered_set<string>::iterator i = shmem_arrays_.begin();
         i != shmem_arrays_.end(); i++) {
         if (i->c_str() != NULL) {
-          LOG_INFO("Removing Shared memory object: %s", i->c_str());
+          //LOG_INFO("Removing Shared memory object: %s", i->c_str());
           SharedMemoryObject::remove(i->c_str());
         }
       }
@@ -979,15 +1038,15 @@ void PrestoWorker::HandleRequests(int type) {
         case WorkerRequest::HELLO:
           {
             LOG_DEBUG("New HELLO Request received from Worker");
-
             hello(worker_req.hello().master_location(),
                   worker_req.hello().worker_location(),
                   worker_req.hello().is_heartbeat(),
-                  worker_req.hello().reply_attr_flag());
+                  worker_req.hello().reply_attr_flag(),
+                  worker_req.hello().num_workers());
           }
           break;
         case WorkerRequest::FETCH:
-          {
+          { 
             LOG_DEBUG("New FETCH TaskID %16zu - Received from Master", worker_req.fetch().uid());
             string store;
             if (worker_req.fetch().has_store()) {
@@ -1003,26 +1062,86 @@ void PrestoWorker::HandleRequests(int type) {
           break;
         case WorkerRequest::NEWTRANSFER:
           {
-            LOG_DEBUG("New NEWTRANSFER Task           - Received from Worker %s at Port %d", worker_req.fetch().location().name().c_str(), worker_req.fetch().location().presto_port());
+            LOG_DEBUG("New NEWTRANSFER Task %10zu - Received from Worker %s at Port %d", worker_req.fetch().uid(), worker_req.fetch().location().name().c_str(), worker_req.fetch().location().presto_port());
             string store;
             if (worker_req.fetch().has_store()) {
               store = worker_req.fetch().store();
             }
+            
+            if(DATASTORE == RINSTANCE) {
+              ::uint64_t taskid = worker_req.fetch().uid();
+
+              NewArg arg;
+              arg.set_arrayname(worker_req.fetch().name());
+              arg.set_varname(worker_req.fetch().name());
+              std::vector<NewArg> transfer_arg;
+              transfer_arg.push_back(arg);
+
+              //Persist to worker if not already on worker.
+              executorscheduler_->ValidatePartitions(transfer_arg, -1, taskid);
+              LOG_INFO("NEWTRANSFER TaskID %14zu - Split %s validated", taskid, worker_req.fetch().name().c_str());
+            }
+
             newtransfer(worker_req.fetch().name(),
                         worker_req.fetch().location(),
                         worker_req.fetch().size(),
                         store);
           }
           break;
+        case WorkerRequest::PERSIST:
+          {
+            LOG_DEBUG("New PERSIST TaskID %14zu - Received from Worker for Split %s", worker_req.persist().uid(), worker_req.persist().split_name().c_str());
+            executorpool_->persist(worker_req.persist().split_name(),
+                                   worker_req.persist().executor(),
+                                   worker_req.persist().parenttaskid());
+          }
+          break;
         case WorkerRequest::CREATECOMPOSITE:
           {
             LOG_INFO("New CREATECOMPOSITE TaskID %6zu - Received from Master", worker_req.createcomposite().uid());
-            createcomposite(worker_req.createcomposite());
+
+            if(DATASTORE == WORKER) {
+              createcomposite(worker_req.createcomposite());
+            } else {
+              ::uint64_t taskid = worker_req.createcomposite().uid();
+              //Commented for future use
+              /*vector<NewArg> task_args;
+              task_args.clear();
+              ::uint64_t taskid = worker_req.createcomposite().uid();
+              ::uint64_t parenttaskid = worker_req.createcomposite().parenttaskid();
+
+              get_vector_from_repeated_field
+                <RepeatedPtrField<NewArg>::const_iterator,
+                 NewArg>(worker_req.createcomposite().task_args().begin(),
+                       worker_req.createcomposite().task_args_size(), &task_args);
+              int executor_id = executorscheduler_->AddParentTask(task_args, worker_req.createcomposite().parenttaskid());*/
+
+              vector<NewArg> cc_args;
+              cc_args.clear();
+              get_vector_from_repeated_field
+                <RepeatedPtrField<NewArg>::const_iterator,
+                NewArg>(worker_req.createcomposite().cargs().begin(),
+                       worker_req.createcomposite().cargs_size(), &cc_args);
+
+              if(cc_args.size() > 0)
+                executorscheduler_->ValidatePartitions(cc_args, -1, taskid);
+
+              LOG_INFO("CREATECOMPOSITE TaskID %10zu - All input splits validated", taskid);
+              createcomposite(worker_req.createcomposite());
+            }
+          }
+          break;
+        case WorkerRequest::METADATAUPDATE:
+          {
+            LOG_INFO("New METADATAUPDATE TaskID %7zu - Received from Master", worker_req.metadataupdate().uid());
+            executorpool_->reset_executors();
+            executorscheduler_->ForeachComplete(worker_req.metadataupdate().id(), 
+                                        worker_req.metadataupdate().uid(), 
+                                        worker_req.metadataupdate().status());
           }
           break;
         case WorkerRequest::VERTICALOAD:
           {
-
             LOG_INFO("New VERICALOAD Task ID %zu - Received from Master", worker_req.verticaload().uid());
             verticaload(worker_req.verticaload());
           }
@@ -1068,12 +1187,32 @@ void PrestoWorker::HandleRequests(int type) {
                 worker_req.newexecr().composite_args().begin(),
                 worker_req.newexecr().composite_args_size(), &composite_args);
 
-
           {
-            executorpool_->execute(func, new_args, raw_args, composite_args,
+            if(DATASTORE == WORKER) {
+              executorpool_->execute(func, new_args, raw_args, composite_args,
                                    worker_req.newexecr().id(),
                                    worker_req.newexecr().uid(),
                                    &worker_resp);
+            } else {
+              ::uint64_t taskid = worker_req.newexecr().uid();
+              ::uint64_t parenttaskid = worker_req.newexecr().parenttaskid();
+
+              int executor_id = executorscheduler_->AddParentTask(new_args, parenttaskid, taskid);
+              LOG_DEBUG("EXECUTE TaskID %18zu - Assigned to Executor Id %d. Validating input splits.", taskid, executor_id);
+
+              if(new_args.size() > 0)
+                executorscheduler_->ValidatePartitions(new_args, executor_id, taskid);
+
+              if(composite_args.size() > 0)
+                executorscheduler_->ValidatePartitions(composite_args, executor_id, taskid);
+
+              LOG_INFO("EXECUTE TaskID %18zu - All input splits validated. Sending to Executor Id %d for execution", taskid, executor_id);
+              executorpool_->execute(func, new_args, raw_args, composite_args,
+                                     worker_req.newexecr().id(),
+                                     worker_req.newexecr().uid(),
+                                     &worker_resp, executor_id,
+                                     worker_req.newexecr().stage_updates());
+            }
           }
           break;
         case WorkerRequest::LOG:
@@ -1125,7 +1264,7 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
     ms.set_presto_port(master_port);
     ws.set_name(worker_addr);
     ws.set_presto_port(port_num);
-    hello(ms, ws, false, 0xffffffff);
+    hello(ms, ws, false, 0xffffffff, 0);
   } else {
     LOG_INFO("Master IP:port info is not given. Wait for a master to initiate the handshake");
   }
@@ -1151,7 +1290,7 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
     Notify(*worker_req);
 
     int type = MISC;
-    //LOG_INFO("PrestoWorker::Run getting a message type: %s", WorkerRequest::Type_Name(worker_req.type()).c_str());
+    //LOG_INFO("PrestoWorker::Run getting a message type: %s", WorkerRequest::Type_Name(worker_req->type()).c_str());
     switch (worker_req->type()) {
       case WorkerRequest::NEWEXECR:
         master_last_contacted_.start();
@@ -1178,19 +1317,20 @@ void PrestoWorker::Run(string master_addr, int master_port, string worker_addr) 
         // new_transfer is sent by other worker
         type = SEND;  // This worker has to send to other workers
         break;
-
       case WorkerRequest::HELLO:
         master_last_contacted_.start();
         type = HELLO;
         break;
+      case WorkerRequest::METADATAUPDATE:
+        master_last_contacted_.start();
+        type = METADATAUPDATE;
+        break;
       case WorkerRequest::CREATECOMPOSITE:
       case WorkerRequest::CLEAR:
+      case WorkerRequest::VERTICALOAD:
       case WorkerRequest::LOG:
         master_last_contacted_.start();
         type = MISC;
-        break;
-      case WorkerRequest::VERTICALOAD:
-        type = VERTICALOAD;
         break;
       case WorkerRequest::SHUTDOWN:
         if (master_ == NULL) {
@@ -1267,8 +1407,9 @@ WorkerInfo* PrestoWorker::getClient(const ServerInfo& location) {
  * @return NULL
  */
 void PrestoWorker::hello(ServerInfo master_location,
-                       ServerInfo worker_location,
-                         bool is_heartbeat, int reply_flag) {
+                         ServerInfo worker_location,
+                         bool is_heartbeat, int reply_flag,
+                         int num_workers) {
   // To check if this is the first hello message for initial setup
   if (is_heartbeat == false) {
     if (master_ != NULL) {
@@ -1301,7 +1442,11 @@ void PrestoWorker::hello(ServerInfo master_location,
     thread thr(boost::bind(&PrestoWorker::MonitorMaster, this));
     thr.detach();
     master_last_contacted_.start();
+  } else {
+    //LOG_INFO("===> Heartbeat hello %d", num_workers);
+    num_workers_ = num_workers;
   }
+
   // prepare for a reply
   if (master_ == NULL) {
     LOG_WARN("No Master is registered with the Worker. HELLO message will be ignored.");
@@ -1440,6 +1585,7 @@ void PrestoWorker::shutdown() {
       exec_pool_del_mutex_.unlock();
     }
   } catch(...) {}
+
   LOG_INFO("Worker shutdown - Removing shared memory segments");
   try {
     bool ret = shmem_arrays_mutex_.timed_lock(boost::get_system_time()+boost::posix_time::milliseconds(2000));
@@ -1447,7 +1593,7 @@ void PrestoWorker::shutdown() {
       for (boost::unordered_set<string>::iterator i = shmem_arrays_.begin();
         i != shmem_arrays_.end(); i++) {
         if (i->c_str() != NULL) {
-          LOG_DEBUG("Removing shared memory object: %s", i->c_str());
+          //LOG_DEBUG("Removing shared memory object: %s", i->c_str());
           SharedMemoryObject::remove(i->c_str());
         }
       }
@@ -1463,6 +1609,12 @@ void PrestoWorker::shutdown() {
   set<int> worker_set = check_if_worker_running();
   if (worker_set.size() == 0) {
     std::remove(get_shm_size_check_name().c_str());
+  }
+
+  LOG_INFO("Worker shutdown - Closing Worker scheduler");
+  if(executorscheduler_ != NULL) {
+    delete executorscheduler_;
+    executorscheduler_ = NULL;
   }
 
   // Remove array stores
@@ -1844,6 +1996,7 @@ int main(int argc, char **argv) {
   // if the configuration is delivered from command line option
   // p: port number of a worker - if this is 0, a worker randomly selects one
   // e: number of executors
+  // s: storage layer - worker or executor
   // m: the quota of shared memory
   // l: log level (0:error, 1: warning, 2: info, 3: debug)
   // a: address of master node. If this value is given, a worker initiates connection to a master.
@@ -1854,7 +2007,7 @@ int main(int argc, char **argv) {
   // o: memory limit for the distributedR process.
   // k: cpu mask set by the distributedR resource pool.
   // d: cpu mode specified by the distributedR pool.
-  while ((c = getopt (argc, argv, "p:e:m:l:a:b:w:q:v:c:o:k:d:")) != -1)
+  while ((c = getopt (argc, argv, "p:e:s:m:l:a:b:w:q:v:c:o:k:d:")) != -1)
     switch (c) {
       case 'p':
         start_port = atoi(optarg);
@@ -1864,6 +2017,9 @@ int main(int argc, char **argv) {
         break;
       case 'e':
         executors = atoi(optarg) > 0 ? atoi(optarg) : executors;
+        break;
+      case 's':
+        presto::DATASTORE = (std::string(optarg) == "worker") ? WORKER : RINSTANCE;
         break;
       case 'm':
         {
@@ -1928,7 +2084,7 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  LOG_INFO("Starting worker.");
+  LOG_INFO("Starting worker with data storage layer %s in use", getStorageLayer().c_str());
   //sleep for N secs if that file exists
   FILE* f = fopen("/tmp/r_worker_startup_sleep_secs", "r");
   if(f) {

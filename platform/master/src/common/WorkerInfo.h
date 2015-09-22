@@ -52,7 +52,7 @@ using namespace std;
 using namespace zmq;
 
 namespace presto {
-    
+
 class WorkerInfo {
  public:
   WorkerInfo(const string& hostname, int32_t port, context_t* zmq_ctx, int32_t id = 0);
@@ -68,9 +68,11 @@ class WorkerInfo {
   void Fetch(const FetchRequest& fetch);
   void NewTransfer(const FetchRequest& fetch);
   void NewExecuteR(const NewExecuteRRequest& newexecr);
+  void Persist(const PersistRequest& persist);
   void IO(const IORequest& io);
   void Clear(const ClearRequest& clear);
   void CreateComposite(const CreateCompositeRequest& createcomposite);
+  void MetadataUpdate(const MetadataUpdateRequest& metadataupdate);
   void Log(const LogRequest& log);
   void VerticaLoad(const VerticaDLRequest& verticaload);
   bool IsRunning();
@@ -111,7 +113,7 @@ class WorkerInfo {
   boost::condition_variable message_queue_empty_;
   list<WorkerRequest> message_queue_;
 };
-   
+
 }  // namespace presto
 
 #endif  // _PRESTO_WORKER_INFO_

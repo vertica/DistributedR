@@ -27,13 +27,14 @@ typedef struct {
   int64_t type;
   int64_t size;
   int64_t dims[2];
+  StorageLayer store;
 } dlist_header_t;
 
 class DistList : public ArrayData {
  public:
-  explicit DistList(const std::string &name);
-  DistList(const std::string &name, const SEXP sexp,
-      size_t size, int split_len);
+  explicit DistList(const std::string &name, StorageLayer store=WORKER);
+  DistList(const std::string &name, StorageLayer store, size_t r_size,
+      const SEXP sexp, size_t size, int split_len);
   virtual void LoadInR(RInside &R, const std::string &varname);
   virtual std::pair<std::int64_t, std::int64_t> GetDims() const;
   virtual ~DistList();

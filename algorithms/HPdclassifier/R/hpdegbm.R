@@ -61,7 +61,11 @@ hpdegbm <- function(
        interaction.depth = 1, 
        n.minobsinnode = 10,
        shrinkage = 0.050,     #[0.001, 1]
-       bag.fraction = 0.50, #0.5-0.8,
+       bag.fraction = 0.50, #0.5-0.8
+       samplingFlag = TRUE,  
+       nClass,
+       sampleThresh=100,
+       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        offset = NULL, 
        misc = NULL, 
        w = NULL,
@@ -71,13 +75,9 @@ hpdegbm <- function(
        keep.data = FALSE,
        verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
        var.names = NULL,
-       #response.name = "y",
-       group = NULL,
-       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE,
-       samplingFlag = TRUE,  
-       nClass,
-       sampleThresh=100) # default system parameters are defined here
+       response.name = "y",
+       group = NULL
+       ) # default system parameters are defined here
 
 # X_train: a dframe, darray, data frame, or data matrix containing the predictor variables
 # Y_train: a vector of outputs
@@ -89,7 +89,6 @@ hpdegbm <- function(
 # bag.fraction: the fraction of the training set observations randomly selected for the next tree in the expansion
 # verbose: If TRUE, gbm prints out progress and performance indicators
 # trace: If TRUE, print out the training time
-# completeModel: If TRUE, add training time in the model 
 # samplingFlag: If true, call distributed sampling
 # nClass: a parameter used to determine the sampling ratio. For classification, it is the class number 
 # sampleThresh: sample threshold
@@ -119,6 +118,8 @@ hpdegbm <- function(
    if ( ((distribution=="bernoulli") || (distribution=="adaboost") || (distribution=="gaussian")) && (is.dframe(Y_train)) )
       stop("'Y_train' cannot be dframe for regression and binary classification")
 
+   if ( (((is.dframe(X_train)) || (is.darray(X_train))) && ((!is.dframe(Y_train)) && (!is.darray(Y_train))))  || (((is.dframe(Y_train)) || (is.darray(Y_train))) && ((!is.dframe(X_train)) && (!is.darray(X_train)))) )
+       stop("Either both 'X_train' and 'Y_train' must be dobjects, or neither can be dobjects")
 
    if (missing(nExecutor))   
        nExecutor <- sum(distributedR_status()$Inst)
@@ -129,7 +130,7 @@ hpdegbm <- function(
    if(missing(distribution))
 	stop("'distribution' is a required argument")
 
-   if ( !(is.na(distribution)) && (!(distribution=="gaussian")) && (!(distribution=="bernoulli")) && (!(distribution=="adaboost")) && (!(distribution=="multinomial"))  )
+   if ( (is.na(distribution)) && (!(distribution=="gaussian")) && (!(distribution=="bernoulli")) && (!(distribution=="adaboost")) && (!(distribution=="multinomial"))  )
        stop("'distribution' must be gaussian or bernoulli or adaboost or multinomial")
 
   if (!( (is.numeric(n.trees)) && (length(n.trees)==1) && (n.trees%%1 == 0) && (n.trees > 0) )) 
@@ -155,8 +156,8 @@ hpdegbm <- function(
    if (!((samplingFlag == TRUE) | (samplingFlag == FALSE)))
          stop("'samplingFlag' must be TRUE or FALSE")
 
-   if ( !(distribution=="gaussian") & (missing(nClass)) & ((is.dframe(X_train))) | ((is.darray(X_train))) )
-	stop("'nClass' is a required argument for X_train as dframe or darray and non-gaussian distribution")
+   if ( (missing(nClass)) & (samplingFlag==TRUE)  & !(distribution=="gaussian")  & ( (is.dframe(X_train)) | (is.darray(X_train)) ) )
+	stop("'nClass' is a required argument for X_train as dframe or darray and non-gaussian distribution and samplingFlag==TRUE")
 
 
    if (!( (is.numeric(nClass)) && (length(nClass)==1) && (nClass%%1 == 0) && (nClass > 0) )) 
@@ -168,6 +169,23 @@ hpdegbm <- function(
 
    if (distribution == "gaussian")
        nClass = 1
+
+
+   # Check the class number of each partition of Y_train (dframe/darray: must be be the same as nClass)
+   if ( !(distribution=="gaussian") && ((is.dframe(Y_train)) || is.darray(Y_train)) ){
+      npartition_Y = npartitions(Y_train)
+      dnClass <- darray(c(npartition_Y,1), c(1,1)) 
+      foreach(i, 1:npartition_Y, function(y=splits(Y_train,i), nClassPartition=splits(dnClass,i) ) {
+         nClassPartition <- as.matrix(as.numeric(min(table(y))))
+         update(nClassPartition)
+      })
+      if (min(getpartition(dnClass)) == 0) {
+           stop("Missing samples in the class of some partition")
+      }
+   }
+ 
+
+          
 
    # store trained gbm model
    dl_GBM_model <- dlist(nExecutor)
@@ -200,7 +218,7 @@ hpdegbm <- function(
          nTrain = NULL,
          train.fraction = NULL, 
          keep.data = FALSE,
-         verbose = TRUE,
+         verbose = FALSE,
          var.names = NULL,
          response.name = "y",
          group = NULL)
@@ -262,7 +280,7 @@ hpdegbm <- function(
             nTrain = NULL,
             train.fraction = NULL,
             keep.data = FALSE,
-            verbose = TRUE,
+            verbose = FALSE,
             var.names = NULL,
             #response.name = "y",
             group = NULL)
@@ -285,7 +303,7 @@ hpdegbm <- function(
     }
   
     if(trace) {
-	timing_info <- Sys.time() - timing_info
+	timing_info <- Sys.time() - starttime
 	print(timing_info)
     }
 
@@ -293,18 +311,9 @@ hpdegbm <- function(
     GBM_model1 <- getpartition(dl_GBM_model)
     best.iter1 <- getpartition(dbest.iter)
 
-   # if (completeModel) {
-   #    finalModel <- list(hpdegbm_Model="GBM_model1",bestIterations="best.iter1", trainingTime="timing_info")
-   # } else {
-   #    finalModel <- list(hpdegbm_Model="GBM_model1",bestIteration="best.iter1")
-   # }
 
-    if (completeModel) {
-       finalModel <- list(GBM_model1,best.iter1, timing_info)
-    } else {
-       finalModel <- list(GBM_model1, best.iter1)
-    }
-
+    finalModel <- list(GBM_model1, best.iter1)
+  
     cl <- match.call()
     cl[[1]] <- as.name("hpdegbm")
     finalModel$call <- cl
@@ -342,26 +351,17 @@ hpdegbm <- function(
 }
 
 
-## print function for hpdegbm
 print.hpdegbm <- function(x, ...)
 {
-    cat("\n hpdegbm model:\n")
-    print(x$model, ...)
-
-    cat("\n distribution:\n")
-    print(x$distribution, ...)
-
-    cat("\n n.trees:\n")
-    print(x$n.trees, ...)
-
-    cat("\n number of GBM models:\n")
-    print(x$numGBMModel, ...)
-
-    cat("\n best iterations of GBM models:\n")
-    print(x$bestIterations, ...)
-
-
-    #invisible(x)
+    print(x$call)
+    cat(paste("\n Number of GBM models: ", x$numGBMModel, "\n"))
+    cat(paste("distribution: ", x$distribution, "\n"))    
+    cat(paste("n.trees: ", x$ n.trees, "\n"))
+    cat(paste("best iterations of GBM models: ", x$bestIterations, "\n"))
+    #print(x$model[[1]]) 
 }
+
+
+
 
 

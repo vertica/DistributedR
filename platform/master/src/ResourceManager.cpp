@@ -109,6 +109,7 @@ void ResourceManager::SendHello(WorkerInfo* worker) {
   HelloRequest hello;
   hello.set_is_heartbeat(true);
   hello.set_reply_attr_flag(hello_reply_flag_);
+  hello.set_num_workers(scheduler_->GetWorkerInfo().size());
   ServerInfo wi;
   wi.set_name(worker->hostname());
   wi.set_presto_port(worker->port());

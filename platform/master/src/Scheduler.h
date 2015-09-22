@@ -223,6 +223,7 @@ struct ForeachStatus {
   int num_tasks;
   bool is_error;
   std::ostringstream error_stream;
+  boost::interprocess::interprocess_semaphore *sema;
 };
 
 // Abstract Scheduler class that keeps track of metadata
@@ -350,6 +351,11 @@ class Scheduler {
     foreach_status_ = foreach_status;
   }
 
+  void UpdateWorkerMetadata(bool status);
+  void MetadataUpdateReply(MetadataUpdateReply update) {
+    foreach_status_->sema->post();
+  }
+
   // Current implementation is basedon assumption that
   // atmost 1 foreach() will run at time
   ForeachStatus *foreach_status_;
@@ -360,12 +366,14 @@ class Scheduler {
   uint64_t GetNewTaskID();
 
   // execute an exec task on a worker
-  uint64_t Exec(Worker *worker, TaskArg *task);
+  uint64_t Exec(Worker *worker, TaskArg *task, ::uint64_t parentid=0);
 
   // createa a composite array from splits on a worker
   uint64_t CreateComposite(Worker *worker,
                            const std::string &name,
-                           const Arg &arg);
+                           const Arg &arg,
+                           const std::vector<Arg>* task_args = NULL,
+                           ::uint64_t parentid=0);
 
   // execute a fetch task on a worker
   uint64_t Fetch(Worker *to, Worker *from, Split *split);
@@ -382,6 +390,7 @@ class Scheduler {
   uint64_t Delete(Split *split, ArrayStore *store,
                   bool metadata_already_erased = false);
   uint64_t Delete(Split *split, Worker *worker,
+                  bool delete_in_worker = true,
                   bool metadata_already_erased = false);
 
   // send a log msg to the worker
@@ -400,7 +409,7 @@ class Scheduler {
   uint64_t IsSplitBeingAcquired(Split *split, Worker *worker);
 
   // completely delete a split (from all workers, arraystores, bookkeeping)
-  void DeleteSplit(Split *split);
+  void DeleteSplit(Split *split, Worker* current_worker = NULL);
 
   // get the next available worker when the foreach has no data partition involved.
   Worker* GetNextAvailableWorker();
@@ -517,6 +526,7 @@ class InMemoryScheduler : public Scheduler {
     Worker *worker;
     bool inited;
     const Arg *arg;
+    const std::vector<Arg> *task_args;
   };
 
   boost::recursive_mutex mutex_;

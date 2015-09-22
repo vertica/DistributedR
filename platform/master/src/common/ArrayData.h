@@ -59,7 +59,8 @@ enum ARRAYTYPE {
   SPARSE,
   SPARSE_TRIPLET,
   DATA_FRAME,
-  LIST
+  LIST,
+  BINARY
 };
 
 enum DobjectType {
@@ -91,6 +92,7 @@ typedef struct {
   int64_t dims[2];
   SEXPTYPE value_type;  // either int or real
   //    SEXPREC_ALIGN sexp;
+  StorageLayer store;
 } dense_header_t;
 
 typedef struct {
@@ -98,12 +100,14 @@ typedef struct {
   int64_t nnz;
   int64_t dims[2];
   sprs_encoding_t encoding;
+  StorageLayer store;
 } sparse_header_t;
 
 typedef struct {
   int64_t type;
   int64_t nnz;
   int64_t dims[2];
+  StorageLayer store;
 } sparse_triplet_header_t;
 
 /* Abstract class for R array serialization to shared memory */
@@ -116,7 +120,7 @@ class ArrayData {
      For the latter, the first 64 bits of the serialization should contain
      the type of the array using enum ARRAYTPE.
      TODO(erik): enforce this somehow through class hierarchy? */
-  ArrayData(const std::string &name_, int type_);
+  ArrayData(const std::string &name_, int type_, StorageLayer store=WORKER, size_t r_size=0);
 
   // Load the array in R
   virtual void LoadInR(RInside &R, const std::string &varname) = 0;
@@ -132,6 +136,8 @@ class ArrayData {
   virtual std::string GetName() const;
   // Get total size in shared memory
   virtual size_t GetSize();
+  //Get type of the array data
+  virtual ARRAYTYPE GetClassType();
   // Get array dimensions
   virtual std::pair<std::int64_t, std::int64_t> GetDims() const = 0;
 
@@ -150,7 +156,9 @@ class ArrayData {
   void OpenShm(bool external);
 
   boost::interprocess::mapped_region *header_region;
-  const int type;
+  const ARRAYTYPE type;
+  StorageLayer store;
+  size_t r_size;
 
  private:
   const std::string name;
@@ -163,7 +171,7 @@ ArrayData* ParseShm(const std::string &name);
 // Create the appropriate ArrayData structure by parsing R variable with
 // name varname
 ArrayData* ParseVariable(RInside &R, const std::string &varname,
-    const std::string &newname, ARRAYTYPE org_class);
+    const std::string &newname, ARRAYTYPE org_class, StorageLayer store=WORKER);
 
 // Create composite array from metadata described in ca
 size_t CreateComposite(
@@ -171,16 +179,18 @@ size_t CreateComposite(
     const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
     const std::vector<ArrayData*> &splits,
     std::pair<std::int64_t, std::int64_t> dims,
-    ARRAYTYPE type);
+    ARRAYTYPE type,
+    StorageLayer store);
 
 // Store dense array data
 class DenseArrayData : public ArrayData {
  public:
-  explicit DenseArrayData(const std::string &name);
-  DenseArrayData(const std::string &name, const SEXP sexp,
-      const boost::unordered_set<std::string> &classname);
+  explicit DenseArrayData(const std::string &name, StorageLayer store=WORKER);
+  DenseArrayData(const std::string &name, StorageLayer store, size_t r_size, 
+      const SEXP sexp, const boost::unordered_set<std::string> &classname);
   DenseArrayData(
-      const std::string &name,
+      const std::string &name, 
+      StorageLayer store,
       const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
       const std::vector<ArrayData*> &splits,
       std::pair<std::int64_t, std::int64_t> dims);
@@ -201,10 +211,11 @@ class DenseArrayData : public ArrayData {
 // Store sparse array data in dgCMatrix format
 class SparseArrayData : public ArrayData {
  public:
-  explicit SparseArrayData(const std::string &name);
-  SparseArrayData(const std::string &name, const SEXP sexp,
-      const boost::unordered_set<std::string> &classname);
-  SparseArrayData(const std::string &name,
+  explicit SparseArrayData(const std::string &name, StorageLayer store=WORKER);
+  SparseArrayData(const std::string &name, StorageLayer store, size_t r_size,
+      const SEXP sexp, const boost::unordered_set<std::string> &classname);
+  SparseArrayData(const std::string &name, 
+      StorageLayer store,
       const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
       const std::vector<ArrayData*> &splits,
       std::pair<std::int64_t, std::int64_t> dims);
@@ -224,15 +235,16 @@ class SparseArrayData : public ArrayData {
 // Store sparse array data in dgTMatrix format (triplet)
 class SparseArrayTripletData : public ArrayData {
  public:
-  explicit SparseArrayTripletData(const std::string &name);
-  SparseArrayTripletData(const std::string &name, const SEXP sexp,
-      const boost::unordered_set<std::string> &classname);
+  explicit SparseArrayTripletData(const std::string &name, StorageLayer store=WORKER);
+  SparseArrayTripletData(const std::string &name, StorageLayer store, size_t r_size,
+      const SEXP sexp, const boost::unordered_set<std::string> &classname);
   SparseArrayTripletData(const std::string &name,
+      StorageLayer store,
       const std::vector<std::pair<std::int64_t, std::int64_t> > &offsets,
       const std::vector<ArrayData*> &splits,
       std::pair<std::int64_t, std::int64_t> dims);
 
-  SparseArrayTripletData(const string& name, const SEXP sexp_from,
+  SparseArrayTripletData(const string& name, StorageLayer store, size_t r_size, const SEXP sexp_from,
     const boost::unordered_set<std::string> &classname, const int32_t startx, const int32_t starty,
     const int32_t endx, const int32_t endy, const int64_t nonzeros,
     bool is_row_split);

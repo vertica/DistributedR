@@ -45,12 +45,12 @@
 ####################################################################################
 ###                     Data-distributed and model-centralized prediction function of distributed GBM
 ####################################################################################
-predict.hpdegbm <- function(object, newdata, type="link", trace = FALSE)
+predict.hpdegbm <- function(object, newdata, trace = FALSE)
 {
   # model: assembled GBM model
   # best.iter: best iteration of sub-models
   # newdata: testing data in dframe/darray
-  # type="link" or "response"
+  # type="link" (gaussian, bernoulli, adaboost) or "response" (multinomial)
 
   ############### data-distributed and model-centralized  prediction #################
   # suitable for models whose size can fit into the memory
@@ -69,7 +69,10 @@ predict.hpdegbm <- function(object, newdata, type="link", trace = FALSE)
   # check function arguments
   if(missing(object))
      stop("'object' is a required argument")
-
+ 
+  if ( (is.null(object$n.trees)) | (is.null(object$distribution)) | (is.null(object$bestIterations)))
+     stop("The input hpdegbm model is invalid")
+  
   if(missing(newdata))
      stop("'newdata' is a required argument")
 
@@ -90,7 +93,7 @@ predict.hpdegbm <- function(object, newdata, type="link", trace = FALSE)
      }
 
      # distributed prediction
-     foreach(i, 1:nExecutor_test, function(GBM_model=model, best.iter=best.iter, predi=splits(daPredict,i), data2=splits(newdata,i), distributionGBM=distributionGBM, type=type) { 
+     foreach(i, 1:nExecutor_test, function(GBM_model=model, best.iter=best.iter, predi=splits(daPredict,i), data2=splits(newdata,i), distributionGBM=distributionGBM, type="link") { 
         library(gbm)
 
         # Gaussian distribution for regression
@@ -157,7 +160,8 @@ predict.hpdegbm <- function(object, newdata, type="link", trace = FALSE)
           update(predi)
      }) 
 
-     Predictions <- getpartition(daPredict)
+    # Predictions <- getpartition(daPredict)
+     Predictions <- daPredict
    } else{
      # centralized prediction for small data (newdata). newdata is data.frame or matrix
      nTest <- nrow(newdata)

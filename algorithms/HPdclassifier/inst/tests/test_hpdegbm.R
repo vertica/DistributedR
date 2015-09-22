@@ -169,24 +169,23 @@ test_that("Test classification accuracy: AdaBoost", {
        var.names = NULL,
        #response.name = "y",
        group = NULL,
-       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE,
+       trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
        sampleThresh = 200) 
 
 
     newdata1 <- X_test        # test centralized small simulated data
-    Predictions1 <- predict.hpdegbm(finalModel1, newdata1, type="link", trace = FALSE)
+    Predictions1 <- predict.hpdegbm(finalModel1, newdata1, trace = FALSE)
     result1 <- confusion(Predictions1 > 0, y_test > 0)
 
-    PredictionsGBM1_1 <- predict.gbm(finalModel1[[1]][[1]], newdata1, n.trees=finalModel1[[2]][1],type="link", trace = FALSE)
+    PredictionsGBM1_1 <- predict.gbm(finalModel1[[1]][[1]], newdata1, n.trees=finalModel1[[2]][1], trace = FALSE)
     result1_1 <- confusion(PredictionsGBM1_1 > 0, y_test > 0)
-    PredictionsGBM1_2 <- predict.gbm(finalModel1[[1]][[2]], newdata1, n.trees=finalModel1[[2]][2],type="link", trace = FALSE)
+    PredictionsGBM1_2 <- predict.gbm(finalModel1[[1]][[2]], newdata1, n.trees=finalModel1[[2]][2], trace = FALSE)
     result1_2 <- confusion(PredictionsGBM1_2 > 0, y_test > 0)
-    PredictionsGBM1_3 <- predict.gbm(finalModel1[[1]][[3]], newdata1, n.trees=finalModel1[[2]][3],type="link", trace = FALSE)
+    PredictionsGBM1_3 <- predict.gbm(finalModel1[[1]][[3]], newdata1, n.trees=finalModel1[[2]][3], trace = FALSE)
     result1_3 <- confusion(PredictionsGBM1_3 > 0, y_test > 0)
-    PredictionsGBM1_4 <- predict.gbm(finalModel1[[1]][[4]], newdata1, n.trees=finalModel1[[2]][4],type="link", trace = FALSE)
+    PredictionsGBM1_4 <- predict.gbm(finalModel1[[1]][[4]], newdata1, n.trees=finalModel1[[2]][4], trace = FALSE)
     result1_4 <- confusion(PredictionsGBM1_4 > 0, y_test > 0)
 
     # availability of some outputs
@@ -239,26 +238,25 @@ test_that("Test classification accuracy: AdaBoost", {
        var.names = NULL,
        #response.name = "y",
        group = NULL,
-       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE,
+       trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
        sampleThresh = 200) # default system parameters are defined here
 
 
     newdata2 <- dfX_test     # test distributed big data
-    Predictions2 <- predict.hpdegbm(finalModel2, newdata2, type="link", trace = FALSE)
+    Predictions2 <- getpartition(predict.hpdegbm(finalModel2, newdata2,  trace = FALSE))
     print(confusion(Predictions2 > 0, getpartition(daY_test) > 0)) 
     result2 <- confusion(Predictions2 > 0, getpartition(daY_test) > 0)
 
     newdata21 <- getpartition(newdata2)
-    PredictionsGBM2_1 <- predict.gbm(finalModel2[[1]][[1]], newdata21, n.trees=finalModel2[[2]][1],type="link", trace = FALSE)
+    PredictionsGBM2_1 <- predict.gbm(finalModel2[[1]][[1]], newdata21, n.trees=finalModel2[[2]][1], trace = FALSE)
     result2_1 <- confusion(PredictionsGBM2_1 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM2_2 <- predict.gbm(finalModel2[[1]][[2]], newdata21, n.trees=finalModel2[[2]][2],type="link", trace = FALSE)
+    PredictionsGBM2_2 <- predict.gbm(finalModel2[[1]][[2]], newdata21, n.trees=finalModel2[[2]][2], trace = FALSE)
     result2_2 <- confusion(PredictionsGBM2_2 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM2_3 <- predict.gbm(finalModel2[[1]][[3]], newdata21, n.trees=finalModel2[[2]][3],type="link", trace = FALSE)
+    PredictionsGBM2_3 <- predict.gbm(finalModel2[[1]][[3]], newdata21, n.trees=finalModel2[[2]][3], trace = FALSE)
     result2_3 <- confusion(PredictionsGBM2_3 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM2_4 <- predict.gbm(finalModel2[[1]][[4]], newdata21, n.trees=finalModel2[[2]][4],type="link", trace = FALSE)
+    PredictionsGBM2_4 <- predict.gbm(finalModel2[[1]][[4]], newdata21, n.trees=finalModel2[[2]][4], trace = FALSE)
     result2_4 <- confusion(PredictionsGBM2_4 > 0, getpartition(daY_test) > 0)
 
     # availability of some outputs
@@ -309,26 +307,25 @@ test_that("Test classification accuracy: AdaBoost", {
        var.names = NULL,
        #response.name = "y",
        group = NULL,
-       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE,
+       trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
        sampleThresh = 200) # default system parameters are defined here
 
 
     newdata3 <- dfX_test     # test distributed big data
-    Predictions3 <- predict.hpdegbm(finalModel3, newdata3, type="link", trace = FALSE)
+    Predictions3 <- getpartition(predict.hpdegbm(finalModel3, newdata3, trace = FALSE))
     print(confusion(Predictions3 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
     result3 <- confusion(Predictions3 > 0, getpartition(daY_test) > 0)
 
     newdata31 <- getpartition(newdata3)
-    PredictionsGBM3_1 <- predict.gbm(finalModel3[[1]][[1]], newdata31, n.trees=finalModel3[[2]][1],type="link", trace = FALSE)
+    PredictionsGBM3_1 <- predict.gbm(finalModel3[[1]][[1]], newdata31, n.trees=finalModel3[[2]][1], trace = FALSE)
     result3_1 <- confusion(PredictionsGBM3_1 > 0, getpartition(daY_test)> 0)
-    PredictionsGBM3_2 <- predict.gbm(finalModel3[[1]][[2]], newdata31, n.trees=finalModel3[[2]][2],type="link", trace = FALSE)
+    PredictionsGBM3_2 <- predict.gbm(finalModel3[[1]][[2]], newdata31, n.trees=finalModel3[[2]][2], trace = FALSE)
     result3_2 <- confusion(PredictionsGBM3_2 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM3_3 <- predict.gbm(finalModel3[[1]][[3]], newdata31, n.trees=finalModel3[[2]][3],type="link", trace = FALSE)
+    PredictionsGBM3_3 <- predict.gbm(finalModel3[[1]][[3]], newdata31, n.trees=finalModel3[[2]][3], trace = FALSE)
     result3_3 <- confusion(PredictionsGBM3_3 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM3_4 <- predict.gbm(finalModel3[[1]][[4]], newdata31, n.trees=finalModel3[[2]][4],type="link", trace = FALSE)
+    PredictionsGBM3_4 <- predict.gbm(finalModel3[[1]][[4]], newdata31, n.trees=finalModel3[[2]][4], trace = FALSE)
     result3_4 <- confusion(PredictionsGBM3_4 > 0, getpartition(daY_test) > 0)
 
     # availability of some outputs
@@ -381,25 +378,24 @@ test_that("Test classification accuracy: bernoulli", {
        var.names = NULL,
        #response.name = "y",
        group = NULL,
-       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE,
+       trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
        sampleThresh = 200) # default system parameters are defined here
 
 
     newdata4 <- X_test        # test centralized small simulated data
-    Predictions4 <- predict.hpdegbm(finalModel4, newdata4, type="link", trace = FALSE)
+    Predictions4 <- predict.hpdegbm(finalModel4, newdata4,  trace = FALSE)
     print(confusion(Predictions4 > 0, y_test > 0))   # Y_test: centralized small data
     result4 <- confusion(Predictions4 > 0, y_test > 0)
 
-    PredictionsGBM4_1 <- predict.gbm(finalModel4[[1]][[1]], newdata4, n.trees=finalModel4[[2]][1],type="link", trace = FALSE)
+    PredictionsGBM4_1 <- predict.gbm(finalModel4[[1]][[1]], newdata4, n.trees=finalModel4[[2]][1], trace = FALSE)
     result4_1 <- confusion(PredictionsGBM4_1 > 0, y_test > 0)
-    PredictionsGBM4_2 <- predict.gbm(finalModel4[[1]][[2]], newdata4, n.trees=finalModel4[[2]][2],type="link", trace = FALSE)
+    PredictionsGBM4_2 <- predict.gbm(finalModel4[[1]][[2]], newdata4, n.trees=finalModel4[[2]][2], trace = FALSE)
     result4_2 <- confusion(PredictionsGBM4_2 > 0, y_test > 0)
-    PredictionsGBM4_3 <- predict.gbm(finalModel4[[1]][[3]], newdata4, n.trees=finalModel4[[2]][3],type="link", trace = FALSE)
+    PredictionsGBM4_3 <- predict.gbm(finalModel4[[1]][[3]], newdata4, n.trees=finalModel4[[2]][3], trace = FALSE)
     result4_3 <- confusion(PredictionsGBM4_3 > 0, y_test > 0)
-    PredictionsGBM4_4 <- predict.gbm(finalModel4[[1]][[4]], newdata4, n.trees=finalModel4[[2]][4],type="link", trace = FALSE)
+    PredictionsGBM4_4 <- predict.gbm(finalModel4[[1]][[4]], newdata4, n.trees=finalModel4[[2]][4], trace = FALSE)
     result4_4 <- confusion(PredictionsGBM4_4 > 0, y_test > 0)
 
     # availability of some outputs
@@ -451,26 +447,25 @@ test_that("Test classification accuracy: bernoulli", {
        var.names = NULL,
        #response.name = "y",
        group = NULL,
-       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE,
+       trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
        sampleThresh = 200) # default system parameters are defined here
 
 
     newdata5 <- dfX_test     # test distributed big data
-    Predictions5 <- predict.hpdegbm(finalModel5, newdata5, type="link", trace = FALSE)
+    Predictions5 <- getpartition(predict.hpdegbm(finalModel5, newdata5, trace = FALSE))
     print(confusion(Predictions5 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
     result5 <- confusion(Predictions5 > 0, getpartition(daY_test) > 0)
 
     newdata51 = getpartition(newdata5)
-    PredictionsGBM5_1 <- predict.gbm(finalModel5[[1]][[1]], newdata51, n.trees=finalModel5[[2]][1],type="link", trace = FALSE)
+    PredictionsGBM5_1 <- predict.gbm(finalModel5[[1]][[1]], newdata51, n.trees=finalModel5[[2]][1], trace = FALSE)
     result5_1 <- confusion(PredictionsGBM5_1 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM5_2 <- predict.gbm(finalModel5[[1]][[2]], newdata51, n.trees=finalModel5[[2]][2],type="link", trace = FALSE)
+    PredictionsGBM5_2 <- predict.gbm(finalModel5[[1]][[2]], newdata51, n.trees=finalModel5[[2]][2], trace = FALSE)
     result5_2 <- confusion(PredictionsGBM5_2 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM5_3 <- predict.gbm(finalModel5[[1]][[3]], newdata51, n.trees=finalModel5[[2]][3],type="link", trace = FALSE)
+    PredictionsGBM5_3 <- predict.gbm(finalModel5[[1]][[3]], newdata51, n.trees=finalModel5[[2]][3], trace = FALSE)
     result5_3 <- confusion(PredictionsGBM5_3 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM5_4 <- predict.gbm(finalModel5[[1]][[4]], newdata51, n.trees=finalModel5[[2]][4],type="link", trace = FALSE)
+    PredictionsGBM5_4 <- predict.gbm(finalModel5[[1]][[4]], newdata51, n.trees=finalModel5[[2]][4], trace = FALSE)
     result5_4 <- confusion(PredictionsGBM5_4 > 0, getpartition(daY_test) > 0)
 
     # availability of some outputs
@@ -521,26 +516,25 @@ test_that("Test classification accuracy: bernoulli", {
        var.names = NULL,
        #response.name = "y",
        group = NULL,
-       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE,
+       trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
        sampleThresh = 200) # default system parameters are defined here
 
 
     newdata6 <- dfX_test     # test distributed big data
-    Predictions6 <- predict.hpdegbm(finalModel6, newdata6, type="link", trace = FALSE)
+    Predictions6 <- getpartition(predict.hpdegbm(finalModel6, newdata6, trace = FALSE))
     print(confusion(Predictions6 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
     result6 <- confusion(Predictions6 > 0, getpartition(daY_test) > 0)
 
     newdata61 <- getpartition(newdata6)
-    PredictionsGBM6_1 <- predict.gbm(finalModel6[[1]][[1]], newdata61, n.trees=finalModel6[[2]][1],type="link", trace = FALSE)
+    PredictionsGBM6_1 <- predict.gbm(finalModel6[[1]][[1]], newdata61, n.trees=finalModel6[[2]][1], trace = FALSE)
     result6_1 <- confusion(PredictionsGBM6_1 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM6_2 <- predict.gbm(finalModel6[[1]][[2]], newdata61, n.trees=finalModel6[[2]][2],type="link", trace = FALSE)
+    PredictionsGBM6_2 <- predict.gbm(finalModel6[[1]][[2]], newdata61, n.trees=finalModel6[[2]][2], trace = FALSE)
     result6_2 <- confusion(PredictionsGBM6_2 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM6_3 <- predict.gbm(finalModel6[[1]][[3]], newdata61, n.trees=finalModel6[[2]][3],type="link", trace = FALSE)
+    PredictionsGBM6_3 <- predict.gbm(finalModel6[[1]][[3]], newdata61, n.trees=finalModel6[[2]][3], trace = FALSE)
     result6_3 <- confusion(PredictionsGBM6_3 > 0, getpartition(daY_test)> 0)
-    PredictionsGBM6_4 <- predict.gbm(finalModel6[[1]][[4]], newdata61, n.trees=finalModel6[[2]][4],type="link", trace = FALSE)
+    PredictionsGBM6_4 <- predict.gbm(finalModel6[[1]][[4]], newdata61, n.trees=finalModel6[[2]][4], trace = FALSE)
     result6_4 <- confusion(PredictionsGBM6_4 > 0, getpartition(daY_test) > 0)
 
     # availability of some outputs
@@ -589,15 +583,14 @@ test_that("Test classification accuracy: multinomial", {
        var.names = NULL,
        #response.name = "y",
        group = NULL,
-       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE,
+       trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 3,
        sampleThresh = 200) # default system parameters are defined here
 
 
     newdata7 <- valid1.iris  # test small real data 
-    Predictions7 <- predict.hpdegbm(finalModel7, newdata7, type="response", trace = FALSE)
+    Predictions7 <- predict.hpdegbm(finalModel7, newdata7, trace = FALSE)
     print(Predictions7)
     as.factor(valid.iris$Species)
     print(table ((Predictions7), (valid.iris$Species)))
@@ -607,25 +600,25 @@ test_that("Test classification accuracy: multinomial", {
 
 
     # compute classification error rate
-    PredictionsGBM7_1 <- predict.gbm(finalModel7[[1]][[1]], newdata7, n.trees=finalModel7[[2]][1],type="response", trace = FALSE)
+    PredictionsGBM7_1 <- predict.gbm(finalModel7[[1]][[1]], newdata7, n.trees=finalModel7[[2]][1], trace = FALSE)
     aa7_1 <- apply(PredictionsGBM7_1, 1, which.max) - as.numeric(valid.iris$Species)
     correctCount7_1 <- sum(aa7_1 == 0)
     errorRate7_1 <- 1 - correctCount7_1/(nrow(newdata7))
     print(errorRate7_1)
 
-    PredictionsGBM7_2 <- predict.gbm(finalModel7[[1]][[2]], newdata7, n.trees=finalModel7[[2]][2],type="response", trace = FALSE)
+    PredictionsGBM7_2 <- predict.gbm(finalModel7[[1]][[2]], newdata7, n.trees=finalModel7[[2]][2], trace = FALSE)
     aa7_2 <- apply(PredictionsGBM7_2, 1, which.max) - as.numeric(valid.iris$Species)
     correctCount7_2 <- sum(aa7_2 == 0)
     errorRate7_2 <- 1 - correctCount7_2/(nrow(newdata7))
     print(errorRate7_2)
 
-   # PredictionsGBM7_3 <- predict.gbm(finalModel7[[1]][[3]], newdata7, n.trees=finalModel7[[2]][3],type="response", trace = FALSE)
+   # PredictionsGBM7_3 <- predict.gbm(finalModel7[[1]][[3]], newdata7, n.trees=finalModel7[[2]][3], trace = FALSE)
    # aa7_3 <- apply(PredictionsGBM7_3, 1, which.max) - as.numeric(valid.iris$Species)
    # correctCount7_3 <- sum(aa7_3 == 0)
    # errorRate7_3 <- 1 - correctCount7_3/(nrow(newdata7))
    # print(errorRate7_3)
 
-   # PredictionsGBM7_4 <- predict.gbm(finalModel7[[1]][[4]], newdata7, n.trees=finalModel7[[2]][4],type="response", trace = FALSE)
+   # PredictionsGBM7_4 <- predict.gbm(finalModel7[[1]][[4]], newdata7, n.trees=finalModel7[[2]][4], trace = FALSE)
    # aa7_4 <- apply(PredictionsGBM7_4, 1, which.max) - as.numeric(valid.iris$Species)
    # correctCount7_4 <- sum(aa7_4 == 0)
    # errorRate7_4 <- 1 - correctCount7_4/(nrow(newdata7))
@@ -729,8 +722,7 @@ test_that("Test regression accuracy: gaussian", {
        var.names = NULL,
        #response.name = "y",
        group = NULL,
-       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       completeModel = FALSE,
+       trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
        sampleThresh = 200) # default system parameters are defined here
@@ -752,17 +744,17 @@ test_that("Test regression accuracy: gaussian", {
     data2 <- data.frame(Y,X1=X1,X2=X2,X3=X3,X4=X4,X5=X5,X6=X6)
  
     newdata8 <- data2
-    Predictions8 <- predict.hpdegbm(finalModel8, newdata8, type="link", trace = FALSE)
+    Predictions8 <- predict.hpdegbm(finalModel8, newdata8, trace = FALSE)
     print (sum((data2$Y - Predictions8)^2))
     result8 <- sum((data2$Y - Predictions8)^2)
 
-    PredictionsGBM8_1 <- predict.gbm(finalModel8[[1]][[1]], newdata8, n.trees=finalModel8[[2]][1],type="link", trace = FALSE)
+    PredictionsGBM8_1 <- predict.gbm(finalModel8[[1]][[1]], newdata8, n.trees=finalModel8[[2]][1], trace = FALSE)
     result8_1 <-  sum((data2$Y - PredictionsGBM8_1)^2)
-    PredictionsGBM8_2 <- predict.gbm(finalModel8[[1]][[2]], newdata8, n.trees=finalModel8[[2]][2],type="link", trace = FALSE)
+    PredictionsGBM8_2 <- predict.gbm(finalModel8[[1]][[2]], newdata8, n.trees=finalModel8[[2]][2], trace = FALSE)
     result8_2 <- sum((data2$Y - PredictionsGBM8_2)^2)
-    PredictionsGBM8_3 <- predict.gbm(finalModel8[[1]][[3]], newdata8, n.trees=finalModel8[[2]][3],type="link", trace = FALSE)
+    PredictionsGBM8_3 <- predict.gbm(finalModel8[[1]][[3]], newdata8, n.trees=finalModel8[[2]][3], trace = FALSE)
     result8_3 <- sum((data2$Y - PredictionsGBM8_3)^2)
-    PredictionsGBM8_4 <- predict.gbm(finalModel8[[1]][[4]], newdata8, n.trees=finalModel8[[2]][4],type="link", trace = FALSE)
+    PredictionsGBM8_4 <- predict.gbm(finalModel8[[1]][[4]], newdata8, n.trees=finalModel8[[2]][4], trace = FALSE)
     result8_4 <- sum((data2$Y - PredictionsGBM8_4)^2)
 
 
@@ -804,16 +796,15 @@ dirisX_test  <- as.dframe(irisX_test)
 dirisY_test  <- as.dframe(as.data.frame(irisY_test))
 
 # Big data case
-dmod <- hpdegbm(dirisX_train, dirisY_train, distribution = 'multinomial',
-                   nClass = 3)
+dmod <- hpdegbm(dirisX_train, dirisY_train, distribution = 'multinomial', nClass = 3)
 
 # centralized prediction of multi-class classification
-a <- predict.hpdegbm(dmod, irisX_test, type="response")
+a <- predict.hpdegbm(dmod, irisX_test)
 a
 
 
 # distributed prediction of multi-class classification
-b <- predict.hpdegbm(dmod, dirisX_test, type="response")
+b <- getpartition(predict.hpdegbm(dmod, dirisX_test))
 b
 
 
