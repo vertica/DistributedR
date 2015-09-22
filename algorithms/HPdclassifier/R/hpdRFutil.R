@@ -1,6 +1,8 @@
 .distributeForest <- function(forest)
 {
 	temp_forest = .Call("serializeForest",forest,PACKAGE="HPdclassifier")
+	.Call("garbageCollectForest",forest)
+
 	ntree = length(temp_forest) - 1
 	dforest = dlist(npartition = min(ntree,sum(distributedR_status()$Inst)))
 	trees_per_partition <- floor(ntree/npartitions(dforest))
@@ -20,6 +22,7 @@
 
 	})
 	trees = lapply(tree_ids, function(ids) temp_forest[ids])
+
 	foreach(i,1:npartitions(dforest), function(dforest = splits(dforest,i),
 					  forest_header = temp_forest[[1]],
 					  tree_ids = tree_ids[[i]],
@@ -33,6 +36,8 @@
 		update(dforest)
 	},progress = FALSE)
 
+	rm(temp_forest)
+	rm(trees)
 	return(dforest)
 
 }

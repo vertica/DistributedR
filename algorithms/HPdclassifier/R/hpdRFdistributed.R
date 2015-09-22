@@ -532,6 +532,7 @@
 .predictOOB <- function(forest, observations, responses, oob_indices, 
 	    cutoff, classes, reduceModel = FALSE, trace)
 {
+
 	timing_info <- Sys.time()
 	oob_predictions = dframe(npartitions = npartitions(observations))
 	sse = darray(npartitions = npartitions(observations))
@@ -540,6 +541,7 @@
 	L1 = darray(npartitions = npartitions(observations))
 	L2 = darray(npartitions = npartitions(observations))
 	class_count = darray(npartitions = npartitions(observations))
+
 
 	dforest = forest
 	suppressWarnings({
