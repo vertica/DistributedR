@@ -50,14 +50,13 @@ using namespace boost;
 #define SERVER_SHUTDOWN_MSG "-1"
 
 namespace presto {
-    
+
 #ifdef PERF_TRACE
     extern ZTracer::ZTraceEndpointRef ztrace_inst;
 #endif
-    
-// keeping original R SIGINT handler
+
+// keeping original R SIGINT hanlder
 extern sighandler_t r_sigint_handler;
-  
 // a function that is customized for Presto SIGINT handler
 extern "C" void m_sigint_handler(int sig);
 
@@ -70,6 +69,7 @@ Rcpp::XPtr<DistributedObject> inline get_dobject(SEXP xp) {
   Rcpp::XPtr<DistributedObject> ptr1(env.get(".pointer"));
   return ptr1;
 }
+
 
 /** Get scheduler object with a given R-environment variable
  * @param xp R environment variable
@@ -300,7 +300,7 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
 #endif
   
   for (int32_t i = 0; i < calls; ++i) {
-      
+
     size_t raw_msg_size = 0;  // to keep track of cumulated raw message size per each task
     t.start();
     TaskArg &task = *(new TaskArg);
@@ -443,12 +443,12 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
     rawargst += t.stop()/1e6;
     
     tasks.push_back(&task);
-    
   }
 
   ForeachStatus &foreach = *(new ForeachStatus);
   foreach.num_tasks = calls;
   foreach.is_error = false;
+  foreach.sema = &sema;
 
   get_scheduler(presto_master_exp)->InitializeForeach(&foreach);
   get_scheduler(presto_master_exp)->AddTask(tasks, scheduler_policy, &inputs);
@@ -470,7 +470,7 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
 #endif
 
   if (wait) {
-    // pool.wait();
+    //wait for task completion.
     int prev = -1;
     for (volatile int i = 0; i < calls; i++) {
       if (progress) {
@@ -485,9 +485,20 @@ RcppExport SEXP DistributedObject_ExecR(SEXP presto_master_exp,
     if (progress) {
       printf("\rprogress: 100%%\n");
     }
+    LOG_DEBUG("All tasks complete");
 
+    //wait for master metadata update
     for(volatile int i = 0; i < calls; i++) {
       sema.wait();
+    }
+    LOG_DEBUG("Master metadata updated");
+
+    if(DATASTORE == RINSTANCE) {
+      //wait for worker metadata update
+      for(int i = 0; i < pm->NumClients(); i++) {
+        sema.wait();
+      }
+      LOG_DEBUG("Worker metadata updated");
     }
   }
   signal(SIGINT, r_sigint_handler);  // revert to default

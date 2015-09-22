@@ -31,9 +31,9 @@ class ResourceManager {
     ResourceManager(Scheduler* scheduler, PrestoMaster *pm);
     ~ResourceManager();
     void Run();
+    void SendHello(WorkerInfo* worker);
 
   protected:
-    void SendHello(WorkerInfo* worker);
     void SetReplyAttrFlag(int flag);
     bool CheckIfContacted(Worker* worker);
     bool CheckIfDead(Worker* worker);

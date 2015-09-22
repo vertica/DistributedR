@@ -36,21 +36,29 @@
 
 namespace presto {
 
-extern void* transfer_pthread(void* ptr);
+extern void* worker_transfer_pthread(void* ptr);
+extern void* R_transfer_pthread(void* ptr);
 
 class TransferServer {
  public:
-  TransferServer(int start_port = 50000, int end_port = 50100) :
-    start_port_range_(start_port), end_port_range_(end_port) {
+  TransferServer(StorageLayer source, StorageLayer destination, int start_port = 50000, int end_port = 50100, void* addr = NULL, size_t size = 0) :
+    start_port_range_(start_port), end_port_range_(end_port),
+    source_(source), destination_(destination) {
+    dest_= addr;
+    size_= size;
   }
 
-  ~TransferServer() { }
+  ~TransferServer() {
+    if(dest_!=NULL)
+      free(dest_);
+  }
 
-  int32_t transfer_blob(void *dest, const string &name, size_t size,
-                        WorkerInfo* client, const string& myhostname,
-                        const string &store);
+ std::pair<void*, int64_t> transfer_blob(const string &name,
+                             WorkerInfo* client, const string& myhostname,
+                             const string &store, uint64_t taskid = 0);
 
-  void* transfer_server_thread(void);
+  void* worker_transfer_server(void);
+  void* R_transfer_server(void);
 
   int64_t bytes_fetched() {
     return bytes_fetched_;
@@ -71,6 +79,8 @@ class TransferServer {
 
   void *dest_;  // a buffer where the transferred data will be written
   size_t size_;
+  StorageLayer source_;
+  StorageLayer destination_;  
   int start_port_range_;
   int end_port_range_;
   sem_t server_ready;

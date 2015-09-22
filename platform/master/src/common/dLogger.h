@@ -66,8 +66,8 @@ namespace presto {
   
   extern bool trace_executor;
   extern ZTracer::ZTraceRef executor_trace;
-#endif  
-  
+#endif    
+
 typedef enum {
 DEBUG, INFO, WARN, ERROR 
 } severity_level;
@@ -186,7 +186,7 @@ static void LOG_DEBUG(const char* msg, ...){
     vsprintf(out_msg, msg, argptr);
     va_end(argptr);
     
-    #ifdef PERF_TRACE
+#ifdef PERF_TRACE
     //is master 
     if(is_master){
         if(trace_master){
@@ -259,7 +259,7 @@ static void LOG_INFO(const char* msg, ...){
         }
     }
 #endif 
-    
+
     src::severity_logger<severity_level>& lg = logger::get();
     BOOST_LOG_SEV(lg, INFO) << out_msg;    
 }
@@ -283,7 +283,7 @@ static void LOG_INFO(string msg){
         }
     }
      
-#endif    
+#endif 
     src::severity_logger<severity_level>& lg = logger::get();
     BOOST_LOG_SEV(lg, INFO) << msg;
 }

@@ -52,8 +52,10 @@ namespace presto {
 
 #ifdef PERF_TRACE   
   ZTracer::ZTraceEndpointRef ztrace_inst;
-#endif    
+#endif
+
 ::uint64_t abs_start_time;
+StorageLayer DATASTORE = WORKER;
 
 sighandler_t r_sigint_handler;
 
@@ -91,7 +93,7 @@ PrestoMaster::PrestoMaster(const string& config_file)
   
   // Initialize random number generator
   srand(time(NULL) + getpid());
-  
+
 #ifdef PERF_TRACE
 int tracer = ZTracer::ztrace_init();
 ztrace_inst = ZTracer::create_ZTraceEndpoint("127.0.0.1", 1, "master"); 
@@ -110,7 +112,7 @@ ztrace_inst = ZTracer::create_ZTraceEndpoint("127.0.0.1", 1, "master");
 //  LOG_INFO("Distributed Object Map Created.");
   ParseXMLConfig(config_file, &master_, &workers_);
   CheckMasterWorkerAddrSanity();
-  
+
 #ifdef OOC_SCHEDULER
   scheduler_ = new OOCScheduler(master_.name(), this);
 #else
@@ -365,11 +367,14 @@ void PrestoMaster::DeleteDobject(string da_name) {
  * It starts resource manager thread
  * @return NULL
  */
-void PrestoMaster::Start(int loglevel) {
+void PrestoMaster::Start(int loglevel, std::string storage) {
   // Initialize zmq server for worker->master communication
   // disable SIGINT to have reliable initialization
   LoggerFilter(loglevel);
   r_sigint_handler = signal(SIGINT, SIG_IGN);
+
+  presto::DATASTORE = (storage == "worker") ? WORKER : RINSTANCE;
+  LOG_INFO("Data storage layer in use: %s", getStorageLayer().c_str());
 
   // This waits until PrestoMasterHandler thread starts (open port and wait for the post message)
   // handler thread will be inited in the PrestoMaster constructor
@@ -512,6 +517,11 @@ void PrestoMaster::ConnectWorkers(const vector<ServerInfo>& workers) {
       }
       fprintf(stderr, "Check log files (/tmp/R_worker_...) in each node.\n");
     }
+  }
+  
+  boost::unordered_map<std::string, Worker*>::iterator wit;
+  for (wit = reg_workers.begin(); wit != reg_workers.end(); ++wit) {
+    res_manager_->SendHello(wit->second->workerinfo);
   }
   fflush(stderr);
 }

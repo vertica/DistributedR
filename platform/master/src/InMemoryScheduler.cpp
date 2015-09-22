@@ -44,7 +44,6 @@ using namespace boost;
 
 namespace presto {
 
-
 /** A task is done, and the InMemoryScheduler needs to perform further processing
  * @param taskid ID of a task that is completed
  * @param task a pointer of task information
@@ -117,7 +116,7 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
           unique_lock<recursive_mutex> metalock(metadata_mutex);
           // Upon completion of a dependent task, Execute the task
           LOG_INFO("FETCH dependencies on the Foreach are resolved. Executing Foreach Task.");
-          ::uint64_t id = Exec(taskdata.worker, taskdata.task);
+          ::uint64_t id = Exec(taskdata.worker, taskdata.task, dep_task_id);
 
 #ifdef PROFILING
           fprintf(profiling_output_, "%8.3lf %15s %6zu EDEPS DONE %8.3lf\n",
@@ -149,9 +148,18 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
           // Start create composite task
           unique_lock<recursive_mutex> metalock(metadata_mutex);
           LOG_INFO("FETCH dependencies for Create Composite are resolved. Creating Composite Array.");
-          ::uint64_t cc_id = CreateComposite(taskdata.worker,
-                                           taskdata.name,
-                                           *taskdata.arg);
+          ::uint64_t cc_id = -1;
+          if (DATASTORE == WORKER) {
+            cc_id = CreateComposite(taskdata.worker,
+                                               taskdata.name,
+                                               *taskdata.arg);
+          } else {
+            cc_id = CreateComposite(taskdata.worker,
+                                               taskdata.name,
+                                               *taskdata.arg,
+                                               taskdata.task_args,
+                                               dep_task_id);
+          }
           // copy over dependencies to new id.
           // We still need to keep a list that is dependent on the task
           dependencies_[cc_id] = dependencies_[dep_task_id];
@@ -212,7 +220,7 @@ void InMemoryScheduler::ChildDone(::uint64_t taskid, void *task, TaskType type) 
 
         unique_lock<recursive_mutex> metalock(metadata_mutex);
         LOG_INFO("Composite Array Created. All dependencies resolved. Executing Foreach Task.: %s", t->name.c_str());
-        ::uint64_t id = Exec(taskdata.worker, taskdata.task);
+        ::uint64_t id = Exec(taskdata.worker, taskdata.task, dep_task_id);
 #ifdef PROFILING
         fprintf(profiling_output_, "%8.3lf %15s %6zu CC_EDEPS DONE %8.3lf\n",
                 timer_.stop()/1e6,
@@ -545,6 +553,7 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
             cc.worker = worker;
             cc.inited = false;
             cc.arg = &arg;
+            cc.task_args = &t->args;
             for (int32_t j = 0; j < arg.arrays_size(); j++) {
               unique_lock<recursive_mutex> lock(mutex_);
               // we need the metadata lock because
@@ -562,7 +571,6 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
                 if (beingfetched == 0) {
                   // if this is not being fetched, fetch it first
                   Worker *from = best_worker_to_fetch_from(split->workers);
-
                   ::uint64_t fetch_task_id = Fetch(
                       worker,
                       from,
@@ -597,9 +605,19 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
               // create composite
               LOG_INFO("Composite Array '%s' - FETCH dependencies resolved. Creating Composite Array.", arg.name().c_str());
               unique_lock<recursive_mutex> metalock(metadata_mutex);
-              ::uint64_t cc_id2 = CreateComposite(cc.worker,
-                                                cc.name,
-                                                *cc.arg);
+              ::uint64_t cc_id2 = -1;
+              if(DATASTORE == WORKER) {
+                cc_id2 = CreateComposite(cc.worker,
+                                                    cc.name,
+                                                    *cc.arg);
+              } else {
+                cc_id2 = CreateComposite(cc.worker,
+                                                    cc.name,
+                                                    *cc.arg,
+                                                    //*cc.task_args,    
+                                                    &t->args,
+                                                    task_id);
+             }
 #ifdef PROFILING
               fprintf(profiling_output_, "%8.3lf %15s %6zu CDEPS DONE %8.3lf\n",
                       timer_.stop()/1e6,
@@ -635,8 +653,9 @@ void InMemoryScheduler::AddTask(const std::vector<TaskArg*> &tasks,
     // All necessary split is prepared
     if (taskdata.num_dependencies == 0 && taskdata.launched == false) {
       if (task_cnt==1)
-         LOG_INFO("Foreach arguments has no dependencies. Sending task to Worker for execution");
-      ::uint64_t id = Exec(worker, t);
+	 LOG_INFO("Foreach arguments has no dependencies. Sending task to Worker for execution");
+
+      ::uint64_t id = Exec(worker, t, task_id);
 #ifdef PROFILING
       fprintf(profiling_output_, "%8.3lf %15s %6zu EDEPS DONE %8.3lf\n",
               timer_.stop()/1e6,

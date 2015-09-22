@@ -28,6 +28,7 @@ message HelloRequest {
   optional int64 abs_time = 3;
   optional int32 reply_attr_flag = 4 [default = 0];
   optional bool is_heartbeat = 5 [default = false];
+  required int32 num_workers = 6;
 }
 
 message CreateRequest {
@@ -49,12 +50,14 @@ message TransferRequest {
 }
 
 message CreateCompositeRequest {
-  repeated string arraynames = 1;
+  repeated NewArg cargs = 1;
   repeated Tuple offsets = 2;
   required Tuple dims = 3;
   required string name = 4;
   optional int64 id = 5;
   required int64 uid = 6;
+  repeated NewArg task_args = 7;
+  optional int64 parenttaskid = 8;
 }
 
 // NOTE: We use WorkerRequest to differentiate between different request
@@ -73,6 +76,8 @@ message WorkerRequest {
     IO = 12;
     LOG = 13;
     VERTICALOAD = 14;
+    METADATAUPDATE = 15;
+    PERSIST = 16;
   }
   required Type type = 1;
   optional HelloRequest hello = 2;
@@ -85,9 +90,8 @@ message WorkerRequest {
   optional IORequest io = 9;
   optional LogRequest log = 10;
   optional VerticaDLRequest verticaload = 11;
-  optional int64 trace_id = 12;
-  optional int64 span_id = 13;
-  optional int64 parent_span_id = 14;
+  optional MetadataUpdateRequest metadataupdate = 12;
+  optional PersistRequest persist = 13;
   // shutdown doesn't have any request
 }
 
@@ -101,12 +105,17 @@ message WorkerRequest {
 // - distributed multiply
 
 message FetchRequest {
+  enum Policy{
+    WORKER_CONN = 1;
+    R_CONN = 2;
+  }
   required string name = 1;
   required ServerInfo location = 2;
-  required int64 size = 3;
+  optional int64 size = 3;
   optional string store = 4;
   optional int64 id = 5;
   optional int64 uid = 6;
+  optional Policy policy = 7 [default = WORKER_CONN];
 }
 
 message NewExecuteRRequest {
@@ -116,6 +125,8 @@ message NewExecuteRRequest {
   repeated NewArg composite_args = 4;
   optional int64 id = 5;
   required int64 uid = 6;
+  optional int64 parenttaskid = 7;
+  optional bool stage_updates = 8 [default = true];
 };
 
 message IORequest {
@@ -146,4 +157,18 @@ message VerticaDLRequest {
   repeated string query_result = 4;
   required int64 id = 5;
   optional int64 uid = 6;
+};
+
+message MetadataUpdateRequest {
+  required int64 id = 1;
+  required int64 uid = 2;
+  required bool status = 3;
+};
+
+message PersistRequest {
+  required int64 id = 1;
+  required int64 uid = 2;
+  required string split_name = 3;
+  required int32 executor = 4;
+  required int64 parenttaskid = 5;
 }

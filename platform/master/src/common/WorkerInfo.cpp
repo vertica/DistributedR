@@ -30,7 +30,6 @@
 
 using namespace boost;
 namespace presto {
-   
 /** This function sends a message (or task) in a queue to a worker. This is called from a master side
  * @return NULL
  */
@@ -77,7 +76,7 @@ void WorkerInfo::Pusher() {
     req.SerializeToArray(zmq_req.data(), zmq_req.size());
 
     try {
-      socket.send(zmq_req);   
+      socket.send(zmq_req);
     } catch (zmq::error_t err) {
       fprintf(stderr, "send to worker %s failed %s\n", endpoint_.c_str(),
               err.what());
@@ -256,7 +255,19 @@ void WorkerInfo::NewTransfer(const FetchRequest& fetch) {
   SendZMQMessagePush(req);  // send message
 }
 
-/** Function to create a composite array
+/** This function lets a worker to persist a split for one of its executor
+ * @param persist Contains information about the object to be persisted and source executor
+ * @return NULL
+ */
+void WorkerInfo::Persist(const PersistRequest& persist) {
+  WorkerRequest req;  // Create a request to worker
+  req.set_type(WorkerRequest::PERSIST);
+  req.mutable_fetch()->CopyFrom(persist);
+  //  SendZMQMessage(req, res);
+  SendZMQMessagePush(req);  // send message
+}
+
+/** Functio to create a composite array
  * @param createcomposite information about this composite array creation
  * @return NULL
  */
@@ -265,14 +276,26 @@ void WorkerInfo::CreateComposite(
   WorkerRequest req;
   req.set_type(WorkerRequest::CREATECOMPOSITE);
   req.mutable_createcomposite()->CopyFrom(createcomposite);
-  
-  #ifdef PERF_TRACE
+
+#ifdef PERF_TRACE
   struct blkin_trace_info info;
   master_trace->get_trace_info(&info);
   req.set_parent_span_id(info.parent_span_id);
   req.set_span_id(info.span_id);
   req.set_trace_id(info.trace_id);
 #endif
+  SendZMQMessagePush(req);
+}
+
+/** Function to communicate foreach status to worker
+ * @param complete information whether the foreach was successful or not
+ * @return NULL
+ */
+void WorkerInfo::MetadataUpdate(
+    const MetadataUpdateRequest& metadataupdate) {
+  WorkerRequest req;
+  req.set_type(WorkerRequest::METADATAUPDATE);
+  req.mutable_metadataupdate()->CopyFrom(metadataupdate);
   SendZMQMessagePush(req);
 }
 

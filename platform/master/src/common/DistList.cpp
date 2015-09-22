@@ -28,11 +28,14 @@ extern map<void*, size_t> *freemap;
 /** DistDataFrame constructor. It creates a shared memory segment object. It does not reserve space yet.
  * @param name the name of shared memory segment in the shared memory region
  */
-DistList::DistList(const std::string &name) : ArrayData(name, LIST) {
-  OpenShm(false);
-  header_region = new boost::interprocess::mapped_region(*shm,
-      boost::interprocess::read_write);
-  header = reinterpret_cast<dlist_header_t*>(header_region->get_address());
+DistList::DistList(const std::string &name, StorageLayer store) 
+  : ArrayData(name, LIST, store, 0), header(NULL) {
+  if(store == WORKER) {
+    OpenShm(false);
+    header_region = new boost::interprocess::mapped_region(*shm,
+        boost::interprocess::read_write);
+    header = reinterpret_cast<dlist_header_t*>(header_region->get_address());
+  }
 }
 
 /* Create shared memory segment and fill input R object into it. This function gets assigned memory on the shared memory
@@ -41,8 +44,11 @@ DistList::DistList(const std::string &name) : ArrayData(name, LIST) {
  * @param size the size of serialized list to be written
  * @param split_len length of the split list
  */
-DistList::DistList(const std::string &name, const SEXP sexp_from,
-      size_t size, int split_len) : ArrayData(name, LIST) {
+DistList::DistList(const std::string &name, StorageLayer store, size_t r_size,
+                   const SEXP sexp_from, size_t size, int split_len) 
+  : ArrayData(name, LIST, store, r_size), header(NULL) {
+
+  if(store == WORKER) {
   // Get dimensions, create array
   if (Rf_isNull(sexp_from)) {
     throw PrestoWarningException("DistList: updated value of split is NULL");
@@ -65,11 +71,20 @@ DistList::DistList(const std::string &name, const SEXP sexp_from,
   header->size = size;
   header->dims[0] = 1;           // Dimension information of each split: Row is always 1
   header->dims[1] = split_len;   // Column is the length of list in a split
+  header->store = store;
   void* data = reinterpret_cast<unsigned char*>(header) + mapped_size(sizeof(*header));
   if (data == NULL) {
     throw PrestoWarningException("DistList: data writable to shm is NULL");
   }
   memcpy(data, RAW_POINTER(sexp_from), size);
+  } else {
+    header = new dlist_header_t;
+    header->type = LIST;
+    header->size = r_size;
+    header->dims[0] = 1;
+    header->dims[1] = split_len;
+    header->store = store;
+  }
 }
 
 /** Get dimension of the list(number of rows/columns)
@@ -112,6 +127,10 @@ void DistList::LoadInR(RInside &R, const std::string &varname){
 }
 
 DistList::~DistList(){
-  delete header_region;
+  if(store = WORKER) {
+    delete header_region;
+  } else {
+    delete header;
+  }
 }
 }
