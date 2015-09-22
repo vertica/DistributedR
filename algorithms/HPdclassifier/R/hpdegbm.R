@@ -121,7 +121,6 @@ hpdegbm <- function(
    if ( (((is.dframe(X_train)) || (is.darray(X_train))) && ((!is.dframe(Y_train)) && (!is.darray(Y_train))))  || (((is.dframe(Y_train)) || (is.darray(Y_train))) && ((!is.dframe(X_train)) && (!is.darray(X_train)))) )
        stop("Either both 'X_train' and 'Y_train' must be dobjects, or neither can be dobjects")
 
-
    if (missing(nExecutor))   
        nExecutor <- sum(distributedR_status()$Inst)
 
@@ -131,7 +130,7 @@ hpdegbm <- function(
    if(missing(distribution))
 	stop("'distribution' is a required argument")
 
-   if ( !(is.na(distribution)) && (!(distribution=="gaussian")) && (!(distribution=="bernoulli")) && (!(distribution=="adaboost")) && (!(distribution=="multinomial"))  )
+   if ( (is.na(distribution)) && (!(distribution=="gaussian")) && (!(distribution=="bernoulli")) && (!(distribution=="adaboost")) && (!(distribution=="multinomial"))  )
        stop("'distribution' must be gaussian or bernoulli or adaboost or multinomial")
 
   if (!( (is.numeric(n.trees)) && (length(n.trees)==1) && (n.trees%%1 == 0) && (n.trees > 0) )) 
@@ -170,6 +169,23 @@ hpdegbm <- function(
 
    if (distribution == "gaussian")
        nClass = 1
+
+
+   # Check the class number of each partition of Y_train (dframe/darray: must be be the same as nClass)
+   if ( !(distribution=="gaussian") && ((is.dframe(Y_train)) || is.darray(Y_train)) ){
+      npartition_Y = npartitions(Y_train)
+      dnClass <- darray(c(npartition_Y,1), c(1,1)) 
+      foreach(i, 1:npartition_Y, function(y=splits(Y_train,i), nClassPartition=splits(dnClass,i) ) {
+         nClassPartition <- as.matrix(as.numeric(min(table(y))))
+         update(nClassPartition)
+      })
+      if (min(getpartition(dnClass)) == 0) {
+           stop("Missing samples in the class of some partition")
+      }
+   }
+ 
+
+          
 
    # store trained gbm model
    dl_GBM_model <- dlist(nExecutor)

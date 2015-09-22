@@ -69,7 +69,10 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE)
   # check function arguments
   if(missing(object))
      stop("'object' is a required argument")
-
+ 
+  if ( (is.null(object$n.trees)) | (is.null(object$distribution)) | (is.null(object$bestIterations)))
+     stop("The input hpdegbm model is invalid")
+  
   if(missing(newdata))
      stop("'newdata' is a required argument")
 
