@@ -188,7 +188,7 @@ extern "C"
 		node_curr->left = node_left_child;
 		node_curr->right = node_right_child;
 		
-		if(node_left_child->additional_info->depth < max_depth)
+		if(node_left_child->additional_info->depth <= max_depth)
 		  {
 		    node_left_child->additional_info->leafID = leaf_nodes+1;
 		    node_counts[leaf_nodes] = 
@@ -196,7 +196,7 @@ extern "C"
 		    new_leaves[leaf_nodes++] = node_left_child;
 		  }
 
-		if(node_right_child->additional_info->depth < max_depth)
+		if(node_right_child->additional_info->depth <= max_depth)
 		  {
 		    node_right_child->additional_info->leafID = leaf_nodes+1;
 		    node_counts[leaf_nodes] = 
@@ -210,7 +210,7 @@ extern "C"
 
 	  }
 	else if(i != next_active_node && 
-		node_curr->additional_info->depth < max_depth)
+		node_curr->additional_info->depth <= max_depth)
 	  {
 	    node_curr->additional_info->leafID = leaf_nodes+1;
 	    node_counts[leaf_nodes] = node_curr->additional_info->num_obs;

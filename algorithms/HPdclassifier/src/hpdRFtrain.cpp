@@ -20,7 +20,8 @@ extern "C"
 		     SEXP R_response_cardinality, 
 		     SEXP R_bin_num, SEXP old_splits_info, SEXP R_cp,
 		     SEXP R_min_count);
-  SEXP applySplits(SEXP R_forest, SEXP R_splits_info, SEXP R_active_nodes);
+  SEXP applySplits(SEXP R_forest, SEXP R_splits_info, SEXP R_active_nodes,
+		   SEXP R_max_depth);
   SEXP updateNodes(SEXP R_observations, SEXP R_responses, 
 		   SEXP R_forest, SEXP R_active_nodes, SEXP R_splits_info,
 		   SEXP R_max_depth);
@@ -130,8 +131,14 @@ extern "C"
 	  UNPROTECT_PTR(splits_info);
 	splits_info = temp_splits_info;
 	SEXP temp_active_nodes;
+
+
 	printf("applying splits\n");
-	PROTECT(temp_active_nodes = applySplits(R_forest,splits_info,active_nodes));
+	PROTECT(temp_active_nodes = applySplits(R_forest,splits_info,
+						active_nodes, 
+						R_max_depth));
+
+
 	UNPROTECT_PTR(active_nodes);
 	active_nodes = temp_active_nodes;
 
@@ -144,12 +151,12 @@ extern "C"
 	PROTECT(active_nodes = allocVector(INTSXP,forest->nleaves));
 	int num_active_nodes = 0;
 
-	
+
 	for(int i = 0; i < forest->nleaves; i++)
 	  if(!forest->leaf_nodes[i]->additional_info->attempted &&
 	     forest->leaf_nodes[i]->additional_info->num_obs > 
 	     INTEGER(node_size)[0] &&
-	     forest->leaf_nodes[i]->additional_info->depth < max_depth)
+	     forest->leaf_nodes[i]->additional_info->depth <= max_depth+1)
 	      INTEGER(active_nodes)[num_active_nodes++] = i+1;
 	SETLENGTH(active_nodes,num_active_nodes);
 

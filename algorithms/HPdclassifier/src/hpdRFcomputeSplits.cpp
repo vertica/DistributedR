@@ -529,7 +529,8 @@ extern "C"
    @param R_splits_info - list of best splits 
    @param R_active_nodes - which nodes to update in the forest
    */
-  SEXP applySplits(SEXP R_forest, SEXP R_splits_info, SEXP R_active_nodes)
+  SEXP applySplits(SEXP R_forest, SEXP R_splits_info, SEXP R_active_nodes, 
+		   SEXP R_max_depth)
   {
     hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
     double min, max;
@@ -538,6 +539,7 @@ extern "C"
     PROTECT(new_active_nodes = allocVector(INTSXP,length(R_active_nodes)));
     int num_new_active_nodes=0;
     int* max_nodes = forest->max_nodes;
+    int max_depth = INTEGER(R_max_depth)[0];
     for(int i = 0; i < length(R_active_nodes) && i < length(R_splits_info); i++)
       {
 	int active_node = INTEGER(R_active_nodes)[i]-1;
@@ -548,9 +550,17 @@ extern "C"
 	int tree_id = node_curr->treeID-1;
 	node_curr->prediction = 
 	  *REAL(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),4));
+	node_curr->complexity = 
+	  REAL(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),3))[0];
+	node_curr->deviance = 
+	  REAL(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),5))[0];
+	node_curr->complexity = (node_curr->deviance-node_curr->complexity)/
+	  node_curr->deviance;
+
 
 	SEXP R_split_criteria = VECTOR_ELT(VECTOR_ELT(R_splits_info,i),2);
-	if(R_split_criteria != R_NilValue)
+	if(R_split_criteria != R_NilValue && 
+	   node_curr->additional_info->depth <= max_depth-1)
 	  {
 	    node_curr->split_variable = 
 	      INTEGER(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),1))[0];
@@ -561,12 +571,6 @@ extern "C"
 				node_curr->split_criteria_length);
 	    split_variable = node_curr->split_variable-1;
 
-	    node_curr->complexity = 
-	      REAL(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),3))[0];
-	    node_curr->deviance = 
-	      REAL(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),5))[0];
-	    node_curr->complexity = (node_curr->deviance-node_curr->complexity)/
-	      node_curr->deviance;
 
 	    min = forest->features_min[split_variable];
 	    max = forest->features_max[split_variable];
@@ -588,7 +592,8 @@ extern "C"
 	  }
 	SET_VECTOR_ELT(R_splits_info,num_new_active_nodes,
 		       VECTOR_ELT(R_splits_info,i));
-	INTEGER(new_active_nodes)[num_new_active_nodes++] = active_node+1;
+	if(node_curr->additional_info->depth <= max_depth-1)
+	  INTEGER(new_active_nodes)[num_new_active_nodes++] = active_node+1;
 	if(tree_id >= 0 && tree_id < forest->ntree && max_nodes[tree_id] > 0)
 	  max_nodes[tree_id] --;
       }

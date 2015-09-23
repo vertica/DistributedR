@@ -210,13 +210,12 @@ SEXP printNode(hpdRFnode *tree, int depth, int max_depth, SEXP classes)
 	tab;
 	printf("num_obs: %d\n", tree->additional_info->num_obs);
 
-	
+	/*
 	tab;
 	printf("indices: ");
 	for(int i = 0; i < tree->additional_info->num_obs; i++)
 	  printf("%d ", tree->additional_info->indices[i]);
 	printf("\n");
-	/*
 	tab;
 	printf("weights: ");
 	for(int i = 0; i < tree->additional_info->num_obs; i++)
@@ -320,12 +319,12 @@ hpdRFnode* createChildNode(hpdRFnode* parent,
   if(parent != NULL)
     {
       child->treeID = parent->treeID;
-      child->additional_info->depth = parent->additional_info->depth;
+      child->additional_info->depth = parent->additional_info->depth+1;
       child->additional_info->parent = parent;
     }
   else
     {
-      child->additional_info->depth = 0;
+      child->additional_info->depth = 1;
       child->additional_info->parent = NULL;
       child->treeID = -1;
     }

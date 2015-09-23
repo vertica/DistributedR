@@ -167,7 +167,10 @@
 	return(list(forest=forest, oob_indices = oob_indices))
 }
 
-.computeHistogramsAndSplits <- function(observations, responses, forest, active_nodes, workers, max_nodes, cp = 1, min_split = 1, trace = FALSE, hist = NULL)
+.computeHistogramsAndSplits <- function(observations, responses, forest, 
+			    active_nodes, workers, max_nodes, cp = 1, 
+			    min_split = 1, max_depth = 10000, 
+			    trace = FALSE, hist = NULL)
 {
 
 	dforest = attr(forest,"dforest")
@@ -268,8 +271,8 @@
 	total_completed = sum(getpartition(total_completed))
 	attr(splits_info,"total_completed") <- total_completed
 	active_nodes = as.vector(getpartition(active_nodes))
-	active_nodes = .Call("applySplits",forest,splits_info, active_nodes,
-	       PACKAGE = "HPdclassifier")
+	active_nodes = .Call("applySplits",forest,splits_info, active_nodes, 
+		     as.integer(max_depth), PACKAGE = "HPdclassifier")
 
 	timing_info <- Sys.time() - timing_info
 	if(trace)
@@ -883,7 +886,7 @@
 		print("computing splits from hists")
 		result = .computeHistogramsAndSplits(observations, 
 			   responses, forest, active_nodes,workers, max_nodes,
-			   cp, min_split, trace, hist)
+			   cp, min_split, max_depth = max_depth, trace, hist)
 
 		active_nodes = result[[2]]
 		splits_info = result[[1]]
