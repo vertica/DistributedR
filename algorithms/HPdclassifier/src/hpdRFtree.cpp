@@ -419,7 +419,7 @@ int convertTreetoRpart(hpdRFnode* tree, int* indices,
 		       double* split_index, int* ncat, 
 		       int rowID, double parent_cp, int node_index,
 		       int* features_cardinality, int* csplit_count,
-		       int current_depth)
+		       int current_depth, int max_depth)
 {
   indices[node_index] = rowID;
   var[node_index] = tree->split_criteria_length == 0? 0:tree->split_variable;
@@ -445,18 +445,20 @@ int convertTreetoRpart(hpdRFnode* tree, int* indices,
 
   parent_cp = complexity[node_index];
 
-  if(tree->left && current_depth < 30)
+  if(tree->left && current_depth < max_depth)
     node_index = convertTreetoRpart(tree->left, indices, var, dev,
 				    yval, complexity, split_index, ncat,
 				    rowID*2, parent_cp, 
 				    node_index+1, features_cardinality,
-				    csplit_count,current_depth+1);
-  if(tree->right && current_depth < 30)
+				    csplit_count,current_depth+1,
+				    max_depth);
+  if(tree->right && current_depth < max_depth)
     node_index = convertTreetoRpart(tree->right, indices, var, dev,
 				    yval, complexity, split_index, ncat,
 				    rowID*2+1, parent_cp, 
 				    node_index+1, features_cardinality,
-				    csplit_count,current_depth+1);
+				    csplit_count,current_depth+1,
+				    max_depth);
   return node_index;
 
 }

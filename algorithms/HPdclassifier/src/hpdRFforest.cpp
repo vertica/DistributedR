@@ -818,8 +818,9 @@ extern "C"
     hpdRFnode* tree = forest->trees[0];
     SEXP model;
     PROTECT(model = allocVector(VECSXP, 8));
+    int max_depth = 30;
 
-    int numNodes = countSubTree(tree, 30);
+    int numNodes = countSubTree(tree, max_depth);
     int max_ncat = 0;
     for(int i = 0; i < forest-> nfeature; i++)
       if(forest->features_cardinality[i] != NA_INTEGER &&
@@ -840,7 +841,7 @@ extern "C"
 		       REAL(dev), REAL(yval), REAL(complexity),
 		       REAL(split_index),INTEGER(ncat),
 		       1, 1, 0, forest->features_cardinality,
-		       &csplit_count, 0);
+		       &csplit_count, 1, max_depth);
 
     int nrow = csplit_count;
     csplit_count = 0;

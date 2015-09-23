@@ -144,19 +144,7 @@ extern "C"
 	PROTECT(active_nodes = allocVector(INTSXP,forest->nleaves));
 	int num_active_nodes = 0;
 
-
-	SEXP bad_nodes;
-	PROTECT(bad_nodes = allocVector(INTSXP,forest->nleaves));
-	for(int i = 0; i < forest->nleaves; i++)
-	  if(forest->leaf_nodes[i]->additional_info->num_obs < min_count)
-	      INTEGER(bad_nodes)[num_active_nodes++] = i+1;
-	SETLENGTH(bad_nodes, num_active_nodes);
-	undoSplits(R_forest,bad_nodes);
-	UNPROTECT_PTR(bad_nodes);
 	
-	num_active_nodes = 0;
-
-
 	for(int i = 0; i < forest->nleaves; i++)
 	  if(!forest->leaf_nodes[i]->additional_info->attempted &&
 	     forest->leaf_nodes[i]->additional_info->num_obs > 

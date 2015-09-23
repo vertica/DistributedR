@@ -306,9 +306,13 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 	colnames(model) <- c("var", "n","wt","dev", "yval", "complexity")
 	rownames(model) <- leaf_ids
 	model <- cbind(model, ncompete = 0, nsurrogate = 0)
+	valid_splits <- complete.cases(splits)
+	splits <- splits[valid_splits,]
+	if(!is.matrix(splits))
+		splits <- matrix(splits,ncol = 5)
 	colnames(splits) <- c("count","ncat", "improve","index","adj")
-	rownames(splits) <- model$var 
-	splits <- splits[complete.cases(splits),]
+	rownames(splits) <- model$var[valid_splits]
+
 	csplit <- matrix(3-csplit,nrow = attr(csplit,"nrow"))
 	model <- list(frame = model, splits = splits, csplit = csplit)
 	return(model)

@@ -104,7 +104,7 @@ int convertTreetoRpart(hpdRFnode* tree, int* indices,
 		       double* split_index, int* ncat, 
 		       int rowID, double parent_cp, int node_index,
 		       int* features_cardinality, int* csplit_count,
-		       int current_depth);
+		       int current_depth, int max_depth);
 
 
 void populateCsplit(hpdRFnode* tree, int* features_cardinality, 
