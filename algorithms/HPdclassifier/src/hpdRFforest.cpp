@@ -840,7 +840,7 @@ extern "C"
 		       REAL(dev), REAL(yval), REAL(complexity),
 		       REAL(split_index),INTEGER(ncat),
 		       1, 1, 0, forest->features_cardinality,
-		       &csplit_count, 1);
+		       &csplit_count, 0);
 
     int nrow = csplit_count;
     csplit_count = 0;

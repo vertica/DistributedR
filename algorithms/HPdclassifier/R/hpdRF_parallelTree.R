@@ -254,7 +254,6 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	free_sh_mem = free_sh_mem - max_nodes_per_iteration*sizeof_node_histogram 
 
 
-
 	threshold = as.integer(floor(threshold))
 	max_nodes_per_iteration = as.integer(floor(max_nodes_per_iteration))
 	nodes_per_executor = as.integer(floor(nodes_per_executor))
@@ -278,6 +277,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 
 	if(do.trace)
 		print(paste("trees left: ", ntree, " out of a total of ", ntree))
+
 
 	suppressWarnings(model <-
 		.hpdRF_distributed(observations, responses, 

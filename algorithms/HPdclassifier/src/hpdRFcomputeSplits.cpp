@@ -138,7 +138,8 @@ void NumericVariableRegressionTreeSplit(double* hist, int nbin,
 					double L2,
 					int** best_split,
 					int* best_split_length,
-					bool* complete, double cp)
+					bool* complete, double cp,
+					double min_count)
 
 {
   double L0_left = 0, L1_left = 0, L0_right = L0, L1_right = L1; 
@@ -152,7 +153,7 @@ void NumericVariableRegressionTreeSplit(double* hist, int nbin,
       L1_right -= hist[2*i+1];
       obj_temp = L2 -L1_left*L1_left/L0_left - L1_right*L1_right/L0_right;
       if(obj_temp < objective)
-	if((L0_left > 0) && (L0_right > 0) && 
+	if((L0_left > min_count) && (L0_right > min_count) && 
 	   (L1_left/L0_left != L1_right/L0_right))
 	  {
 	    objective = obj_temp;
@@ -183,7 +184,8 @@ void CategoricalVariableRegressionTreeSplit(double* hist, int nbin,
 					    double L2, 
 					    int** best_split,
 					    int* best_split_length,
-					    bool *complete, double cp)
+					    bool *complete, double cp,
+					    double min_count)
 {
 
   int* order = sort(hist,nbin);
@@ -197,7 +199,7 @@ void CategoricalVariableRegressionTreeSplit(double* hist, int nbin,
       L1_right -= hist[2*order[split] + 1];
       obj_temp = L2-L1_left*L1_left/L0_left - L1_right*L1_right/L0_right;
       if(obj_temp < objective)
-	if((L0_left > 0) && (L0_right > 0) && 
+	if((L0_left > min_count) && (L0_right > min_count) && 
 	   (L1_left/L0_left != L1_right/L0_right))
 	  {
 	    objective = obj_temp;
@@ -232,7 +234,8 @@ void NumericVariableClassificationTreeSplit(double* hist, int nbin,
 					    int classes, double* cost, 
 					    double sum, int** best_split,
 					    int* best_split_length,
-					    bool *complete, double cp)
+					    bool *complete, double cp,
+					    double min_count)
 {
 
   double* left_counts = (double* ) malloc(sizeof(double)*classes);
@@ -268,7 +271,9 @@ void NumericVariableClassificationTreeSplit(double* hist, int nbin,
       right_cost = 1 - right_sq/right_sum/right_sum;
       split_cost = left_sum/sum * left_cost + right_sum/sum * right_cost;
 
-      if(split_cost < (*cost))
+      if(split_cost < (*cost) &&
+	 left_sum > min_count &&
+	 right_sum > min_count)
 	{
 	  *cost = split_cost;
 	  split_val = i+1;
@@ -307,13 +312,15 @@ void  CategoricalVariableClassificationTreeSplit(double* hist,
 						int** best_split,
 						int* best_split_length,
 						 bool *complete,
-						 double cp)
+						 double cp, 
+						 double min_count)
 {
   
   NumericVariableClassificationTreeSplit(hist, classes_var, 
 					 classes_response, cost, 
 					 sum, best_split, 
-					 best_split_length, complete, cp);
+					 best_split_length, complete, cp,
+					 min_count);
   
   
   int split_location = **best_split;
@@ -344,7 +351,7 @@ int* computeSplit(SEXP histogram, int bin_num, int class_num,
 		  double *cost, bool feature_categorical,
 		  bool response_categorical,
 		  double L0, double L1, bool* complete,
-		  int *best_split_length, double cp)
+		  int *best_split_length, double cp, double min_count)
 {
   int* best_split=NULL;
   SEXP split_criteria;
@@ -354,7 +361,8 @@ int* computeSplit(SEXP histogram, int bin_num, int class_num,
 					 cost, L0, L1, 
 					 REAL(getAttrib(histogram,
 							install("L2")))[0],
-					 &best_split, best_split_length, complete, cp);
+					 &best_split, best_split_length, complete, cp,
+					 min_count);
     }
   if(!response_categorical && feature_categorical)
     {
@@ -362,20 +370,23 @@ int* computeSplit(SEXP histogram, int bin_num, int class_num,
 					     cost, L0, L1, 
 					     REAL(getAttrib(histogram,
 							    install("L2")))[0],
-					     &best_split, best_split_length, complete, cp);
+					     &best_split, best_split_length, complete, cp,
+					     min_count);
     }
   if(response_categorical && !feature_categorical)
     {
       NumericVariableClassificationTreeSplit(REAL(histogram), bin_num, 
 					     class_num, cost, L0, 
-					     &best_split, best_split_length, complete, cp);
+					     &best_split, best_split_length, complete, cp,
+					     min_count);
       
     }
   if(response_categorical && feature_categorical)
     {
       CategoricalVariableClassificationTreeSplit(REAL(histogram), bin_num, 
 						 class_num, cost, L0, 
-						 &best_split, best_split_length, complete, cp);
+						 &best_split, best_split_length, complete, cp,
+						 min_count);
       
     }
   return best_split;
@@ -395,7 +406,7 @@ extern "C"
 		     SEXP R_features_cardinality, 
 		     SEXP R_response_cardinality, 
 		     SEXP R_bin_num, SEXP old_splits_info,
-		     SEXP R_cp)
+		     SEXP R_cp, SEXP R_min_count)
   {
 
 
@@ -480,7 +491,7 @@ extern "C"
 					   features_categorical[featureIndex] != NA_INTEGER,
 					   response_categorical, L0, L1, 
 					   &complete, &curr_split_length,
-					   cp);
+					   cp, REAL(R_min_count)[0]);
 	    if((complete && hist_cost < REAL(VECTOR_ELT(split_info,3))[0]) ||
 	       (complete && hist_cost == REAL(VECTOR_ELT(split_info,3))[0] && featureIndex > best_featureIndex))
 	      {

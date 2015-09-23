@@ -167,7 +167,7 @@
 	return(list(forest=forest, oob_indices = oob_indices))
 }
 
-.computeHistogramsAndSplits <- function(observations, responses, forest, active_nodes, workers, max_nodes, cp = 1, trace = FALSE, hist = NULL)
+.computeHistogramsAndSplits <- function(observations, responses, forest, active_nodes, workers, max_nodes, cp = 1, min_split = 1, trace = FALSE, hist = NULL)
 {
 
 	dforest = attr(forest,"dforest")
@@ -234,7 +234,7 @@
 			features_cardinality = forestparam[[1]],
 			response_cardinality = forestparam[[2]],
 			bin_num = forestparam[[6]],
-			cp = cp)
+			cp = cp, min_split = min_split)
 		{
 
 			active_nodes = as.integer(active_nodes)
@@ -254,7 +254,7 @@
 			     }))
 			splits_info = .Call("computeSplits",hist, active_nodes, 
 				features_cardinality,response_cardinality,
-				bin_num, NULL, cp,
+				bin_num, NULL, cp, as.numeric(min_split),
 	       			PACKAGE = "HPdclassifier")
 			total_completed = matrix(attr(splits_info,"total_completed"),
 					nrow = 1)
@@ -883,7 +883,7 @@
 		print("computing splits from hists")
 		result = .computeHistogramsAndSplits(observations, 
 			   responses, forest, active_nodes,workers, max_nodes,
-			   cp, trace, hist)
+			   cp, min_split, trace, hist)
 
 		active_nodes = result[[2]]
 		splits_info = result[[1]]

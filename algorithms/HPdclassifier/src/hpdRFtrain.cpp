@@ -18,7 +18,8 @@ extern "C"
   SEXP computeSplits(SEXP R_histograms, SEXP R_active_nodes, 
 		     SEXP R_features_cardinality, 
 		     SEXP R_response_cardinality, 
-		     SEXP R_bin_num, SEXP old_splits_info, SEXP R_cp);
+		     SEXP R_bin_num, SEXP old_splits_info, SEXP R_cp,
+		     SEXP R_min_count);
   SEXP applySplits(SEXP R_forest, SEXP R_splits_info, SEXP R_active_nodes);
   SEXP updateNodes(SEXP R_observations, SEXP R_responses, 
 		   SEXP R_forest, SEXP R_active_nodes, SEXP R_splits_info,
@@ -111,6 +112,7 @@ extern "C"
 	  UNPROTECT_PTR(hist);
 	hist = temp_hist;
 
+
 	SEXP forestparam;
 	PROTECT(forestparam = getForestParameters(R_forest));
 	
@@ -120,7 +122,9 @@ extern "C"
 					    VECTOR_ELT(forestparam,0),
 					    VECTOR_ELT(forestparam,1),
 					    VECTOR_ELT(forestparam,5),
-						 splits_info, R_cp));
+						 splits_info, R_cp,
+						 ScalarReal(min_count)));
+
 	UNPROTECT_PTR(forestparam);
 	if(splits_info != R_NilValue)
 	  UNPROTECT_PTR(splits_info);
@@ -130,6 +134,7 @@ extern "C"
 	PROTECT(temp_active_nodes = applySplits(R_forest,splits_info,active_nodes));
 	UNPROTECT_PTR(active_nodes);
 	active_nodes = temp_active_nodes;
+
 	
 	printf("updating nodes\n");
 	updateNodes(observations, responses, R_forest, 
@@ -139,7 +144,7 @@ extern "C"
 	PROTECT(active_nodes = allocVector(INTSXP,forest->nleaves));
 	int num_active_nodes = 0;
 
-	
+
 	SEXP bad_nodes;
 	PROTECT(bad_nodes = allocVector(INTSXP,forest->nleaves));
 	for(int i = 0; i < forest->nleaves; i++)
@@ -150,6 +155,7 @@ extern "C"
 	UNPROTECT_PTR(bad_nodes);
 	
 	num_active_nodes = 0;
+
 
 	for(int i = 0; i < forest->nleaves; i++)
 	  if(!forest->leaf_nodes[i]->additional_info->attempted &&

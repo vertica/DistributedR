@@ -175,7 +175,6 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	max_nodes_per_iteration = as.integer(floor(max_nodes_per_iteration))
 	nodes_per_executor = as.integer(floor(nodes_per_executor))
 
-
 	if(do.trace)
 		print(paste("threshold",
 			toString(threshold),sep=" = "))

@@ -94,6 +94,7 @@ void reformatTree(hpdRFnode* tree, SEXP forest, int* index,
 extern "C"
 {
 SEXP undoSplits(SEXP R_forest, SEXP R_node_ids);
+SEXP printForest(SEXP R_forest, SEXP R_max_depth, SEXP classes);
 }
 
 
