@@ -153,7 +153,7 @@ void NumericVariableRegressionTreeSplit(double* hist, int nbin,
       L1_right -= hist[2*i+1];
       obj_temp = L2 -L1_left*L1_left/L0_left - L1_right*L1_right/L0_right;
       if(obj_temp < objective)
-	if((L0_left > min_count) && (L0_right > min_count) && 
+	if((L0_left >= min_count) && (L0_right >= min_count) && 
 	   (L1_left/L0_left != L1_right/L0_right))
 	  {
 	    objective = obj_temp;
@@ -199,7 +199,7 @@ void CategoricalVariableRegressionTreeSplit(double* hist, int nbin,
       L1_right -= hist[2*order[split] + 1];
       obj_temp = L2-L1_left*L1_left/L0_left - L1_right*L1_right/L0_right;
       if(obj_temp < objective)
-	if((L0_left > min_count) && (L0_right > min_count) && 
+	if((L0_left >= min_count) && (L0_right >= min_count) && 
 	   (L1_left/L0_left != L1_right/L0_right))
 	  {
 	    objective = obj_temp;
@@ -272,8 +272,8 @@ void NumericVariableClassificationTreeSplit(double* hist, int nbin,
       split_cost = left_sum/sum * left_cost + right_sum/sum * right_cost;
 
       if(split_cost < (*cost) &&
-	 left_sum > min_count &&
-	 right_sum > min_count)
+	 left_sum >= min_count &&
+	 right_sum >= min_count)
 	{
 	  *cost = split_cost;
 	  split_val = i+1;
