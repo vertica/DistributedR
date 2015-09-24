@@ -58,9 +58,7 @@ csv2dframe(url, ...)
                                  "hdfsPort": 9000, \cr
                                  "hdfsHost": "172.17.0.3", \cr
                                  "hdfsUser": "jorgem" \cr
-                                 \}
-
-TODO explain helper script to copy hdfsConfigurationFile to all nodes.}
+                                 \}}
 }
 \value{
 A distributed data frame representing the CSV file.

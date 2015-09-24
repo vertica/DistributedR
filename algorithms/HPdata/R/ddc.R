@@ -61,8 +61,6 @@
 #'                                  "hdfsUser": "jorgem" \cr
 #'                                  \}
 #'
-#' TODO explain helper script to copy hdfsConfigurationFile to all nodes.
-#'
 #' @return A distributed data frame representing the CSV file.
 #' @examples
 #' df <- csv2dframe(url=paste(system.file(package='HPdata'),'/tests/data/ex001.csv',sep=''), schema='a:int64,b:character')
@@ -222,13 +220,15 @@ orc2dframe <- function(url, ...) {
                 }
             }
     )
-    # TODO catch error when nlines < nexecutors and return a darray with a single partition using:
-    # d <- dframe(numpartitions=1)
-    # read.csv('../ddc/test/data/ex002.csv',header=FALSE,col.names=c('a','b','c','d'))
 
     c <- NULL
     if("schema" %in% names(options)) {
+        # CSV
         c <- hdfsconnector::schema2colnames(as.character(options['schema']))
+    }
+    else if(as.character(options['fileType']) == 'orc') {
+        # ORC
+        c <- hdfsconnector::orccolnames(url, as.character(options['hdfsConfigurationFile']))
     }
     colnames(d) <- c;
     d # return dframe
