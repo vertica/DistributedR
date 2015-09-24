@@ -292,7 +292,7 @@ mtx <- matrix(c(1:100),nrow=20)
   df <- data.frame(dfa,dfb,dfc)
 
   # creating dframe with default block size
-  ddf <- as.dframe(df)
+  ddf <- as.dframe(df, blocks=c(1,3))
   expect_equal(ddf@dim, c(3,3))
   expect_equal(ddf@blocks, c(1,3))
   expect_equal(colnames(ddf), colnames(df))
