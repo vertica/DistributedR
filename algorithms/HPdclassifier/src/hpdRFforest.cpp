@@ -118,7 +118,8 @@ extern "C"
 			SEXP response_cardinality, 
 			SEXP R_features_num, SEXP R_weights, 
 			SEXP R_observation_indices, SEXP R_scale,
-			SEXP R_max_nodes, SEXP R_tree_ids)
+			SEXP R_max_nodes, SEXP R_tree_ids,
+			SEXP R_starting_depth)
   {
     hpdRFforest *forest = (hpdRFforest *) malloc(sizeof(hpdRFforest));
     SEXP R_forest = PROTECT(R_MakeExternalPtr(forest, R_NilValue, R_NilValue));
@@ -158,6 +159,7 @@ extern "C"
 					   TRUE,INTEGER(observation_indices), 
 					   REAL(weight), length(weight),
 					   forest->features_num);
+	forest->trees[i]->additional_info->depth = INTEGER(R_starting_depth)[i];
 
 	forest->leaf_nodes[i] = forest->trees[i];
 	hpdRFnode* tree = forest->trees[i];
@@ -701,6 +703,24 @@ extern "C"
     forest->ntree = length(R_treeIDs);
 
     return R_NilValue;
+  }
+  SEXP getLeafDepths(SEXP R_forest)
+  {
+    hpdRFforest * forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
+    SEXP depths;
+    PROTECT(depths = allocVector(INTSXP,forest->nleaves));
+    for(int i = 0 ; i < forest->nleaves; i++)
+      {
+	if(forest->leaf_nodes != NULL &&
+	   forest->leaf_nodes[i] != NULL && 
+	   forest->leaf_nodes[i]->additional_info != NULL)
+	  INTEGER(depths)[i] = forest->leaf_nodes[i]->additional_info->depth;
+	else
+	  INTEGER(depths)[i] = 0;
+      }
+    UNPROTECT(1);
+    return depths;
+
   }
 
   SEXP getLeafCounts(SEXP R_forest)

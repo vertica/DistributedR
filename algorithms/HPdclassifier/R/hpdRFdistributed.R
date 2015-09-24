@@ -63,6 +63,7 @@
 			replacement = TRUE,
 			max_nodes = Inf,
 			scale = 1L,
+			starting_depth = rep(1L, ntree),
 			trace = FALSE)
 {
 	timing_info <- Sys.time()
@@ -82,7 +83,7 @@
 	       as.numeric(features_max), 
 	       features_cardinality, response_cardinality, 
 	       features_num,null_weights,null_indices, as.integer(scale), max_nodes,
-	       as.integer(1:ntree),
+	       as.integer(1:ntree), starting_depth,
 	       PACKAGE = "HPdclassifier")
 
 
@@ -108,6 +109,7 @@
 			max_nodes = max_nodes,
 			replacement = replacement,
 			scale = scale,
+			starting_depth = starting_depth,
 			init_seed = sample.int(1000,i))
 		{
 			set.seed(init_seed)
@@ -149,6 +151,7 @@
 			       weights,observation_indices, 
 			       as.integer(scale), max_nodes,
 			       as.integer(1:ntree),
+			       starting_depth,
 	       		       PACKAGE = "HPdclassifier")
 			forest = list(.Call("serializeForest", dforest))
 			.Call("garbageCollectForest",dforest)
@@ -376,9 +379,11 @@
 			forest = .Call("unserializeForest",forest[[1]])
 			weights_local = .Call("getLeafWeights",forest);
 			observations_indices_local = .Call("getLeafIndices",forest);
+			starting_depth = .Call("getLeafDepths",forest)
 
 			loadData <- function(nodes, observations, responses, 
-				 weights_local, observations_indices_local)
+				 weights_local, observations_indices_local,
+				 starting_depth)
 		   	{
 
 			weights_local = weights_local[nodes]
@@ -401,7 +406,9 @@
 			local_data = list(observations_local=observations_local, 
 				   responses_local = responses_local, 
 				   weights_local = weights_local, 
-				   observations_indices_local = observations_indices_local)
+				   observations_indices_local = 
+				   	observations_indices_local,
+				   starting_depth = starting_depth[nodes])
 			return(local_data)
 			}
 
@@ -409,7 +416,8 @@
 				      observations = observations, 
 				      responses = responses, 
 				      weights_local = weights_local,
-				      observations_indices_local)
+				      observations_indices_local,
+				      starting_depth)
 			update(data_local)
 			.Call("garbageCollectForest",forest)
 			gc()			
@@ -458,6 +466,8 @@
 			      	   function(x) x$weights_local)
 		observations_indices_local = lapply(data_local, 
 				   function(x) x$observations_indices_local)
+		starting_depth = lapply(data_local, 
+				   function(x) x$starting_depth)
 		rm(data_local)
 
 
@@ -476,6 +486,7 @@
 		lapply(1:length(observations_indices_local[[1]]), function(i)
 			lapply(1:length(observations_indices_local), function(j)
 				observations_indices_local[[j]][[i]]))
+		starting_depth = as.integer(unlist(starting_depth))
 
 		observations_indices = lapply(observations_indices_local, 
 			function(obs_local) do.call(c,
@@ -498,7 +509,7 @@
 			tree_ids = as.integer(tree_ids), 
 			max_nodes_per_iteration = max_nodes_per_iteration,
 			min_split = min_split, max_depth = max_depth,
-			random_seed = random_seed)
+			starting_depth = starting_depth, random_seed = random_seed)
 
 		
 		dforest = list(.Call("serializeForest",forest))
@@ -834,12 +845,12 @@
       replacement = TRUE, cutoff , classes, completeModel = FALSE, 
       max_nodes_per_iteration =  .Machine$integer.max, 
       trace = FALSE, features_min = NULL, features_max = NULL, scale = 1L, 
-      cp = 0, min_split = 1, max_depth = 10000 )
+      cp = 0, min_split = 1, max_depth = 10000, starting_depth = rep(1L,ntree))
 {
 	gc()
 	workers = sum(distributedR_status()$Inst)
 	threshold = max(threshold, node_size)
-
+	threshold = nrow(observations)/4
 	if(trace)
 	print("computing feature min/max")
 	if(is.null(features_min) | is.null(features_min))
@@ -863,7 +874,7 @@
 	initparam = .initializeDForest(observations, responses, ntree, bin_max, 
 		features_min, features_max, features_cardinality,
 		response_cardinality, features_num, weights, 
-		replacement, max_nodes, scale, 
+		replacement, max_nodes, scale, starting_depth, 
 		trace)
 
 	forest = initparam$forest
@@ -897,7 +908,9 @@
 			   forest, active_nodes, splits_info, 
 			   min_split, max_depth,trace)
 		leaf_attempted = .Call("getAttemptedNodes",forest)
-		active_nodes = which(leaf_nodes > threshold & leaf_attempted == 0)
+		depths = .Call("getLeafDepths",forest)
+		active_nodes = which(leaf_nodes > threshold & leaf_attempted == 0 &
+			     depths <= max_depth+1)
 		max_nodes = .Call("getMaxNodes", forest)
 		gc()
 	}
@@ -980,8 +993,8 @@
       node_size=1, weights=NULL, observation_indices=NULL, 
       features_min = NULL, features_max = NULL, max_nodes = Inf,
       tree_ids = NULL, max_nodes_per_iteration = .Machine$integer.max, 
-      max_time = -1, cp = 0, max_depth = 10000, min_split = 1,
-      trace = TRUE, random_seed = NULL)
+      max_time = -1, cp = 0, max_depth = 10000, min_split = 1, 
+      starting_depth = rep(1L, ntree), trace = TRUE, random_seed = NULL)
 {
 	if(!is.null(random_seed))
 	set.seed(random_seed)
@@ -1023,7 +1036,8 @@
 			features_min, features_max, max_nodes, tree_ids, 
 			max_nodes_per_iteration, trace, scale, max_time, 
 			as.numeric(cp), as.integer(max_depth), 
-			as.integer(min_split),as.integer(random_seed),
+			as.integer(min_split), starting_depth, 
+			starting_depth, as.integer(random_seed),
 			PACKAGE="HPdclassifier")
 
 	return(forest)

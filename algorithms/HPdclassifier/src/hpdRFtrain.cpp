@@ -10,7 +10,8 @@ extern "C"
 			SEXP response_cardinality, 
 			SEXP R_features_num, SEXP R_weights, 
 			SEXP R_observation_indices, SEXP R_scale,
-			SEXP R_max_nodes, SEXP R_tree_ids);
+			SEXP R_max_nodes, SEXP R_tree_ids,
+			SEXP R_starting_depth);
   SEXP buildHistograms(SEXP R_observations, SEXP R_responses, 
 		       SEXP R_forest,
 		       SEXP R_active_nodes, SEXP R_random_features,
@@ -38,7 +39,7 @@ extern "C"
 		   SEXP max_nodes, SEXP tree_ids, SEXP max_nodes_per_iteration,
 		   SEXP trace, SEXP scale, SEXP max_time, 
 		   SEXP R_cp, SEXP R_max_depth, SEXP R_min_count,
-		   SEXP R_random_seed)
+		   SEXP R_starting_depth, SEXP R_random_seed)
   {
     srand(INTEGER(R_random_seed)[0]);
     SEXP R_forest;
@@ -49,7 +50,8 @@ extern "C"
 				      response_cardinality,
 				      features_num, weights, 
 				      observation_indices,
-				      scale, max_nodes, tree_ids));
+				      scale, max_nodes, tree_ids,
+				      R_starting_depth));
     hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
     SEXP hist = R_NilValue;
     SEXP splits_info = R_NilValue;

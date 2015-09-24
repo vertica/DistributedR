@@ -25,7 +25,7 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 								response_name = response_name)
 				{
 					ytest <- data.frame(xtest[,response_name])
-					update(y)
+					update(ytest)
 				},progress = FALSE)
 				}
 				if(is.data.frame(xtest))
