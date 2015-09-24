@@ -55,7 +55,7 @@ If globbing is not used we only load one file and the number of partitions will 
 
 Type conversions work as follows:
                \tabular{ll}{
-                   ORC type          \\tab R type        \cr
+                   ORC type          |\tab R type        \cr
                    -                 |\tab -             \cr
                    byte/short/int    |\tab integer       \cr
                    float/double      |\tab numeric       \cr
