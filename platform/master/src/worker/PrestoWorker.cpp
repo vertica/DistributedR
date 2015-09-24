@@ -1826,7 +1826,25 @@ static void ParseXMLConfig(const string &config,
  * @return optimal number of executors
  */
 static int auto_executors() {
-  int num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+  int num_cores = 0;
+  // Logical cores
+  //num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+
+  // Physical cores
+  std::string cmd = "cat /proc/cpuinfo | egrep 'core id|physical id' | tr -d '\n' | sed s/'physical'/'\\nphysical'/g | grep -v ^$ | sort | uniq | wc -l";
+  FILE* cmdrun = popen(cmd.c_str(), "r");
+  if (!cmdrun) 
+    num_cores = 0;
+
+  char outbuf[16];
+  std::string out = "";
+  while(!feof(cmdrun)) {
+    if(fgets(outbuf, 16, cmdrun) != NULL)
+    	out += outbuf;
+  }
+  pclose(cmdrun);
+  num_cores = atoi(out.c_str());
+
   return num_cores > 0 ? (num_cores) : DEFAULT_EXECUTORS;
 }
 

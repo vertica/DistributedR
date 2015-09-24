@@ -12,7 +12,7 @@
 \arguments{
   \item{model}{
     a model created in R or Distributed R which user wants to save in database.
-    Currently, regression, kmeans and random forest models are supported.
+    Currently, regression, kmeans, random forest, and gbm models are supported.
   }
   \item{dsn}{
     Data Source Name(DSN) as provided in ODBC.INI file to connect to Vertica database.
@@ -35,7 +35,7 @@
   in a Vertica database used in Data Source Name(\code{\link{dsn}}). The models saved in Vertica 
   using this function can be looked up by querying public.R_model table in Vertica. 
 
-  deploy.model supports regression, kmeans and random forest models as of now.
+  deploy.model supports regression, kmeans, random forest, and gbm models as of now.
   It is suggested to deploy a model which does not have attributes which are 
   distributed objects -\code{\link{darray}}, \code{\link{dframe}}, \code{\link{dlist}}
   as it may cause issues while reading the models in the database.

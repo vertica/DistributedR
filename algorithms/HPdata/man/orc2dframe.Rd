@@ -4,16 +4,14 @@
 \alias{orc2dframe}
 \title{Load an ORC file into a distributed data frame}
 \usage{
-orc2dframe(url, ...)
+orc2dframe(url, selectedStripes = "",
+  hdfsConfigurationFile = paste(system.file(package = "hdfsconnector"),
+  "/conf/hdfs.json", sep = ""))
 }
 \arguments{
 \item{url}{File URL. Examples: '/tmp/file.orc', 'hdfs:///file.orc'.}
 
-\item{selectStripes}{ORC stripes to include. Stripes need to be consecutive.}
-
-\item{fileType}{File type is determined automatically by the file extension.
-
-                Users can use fileType to override it. Useful when files don't have extensions.}
+\item{selectedStripes}{ORC stripes to include. Stripes need to be consecutive. If not specified defaults to all the stripes in the ORC file.}
 
 \item{hdfsConfigurationFile}{By default: \code{paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')}.
 

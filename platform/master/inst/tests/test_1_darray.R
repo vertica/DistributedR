@@ -156,12 +156,12 @@ test_that("as.darray support for input sparse matrix", {
   input1 <- Matrix(data=10, nrow=5, ncol=4, sparse=TRUE)
   input2 <- Matrix(data=10, nrow=5, ncol=5, sparse=TRUE)
 
-  output <- as.darray(input1)
+  output <- as.darray(input1, blocks=c(1,4))
   expect_equal(output@dim, c(5,4))
   expect_equal(output@blocks, c(1,4))
   expect_equal(output@sparse, TRUE)
 
-  output <- as.darray(input2)
+  output <- as.darray(input2, blocks=c(1,5))
   expect_equal(output@dim, c(5,5))
   expect_equal(output@blocks, c(1,5))
   expect_equal(output@sparse, TRUE)

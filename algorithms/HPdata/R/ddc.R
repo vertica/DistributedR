@@ -39,9 +39,6 @@
 #'                }
 #' @param delimiter Column separator. Example: delimiter='|'. By default delimiter is ','.
 #' @param commentCharacter Discard lines starting with this character. Leading spaces are ignored.
-#' @param fileType File type is determined automatically by the file extension.
-#'
-#'                 Users can use fileType to override it. Useful when files don't have extensions.
 #' @param hdfsConfigurationFile By default: \code{paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')}.
 #'
 #'                              Options are:
@@ -65,8 +62,14 @@
 #' @examples
 #' df <- csv2dframe(url=paste(system.file(package='HPdata'),'/tests/data/ex001.csv',sep=''), schema='a:int64,b:character')
 
-csv2dframe <- function(url, ...) {
-    options = list(...)
+csv2dframe <- function(url, schema, delimiter=',', commentCharacter='#', 
+                       hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')) {
+    options = list()
+    options['schema'] = schema
+    options['delimiter'] = delimiter
+    options['commentCharacter'] = commentCharacter
+    options['hdfsConfigurationFile'] = hdfsConfigurationFile
+
     options['fileType'] = 'csv'
     .ddc_read(url, options)
 #    tryCatch({
@@ -124,10 +127,7 @@ csv2dframe <- function(url, ...) {
 #'                }
 #'
 #' @param url File URL. Examples: '/tmp/file.orc', 'hdfs:///file.orc'.
-#' @param selectStripes ORC stripes to include. Stripes need to be consecutive.
-#' @param fileType File type is determined automatically by the file extension.
-#'
-#'                 Users can use fileType to override it. Useful when files don't have extensions.
+#' @param selectedStripes ORC stripes to include. Stripes need to be consecutive. If not specified defaults to all the stripes in the ORC file.
 #' @param hdfsConfigurationFile By default: \code{paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')}.
 #'
 #'                              Options are:
@@ -151,8 +151,12 @@ csv2dframe <- function(url, ...) {
 #' df <- orc2dframe(url=paste(system.file(package='HPdata'),'/tests/data/TestOrcFile.test1.orc',sep=''))
 
 
-orc2dframe <- function(url, ...) {
-    options = list(...)
+orc2dframe <- function(url, selectedStripes='', 
+                       hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')) {
+    options = list()
+    options['selectedStripes'] = selectedStripes
+    options['hdfsConfigurationFile'] = hdfsConfigurationFile
+
     options['fileType'] = 'orc'
     .ddc_read(url, options)
 }
