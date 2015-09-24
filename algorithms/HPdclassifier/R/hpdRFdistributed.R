@@ -850,7 +850,6 @@
 	gc()
 	workers = sum(distributedR_status()$Inst)
 	threshold = max(threshold, node_size)
-	threshold = nrow(observations)/4
 	if(trace)
 	print("computing feature min/max")
 	if(is.null(features_min) | is.null(features_min))
