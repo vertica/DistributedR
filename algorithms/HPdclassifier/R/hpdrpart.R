@@ -203,7 +203,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	     min_split = control$minbucket, max_depth = control$maxdepth, 
 	     cp = control$cp)
 	})
-
+	.Call("simplifyForest",tree$forest)
 	if(keep.model)
 	{	     
 		if(do.trace)
@@ -261,34 +261,48 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 		stop("'newdata' is a required argument")
 	if(!is.dframe(newdata) & !is.data.frame(newdata))
 		stop("'newdata' must be a dframe or data.frame")
-	was.data.frame = is.data.frame(newdata)
-	if(is.data.frame(newdata))
-		newdata = as.dframe(newdata)
-	if(attr(newdata,"npartitions")[2] > 1)
-		stop("'newdata' must be partitioned rowise")
 
-	predictions = dframe(npartitions = npartitions(newdata))
-	foreach(i,1:npartitions(newdata),
-		function(model=model, 
-			newdata = splits(newdata,i), 
-			predictions = splits(predictions,i),
-			args = list(...))
-		{
-			library(rpart)	
-			class(model) <- class(model)[-1]
-			args = c(list(object = model, newdata = newdata),args)
-			if(!is.element("type",names(args)))
+	if(is.dframe(newdata))
+	{
+		if(attr(newdata,"npartitions")[2] > 1)
+			stop("'newdata' must be partitioned rowise")
+
+		predictions = dframe(npartitions = npartitions(newdata))
+		foreach(i,1:npartitions(newdata),
+			function(model=model, 
+				newdata = splits(newdata,i), 
+				predictions = splits(predictions,i),
+				args = list(...))
 			{
-				args$type = "vector"
-				if(model$method == "gini")
-					args$type = "class"
-			}	
-			predictions = do.call(predict,args)
-			predictions = data.frame(predictions)
-			update(predictions)
-		},progress = do.trace)
-	if(was.data.frame)
-		predictions = getpartition(predictions)
+				library(rpart)	
+				class(model) <- class(model)[-1]
+				args = c(list(object = model, newdata = newdata),args)
+				if(!is.element("type",names(args)))
+				{
+					args$type = "vector"
+					if(model$method == "gini")
+						args$type = "class"
+				}	
+				predictions = do.call(predict,args)
+				predictions = data.frame(predictions)
+				update(predictions)
+			},progress = do.trace)
+	}
+	if(is.data.frame(newdata))
+	{	
+		args = list(...)
+		class(model) <- "rpart"
+		args = c(list(object = model, newdata = newdata),args)
+		if(!is.element("type",names(args)))
+		{
+			args$type = "vector"
+			if(model$method == "gini")
+				args$type = "class"
+		}	
+		predictions = do.call(predict,args)
+		predictions = data.frame(predictions)
+		class(model) <- c("hpdrpart","rpart")
+	}
 	return(predictions)
 }
 

@@ -246,7 +246,39 @@ SEXP printNode(hpdRFnode *tree, int depth, int max_depth, SEXP classes)
     return R_NilValue;
   }
 
+void simplifyTree(hpdRFnode *tree)
+{
+  if(!tree->left && !tree->right)
+    return;
+  bool left=true,right=true;
+  if(tree->left)
+    {
+      simplifyTree(tree->left);
+      if(tree->left->left || tree->left->right)
+	left = false;
+    }
+  if(tree->right)
+    {
+      simplifyTree(tree->right);
+      if(tree->right->left || tree->right->right)
+	right = false;
+    }
+  if(left && right &&
+     tree->left->prediction == tree->right->prediction)
+    {
+      if(tree->left)
+	destroyTree(tree->left);
+      if(tree->right)
+	destroyTree(tree->right);
+      tree->left = NULL;
+      tree->right = NULL;
+      free(tree->split_criteria);
+      tree->split_criteria_length = 0;
+      tree->split_criteria = NULL;
+      tree->split_variable = -1;
+    }
 
+}
 
 void destroyTree(hpdRFnode *tree)
 {

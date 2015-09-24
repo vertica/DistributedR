@@ -96,7 +96,6 @@ void updateLeafNodeWithPredictions(SEXP R_responses, hpdRFnode *node,
 extern "C" 
 {
 
-
   /*
    this function initializes the forest 
    @param R_observations - dataframe of observations of feature vectors
@@ -883,6 +882,14 @@ extern "C"
     UNPROTECT(1);
     return forest;
   }
-  
+
+
+  void simplifyForest(SEXP R_forest)
+  {
+    hpdRFforest * forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
+    for(int i = 0; i < forest->ntree; i++)
+      simplifyTree(forest->trees[i]);
+  }
+
 }
 
