@@ -4,7 +4,9 @@
 \alias{csv2dframe}
 \title{Load a CSV file into a distributed data frame.}
 \usage{
-csv2dframe(url, ...)
+csv2dframe(url, schema, delimiter = ",", commentCharacter = "#",
+  hdfsConfigurationFile = paste(system.file(package = "hdfsconnector"),
+  "/conf/hdfs.json", sep = ""))
 }
 \arguments{
 \item{url}{File URL. Examples: '/tmp/file.csv', 'hdfs:///file.csv'.
@@ -36,10 +38,6 @@ csv2dframe(url, ...)
 \item{delimiter}{Column separator. Example: delimiter='|'. By default delimiter is ','.}
 
 \item{commentCharacter}{Discard lines starting with this character. Leading spaces are ignored.}
-
-\item{fileType}{File type is determined automatically by the file extension.
-
-                Users can use fileType to override it. Useful when files don't have extensions.}
 
 \item{hdfsConfigurationFile}{By default: \code{paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')}.
 
