@@ -6,7 +6,7 @@
 \usage{
 csv2dframe(url, schema, delimiter = ",", commentCharacter = "#",
   hdfsConfigurationFile = paste(system.file(package = "hdfsconnector"),
-  "/conf/hdfs.json", sep = ""))
+  "/conf/hdfs.json", sep = ""), skipHeader = FALSE)
 }
 \arguments{
 \item{url}{File URL. Examples: '/tmp/file.csv', 'hdfs:///file.csv'.
@@ -57,6 +57,8 @@ csv2dframe(url, schema, delimiter = ",", commentCharacter = "#",
                                  "hdfsHost": "172.17.0.3", \cr
                                  "hdfsUser": "jorgem" \cr
                                  \}}
+
+\item{skipHeader}{Treat first line as the CSV header and discard it.}
 }
 \value{
 A distributed data frame representing the CSV file.
