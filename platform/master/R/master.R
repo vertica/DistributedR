@@ -113,7 +113,7 @@ clean_string <- function(string) {
 
 start_workers <- function(cluster_conf, storage,
                           bin_path="./bin/start_proto_worker.sh",
-                          inst=0, mem=0, rmt_home="", rmt_uid="", log=2) {
+                          executors=0, mem=0, rmt_home="", rmt_uid="", log=2) {
   if (rmt_home == ""){
     rmt_home <- getwd()
   }
@@ -161,10 +161,10 @@ start_workers <- function(cluster_conf, storage,
       r$Executors <- clean_string(r$Executors)
 
       m <- ifelse(as.numeric(mem)>0, mem, ifelse(is.na(r$SharedMemory), 0, r$SharedMemory))
-      e <- ifelse(as.numeric(inst)>0, inst, ifelse(is.na(r$Executors), 0, r$Executors))	
+      e <- ifelse(as.numeric(executors)>0, executors, ifelse(is.na(r$Executors), 0, r$Executors))	
       if (as.numeric(e)>64)
       {
-        message(paste("Warning: distributedR only supports 64 R instances per worker.\nNumber of R instances has been truncated from ", e, " to 64 for worker ", r$Hostname, "\n", sep=""))
+        message(paste("Warning: distributedR only supports 64 Executors per worker.\nNumber of Executors has been truncated from ", e, " to 64 for worker ", r$Hostname, "\n", sep=""))
         e <- 64
       }
       sp_opt <- getOption("scipen")  # This option value determines whether exponentional or fixed expression will be used (m and e should not not be expressed using exponentional expression)
@@ -195,7 +195,7 @@ start_workers <- function(cluster_conf, storage,
 }
 
 distributedR_start <- function(inst=0, mem=0,
-                         cluster_conf="",
+                         cluster_conf="", executors=0,
                          log=2, storage="worker") {
   
   gcinfo(FALSE)
@@ -208,10 +208,12 @@ distributedR_start <- function(inst=0, mem=0,
   rmt_uid=""
   yarn=FALSE
 
-  if (tolower(storage) != "executor" && tolower(storage) != "worker") stop("Argument 'storage' can either be worker or executor")
+  if(tolower(storage) != "executor" && tolower(storage) != "worker") stop("Argument 'storage' can either be worker or executor")
+  if(!(is.numeric(executors) && floor(executors)==executors && executors>=0)) stop("Argument 'executors' should be a non-negative integral value")
   if(!(is.numeric(inst) && floor(inst)==inst && inst>=0)) stop("Argument 'inst' should be a non-negative integral value")
   if(!(is.numeric(mem) && mem>=0)) stop("Argument 'mem' should be a non-negative number")
 
+  if(executors == 0) executors <- inst
   pm <- NULL
   tryCatch(pm <- get_pm_object(), error=function(e){})
   if (!is.null(pm)){
@@ -238,7 +240,7 @@ distributedR_start <- function(inst=0, mem=0,
   tryCatch({
     if (workers) {
       start_workers(cluster_conf=cluster_conf, storage=storage, bin_path=bin_path, 
-        inst=inst, mem=mem, rmt_home=rmt_home, rmt_uid=rmt_uid, log=log)
+        executors=executors, mem=mem, rmt_home=rmt_home, rmt_uid=rmt_uid, log=log)
     }
     else if (yarn){
       dr_path <- system.file(package = "distributedR")
@@ -379,7 +381,7 @@ distributedR_status <- function(help=FALSE){
       names(stat_df) <- c("Workers", "Inst", "SysMem", "MemUsed", "DarrayQuota", "DarrayUsed")
   }},error = handle_presto_exception)
   if(help==TRUE) {
-    cat("\ndistributedR_status - help\nWorkers: list of workers\nInst: number of R instances on a worker\n")
+    cat("\ndistributedR_status - help\nWorkers: list of workers\nInst: number of executors on a worker\n")
     cat("SysMem: total available system memory (MB)\nMemUsed: memory currently used in a worker (MB)\n")
     cat("DarrayQuota:  memory for darrays (MB)\nDarrayUsed: memory currently used by darray (MB)\n\n")
   }

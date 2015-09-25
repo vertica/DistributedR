@@ -15,7 +15,7 @@
 \details{ If partition size (blocks) is missing then the input matrix
 is row partitioned and striped across the cluster, i.e., the returned
 distributed array has approximately as many partitions as the number
-of R instances in the Distributed R session. 
+of Executors in the Distributed R session. 
 %If partition size (blocks) is not present then a distributed
 %array with only a single partition is created.  
 The last set of partitions may have fewer rows or columns if input matrix size is not

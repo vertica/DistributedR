@@ -16,7 +16,7 @@ distributedR_status (help=FALSE)
 Worker information is returned as a data.frame with the following
 columns:
 \item{Workers}{IP and port of each worker.}
-\item{Inst}{number of R instances at each worker.}
+\item{Inst}{number of executors at each worker.}
 \item{SysMem}{total system memory at each worker.}
 \item{MemUsed}{used system memory at each worker.}
 \item{DarrayQuota}{total memory assgined for arrays. Not enforced by runtime.}

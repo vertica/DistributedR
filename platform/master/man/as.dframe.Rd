@@ -15,7 +15,7 @@
 \details{ If partition size (blocks) is missing then the input matrix/data.frame
 is row partitioned and striped across the cluster, i.e., the returned
 distributed frame has approximately as many partitions as the number
-of R instances in the Distributed R session. 
+of Executors in the Distributed R session. 
   
 The last set of partitions may have fewer rows or columns if input matrix size is not
 an integer multiple of partition size. If \code{A} is a 5x5 matrix, then 

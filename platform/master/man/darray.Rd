@@ -41,9 +41,9 @@ number of columns should be same to conform to a well formed array.
 
 Too many partitions increase the overheads of managing distributed
 objects.  We recommend users to create objects with as many partitions
-as the total number of CPU cores in the system.  We restrict users
+as the total number of executors in distributedR session.  We restrict users
 from creating objects when the number of partitions is more than
-100,000 or more than no-of-cores*max(50, no-of-cores).
+100,000 or more than no-of-executors*max(50, no-of-executors).
 
   Distributed arrays can be read-shared by multiple concurrent tasks,
 but modified by only a single writer per partition.  Programmers express
