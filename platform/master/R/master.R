@@ -217,6 +217,11 @@ distributedR_start <- function(inst=0, mem=0,
   if (!is.null(pm)){
     stop("distributedR is already running. Call distributedR_shutdown() to terminate existing session\n")
   }
+
+  if(cluster_conf=="" && Sys.getenv(c("DR_CLUSTER_CONF")) != ""){
+    cluster_conf <- Sys.getenv(c("DR_CLUSTER_CONF"))
+  }
+
   if(presto_home==""){
     presto_home<-ifelse(Sys.getenv(c("DISTRIBUTEDR_HOME"))=="", system.file(package='distributedR'), Sys.getenv(c("DISTRIBUTEDR_HOME")))
   }
