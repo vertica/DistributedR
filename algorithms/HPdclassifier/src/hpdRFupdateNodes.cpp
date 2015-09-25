@@ -57,6 +57,8 @@ bool updateObservationInNode(int observation_feature_value, SEXP split_criteria,
  @param node_weights - list of weights for the node
  @param left_child_weights - weights of indices going to left child
  @param right_child_weights - weights of indices going to right child
+ @param left_child_num_obs - num of indices going to left child
+ @param right_child_num_obs - num of indices going to right child
  */
 void updateNode(SEXP R_observations_feature,  
 		SEXP R_split_criteria,
@@ -123,6 +125,7 @@ extern "C"
    @param R_forest - forest 
    @param R_active_nodes - active nodes to update
    @param R_splits_info - best splits for all nodes 
+   @param R_max_depth - the depth for which to stop growing trees 
    @return - count of observations in all leaf nodes
    */
   SEXP updateNodes(SEXP R_observations, SEXP R_responses, SEXP R_forest, SEXP R_active_nodes, SEXP R_splits_info, SEXP R_max_depth)

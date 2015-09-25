@@ -1,6 +1,26 @@
+/*
+* Copyright [2014] Hewlett-Packard Development Company, L.P.
+*
+* This program is free software; you can redistribute it and/or
+* modify it under the terms of the GNU General Public License
+* as published by the Free Software Foundation; either version 2
+* of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+*/
+
 #include"hpdRF.hpp"
 
-
+/* garbage collect forest
+   @param R_forest - forest to garbage collect
+ */
 void destroyForest(SEXP R_forest)
 {
   if(R_forest == R_NilValue)
@@ -187,7 +207,11 @@ extern "C"
     return(R_forest);
   }
 
-
+  /*this function prints the forest
+    @param R_forest - forest to print
+    @param R_max_depth - maximum depth to print to
+    @param classes - classes of output variable 
+   */
   SEXP printForest(SEXP R_forest, SEXP R_max_depth, SEXP classes)
   {
     hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
@@ -210,6 +234,9 @@ extern "C"
     */
   }
 
+  /*
+    get max nodes value for each tree. returns an array of remaining number of nodes taht can be allocated 
+   */
   SEXP getMaxNodes(SEXP R_forest)
   {
     hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
@@ -580,7 +607,7 @@ extern "C"
     for(int i = 0; i < forest->ntree; i++)
       {
 	index = 0;
-	reformatTree(forest->trees[i],R_new_forest,&index, 
+	convertTreeToRandomForest(forest->trees[i],R_new_forest,&index, 
 		     features_cardinality, max_nodes, i);
       }
     UNPROTECT(8);

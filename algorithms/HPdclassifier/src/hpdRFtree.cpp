@@ -19,6 +19,10 @@
 #include<time.h>
 #include<string.h>
 
+/* calculates how many bytes to allocate for buffer to serialize tree
+   @param tree - tree to be serialized
+ */
+
 //8 bytes for prediction, 12 for treeID, split_variable, split_criteria_length
 //however many bytes for split_criteria + 4 bytes for indicating if left,right,additional_info are null, 16 possible bytes for additional_info and 12*num_obs bytes for indices, weights
 int calculateBufferSize(hpdRFnode* tree)
@@ -36,6 +40,10 @@ int calculateBufferSize(hpdRFnode* tree)
   return total;
 }
 
+/* serializes the tree in custom format
+   @param tree - tree to be serialized
+   @param buffer - buffer to be written into
+ */
 int* serializeTree(hpdRFnode *tree, int* buffer)
 {
   double* temp = (double*) buffer;
@@ -84,6 +92,11 @@ int* serializeTree(hpdRFnode *tree, int* buffer)
   return buffer;
 }
 
+/* function to unserialize the tree=
+   @param tree - tree to be written into
+   @param buffer - buffer to be read from 
+   @param leaf_nodes - array of leaf nodes to be allocated 
+ */
 int* unserializeTree(hpdRFnode *tree, int* buffer, hpdRFnode**leaf_nodes)
 {
   double * temp = (double *)buffer;
@@ -162,6 +175,12 @@ int* unserializeTree(hpdRFnode *tree, int* buffer, hpdRFnode**leaf_nodes)
     
 }
 
+/* This function will print out the tree
+   @param tree - tree to print out
+   @param depth - the starting depth
+   @param max_depth - the maximum depth to print
+   @param classes - for classification trees to print out proper classes 
+ */
 SEXP printNode(hpdRFnode *tree, int depth, int max_depth, SEXP classes)
 {
 #define tab     for(int i = 0; i < depth; i++) printf("\t")
@@ -246,6 +265,9 @@ SEXP printNode(hpdRFnode *tree, int depth, int max_depth, SEXP classes)
     return R_NilValue;
   }
 
+/* If a node has 2 leafnodes that have same predictions, they can be collapsed
+   @param tree - tree to be simplified
+ */
 void simplifyTree(hpdRFnode *tree)
 {
   if(!tree->left && !tree->right)
@@ -280,6 +302,9 @@ void simplifyTree(hpdRFnode *tree)
 
 }
 
+/* garbage collect the tree
+   @param tree - tree that will be garbage collected
+ */
 void destroyTree(hpdRFnode *tree)
 {
   
@@ -385,7 +410,11 @@ void cleanSingleNode(hpdRFnode *node)
   
 }
 
-
+/*
+  this function counts how many nodes are in the tree up to a certain depth
+  @param tree - tree to be counted
+  @param remaining_depth - the depth to keep counoting 
+ */
 int countSubTree(hpdRFnode *tree, int remaining_depth)
 {
   if(remaining_depth == 0)
@@ -398,7 +427,15 @@ int countSubTree(hpdRFnode *tree, int remaining_depth)
   return total;
 }
 
-void reformatTree(hpdRFnode* tree, SEXP forest, int* index, 
+/*This function will reformat trees into randomForest package style trees
+  @param tree - tree to be converted
+  @param forest - output variable to be written to
+  @param index - current location of where to write to in forest variable
+  @param features_cardinality - cardinality of features or NA
+  @param nrow - number of rows in forest variable
+  @param treeID - which tree is being converted
+ */
+void convertTreeToRandomForest(hpdRFnode* tree, SEXP forest, int* index, 
 		  int *features_cardinality, int nrow, int treeID)
 {
   int *i = index;
@@ -429,11 +466,11 @@ void reformatTree(hpdRFnode* tree, SEXP forest, int* index,
      
       (*i)++;
       treemap[treeID*2*nrow +id] = (*i)+1;
-      reformatTree(tree->left,
+      convertTreeToRandomForest(tree->left,
 		   forest, index, features_cardinality, nrow, treeID);
       (*i)++;
       treemap[treeID*2*nrow +id + nrow] = (*i)+1;
-      reformatTree(tree->right,
+      convertTreeToRandomForest(tree->right,
 		   forest, index, features_cardinality, nrow, treeID);
     }
   else
@@ -443,7 +480,23 @@ void reformatTree(hpdRFnode* tree, SEXP forest, int* index,
     }
 }
 
-
+/* this function converts trees to rpart format
+   @param tree - tree to convert
+   @param indices - output variable to write into
+   @param var - output variable to write which  var was split on
+   @param dev - deviance of node
+   @param yval - output value of node
+   @param complexity - complexity of node
+   @param split_index - what is index of split to use
+   @param ncat - ncat variable from rpart
+   @param rowID - rowID of tree
+   @param parent_cp - cp of parent tree node
+   @parm node_index - index of node in rpart variables
+   @param features_cardinality - cardinality of features or NA
+   @param csplit_count - count of categorical splits
+   @param current_depth - depth of current node
+   @param max_depth - maximum depth to allow 
+*/
 int convertTreetoRpart(hpdRFnode* tree, int* indices,
 		       int* var, double* dev, 
 		       double* yval, double* complexity,
@@ -494,6 +547,13 @@ int convertTreetoRpart(hpdRFnode* tree, int* indices,
 
 }
 
+/* function creates the csplit part of rpart model
+   @param tree - tree to create from
+   @param features_cardinality - cardinality of features or NA 
+   @param csplit_count - count of categorical splits (index)
+   @param int* csplit - buffer to write into 
+   @param nrow - number of feature variables (nrow of csplit matrix)
+ */
 
 void populateCsplit(hpdRFnode* tree, int* features_cardinality, 
 		    int* csplit_count, int* csplit, int nrow)

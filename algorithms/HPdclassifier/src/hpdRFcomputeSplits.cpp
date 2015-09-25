@@ -528,6 +528,7 @@ extern "C"
    @param R_forest - the forest 
    @param R_splits_info - list of best splits 
    @param R_active_nodes - which nodes to update in the forest
+   @param R_max_depth - what is the maximum depth allowed for registering split
    */
   SEXP applySplits(SEXP R_forest, SEXP R_splits_info, SEXP R_active_nodes, 
 		   SEXP R_max_depth)

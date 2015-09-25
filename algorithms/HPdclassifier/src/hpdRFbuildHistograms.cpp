@@ -27,9 +27,9 @@
     belong to the node
  @param bin_num - number of bins to use in the histogram
  @param class_num - the number of classes the feature has if categorical
- @feature_categorical - if the feature is categorical or not
- @response_categorical - if the response is categorical
- @histogram - the histogram that has to be filled in
+ @param feature_categorical - if the feature is categorical or not
+ @param response_categorical - if the response is categorical
+ @param histogram - the histogram that has to be filled in
  */
 template <typename resp_type>
 double buildHistogram(SEXP R_observations_feature, SEXP R_responses,
@@ -85,6 +85,8 @@ extern "C"
     @param R_responses - dataframe of observations of response variables
     @param R_forest - dlist forest keeping track of all the node assignments etc
     @param R_active_nodes - array of which nodes to build histogram for
+    @param R_random_features - random features to build histograms on
+    @param histograms - a preallocated structure to improve performance
    */
 
   SEXP buildHistograms(SEXP R_observations, SEXP R_responses, 

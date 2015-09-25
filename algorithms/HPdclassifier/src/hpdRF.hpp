@@ -88,7 +88,7 @@ int calculateBufferSize(hpdRFnode* tree);
 int* serializeTree(hpdRFnode *tree, int* buffer);
 int* unserializeTree(hpdRFnode *tree, int* buffer, hpdRFnode**leaf_nodes);
 int countSubTree(hpdRFnode *tree, int remaining_depth);
-void reformatTree(hpdRFnode* tree, SEXP forest, int* index, 
+void convertTreeToRandomForest(hpdRFnode* tree, SEXP forest, int* index, 
 		  int *features_cardinality, int nrow, int treeID);
 void simplifyTree(hpdRFnode *tree);
 extern "C"

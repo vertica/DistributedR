@@ -1106,7 +1106,7 @@
 					cutoff = rep(1/k,k)
 				cutoff = as.numeric(cutoff)
 				predictions = .Call("combineVotesClassification",
-					predictions, cutoff, k,
+					predictions, cutoff, 
 					PACKAGE = "HPdclassifier")
 				predictions = data.frame(factor(classes[predictions], 
 					levels = classes))

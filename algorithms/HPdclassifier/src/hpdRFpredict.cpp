@@ -1,6 +1,34 @@
+/*
+* Copyright [2014] Hewlett-Packard Development Company, L.P.
+*
+* This program is free software; you can redistribute it and/or
+* modify it under the terms of the GNU General Public License
+* as published by the Free Software Foundation; either version 2
+* of the License, or (at your option) any later version.
+*
+* This program is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+* 
+* You should have received a copy of the GNU General Public License
+* along with this program; if not, write to the Free Software
+* Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+*/
 #include"hpdRF.hpp"
 
-
+/*
+  This function traverses the tree for a particular set of features
+  @param tree - the tree to traverse
+  @param observations - the full set of observations of features
+  @param feature_cardinality - the number of classes of each feature or NA 
+  @param obs_index - the index of which observation to traverse with
+  @param na_pass - if na_pass is true go down both subtrees otherwise stop
+  @param leaf_count - will be assigned in the function with 
+    how many leaf nodes are in the final result
+  @parm weight - this variable will be assigned in the function. It determines 
+    how many observations worth of weight there is in each leaf returned 
+ */
 hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
 				    int *feature_cardinality, int obs_index,
 				    bool na_pass, int* leaf_count, double** weight)
@@ -125,6 +153,12 @@ hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
     return leaves;
 }
 
+/* This function will predict the tree's output value for a single observation
+   @param tree - the tree to predict from
+   @param observations - the data.frame of observations
+   @param feature_cardinality - the cardinality of feature variables or NA
+   @param obs_index - the index of the observation to be predicted
+ */
 double treePredictObservation(hpdRFnode * tree, SEXP observations, 
 		       int *feature_cardinality, int obs_index)
 {
@@ -143,7 +177,12 @@ double treePredictObservation(hpdRFnode * tree, SEXP observations,
 
 extern "C"
 {
-
+  /* Wrapper function of treePredictObservation that allows R to call it
+     @param R_forest - the forest object containing trees
+     @param R_tree_id - index of which tree to use
+     @param R_observations - data.frame of observations
+     @param R_obs_index - index of which observation to predict
+   */
   SEXP specificTreePredictObservation(SEXP R_forest, SEXP R_tree_id, 
 				      SEXP R_observations, SEXP R_obs_index)
   {
@@ -162,6 +201,18 @@ extern "C"
     return ScalarReal(prediction);
   }
 
+  /* This function combines predictions accross trees into a single prediction 
+     @param R_predictions - predictions accross the trees
+     @param R_responses - actual responses to compare accuracy of predictions
+     @param R_cutoff - cutoff value for classification trees
+     @param R_classes - the classes for classification trees
+     @param R_err_count - counting the number of errors in classification trees
+     @param class_count - counting the number in each class each tree outputs
+     @param R_squared_resid - computing squared error of predictions
+     @param R_L0 - calculating how many observations were valid after n trees
+     @param R_L1 - calculating the average predictions after n trees
+     @param R_L2 - calculating predictions^2 after n trees (used for mse later)
+   */
   SEXP cumulativePredictions(SEXP R_predictions, SEXP R_responses, 
 			     SEXP R_cutoff, SEXP R_classes, 
 			     SEXP R_err_count, SEXP R_class_count,
@@ -275,11 +326,13 @@ extern "C"
     return R_final_predictions;
   }
 
-
-  SEXP combineVotesClassification(SEXP R_predictions, SEXP R_cutoff, 
-				  SEXP R_classes_num)
+  /* combines the predictions of classification votes into a single predictions
+     @param R_predictions - array of predictions
+     @param R_cutoff - cutoff values for classes of output feature
+   */
+  SEXP combineVotesClassification(SEXP R_predictions, SEXP R_cutoff)
   {
-    int classes_num = INTEGER(R_classes_num)[0];
+    int classes_num = length(R_cutoff);
     double* ratios = REAL(R_cutoff);
     double* predictions = REAL(R_predictions); 
     int* table = (int *)malloc(sizeof(int)*classes_num);
@@ -319,6 +372,15 @@ extern "C"
     return R_final_predictions;
   }
   
+  /* Find how much using a given subset of trees affects error rate
+     @param - R_votes - array of predictions 
+     @param R_responses - the responses to compare to
+     @param R_curr_trees - the set of trees to use
+     @param R_excluded_trees - the trees to not use
+     @param R_response_cardinality - cardinality of response variable or NA
+     @param R_cutoff - the cutoff values for classification trees
+     @param R_error_count - the error values for using this set of R_curr_trees
+   */
   SEXP findAdditionalTreeErrors(SEXP R_votes, SEXP R_responses, 
 				SEXP R_curr_trees, SEXP R_excluded_trees,
 				SEXP R_response_cardinality,
