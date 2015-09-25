@@ -111,11 +111,18 @@ setMethod("==", signature("dobject", "dobject"),
                                        sComp = splits(comp, i)){
               sComp[1] = all(sA==sB)
               update(sComp)
-            })
+            }, progress=FALSE)
             output <- getpartition(comp)
             all(output==1)
           }
          )
+
+setMethod("!=", signature("dobject", "dobject"),
+          function(e1, e2) {
+	    !(e1==e2)
+	  }
+         )
+
 dimnames.dobject <- function(x) {
   list(x@dimnames[[1]], x@dimnames[[2]])
 }
