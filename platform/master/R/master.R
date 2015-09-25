@@ -218,15 +218,12 @@ distributedR_start <- function(inst=0, mem=0,
     stop("distributedR is already running. Call distributedR_shutdown() to terminate existing session\n")
   }
 
-  if(cluster_conf=="" && Sys.getenv(c("DR_CLUSTER_CONF")) != ""){
-    cluster_conf <- Sys.getenv(c("DR_CLUSTER_CONF"))
-  }
-
   if(presto_home==""){
     presto_home<-ifelse(Sys.getenv(c("DISTRIBUTEDR_HOME"))=="", system.file(package='distributedR'), Sys.getenv(c("DISTRIBUTEDR_HOME")))
   }
+  
   if (cluster_conf==""){
-    cluster_conf <- paste(presto_home,"/conf/cluster_conf.xml",sep="")
+    cluster_conf <- ifelse(Sys.getenv(c("DR_CLUSTER_CONF")) != "", Sys.getenv(c("DR_CLUSTER_CONF")), paste(presto_home,"/conf/cluster_conf.xml",sep=""))
   }
   bin_path <- "./bin/start_proto_worker.sh"
   # Normalize config to expand env vars etc
