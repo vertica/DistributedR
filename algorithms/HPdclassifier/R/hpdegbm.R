@@ -63,22 +63,9 @@ hpdegbm <- function(
        shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.50, #0.5-0.8
        samplingFlag = TRUE,  
-       nClass,
+       nClass = NULL,
        sampleThresh=100,
-       trace = FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
-       offset = NULL, 
-       misc = NULL, 
-       w = NULL,
-       var.monotone = NULL,
-       nTrain = NULL,
-       train.fraction = NULL,
-       keep.data = FALSE,
-       verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
-       var.names = NULL,
-       response.name = "y",
-       group = NULL
-       ) # default system parameters are defined here
-
+       trace = FALSE) 
 # X_train: a dframe, darray, data frame, or data matrix containing the predictor variables
 # Y_train: a vector of outputs
 # distribution: support Gaussian, AdaBoost, bernoulli, multinomial in DR version 1.2
@@ -95,235 +82,231 @@ hpdegbm <- function(
 
 ### start of hpdegbm function
 {
-   # parameters checking
-   if(missing(X_train))
-	stop("'X_train' is a required argument")
+  ##########################################################################
+  # Argument checks
+  ##########################################################################
+  if(missing(X_train))
+    stop("'X_train' is a required argument")
 
-   if(missing(Y_train))
-	stop("'Y_train' is a required argument")
+  if(missing(Y_train))
+    stop("'Y_train' is a required argument")
 
-   if(!is.dframe(X_train) & !is.data.frame(X_train) & !is.darray(X_train) & !is.matrix(X_train)) {
-       stop("'X_train' must be a dframe or data.frame or darray or matrix")
-   } else {
-          nSamples <- nrow(X_train)
-          if (nSamples == 0) stop("X_train has 0 rows")
-   }
+  if(!is.dframe(X_train) & !is.data.frame(X_train) & 
+     !is.darray(X_train) & !is.matrix(X_train)) {
+    stop("'X_train' must be a dframe or data.frame or darray or matrix")
+  } 
 
-   if(!is.dframe(Y_train) & !is.data.frame(Y_train) & !is.darray(Y_train) & !is.matrix(Y_train) & !is.vector(Y_train)) 
-       stop("'Y_train' must be a dframe or data.frame or darray or matrix or numeric vector")
+  if (nrow(X_train) == 0) {
+    stop("'X_train' must be non-empty")
+  }
 
-   if ( (is.vector(Y_train))  & !(nrow(X_train) == length(Y_train)) ) 
-       stop("'Y_train' must be non-empty and have same number of rows as 'X_train'")
+  if(!(.isdarrayorframe(Y_train) || is.data.frame(Y_train) ||
+       is.matrix(Y_train) || is.vector(Y_train)) || 
+     (is.vector(Y_train) && is.na(Y_train))) 
+    stop("'Y_train' must be a dframe or data.frame or darray or matrix or numeric vector")
 
-   if ( ((distribution=="bernoulli") || (distribution=="adaboost") || (distribution=="gaussian")) && (is.dframe(Y_train)) )
-      stop("'Y_train' cannot be dframe for regression and binary classification")
+  if (is.vector(Y_train) && length(Y_train) == 0)
+    stop("'Y_train' must be non-empty")
 
-   if ( (((is.dframe(X_train)) || (is.darray(X_train))) && ((!is.dframe(Y_train)) && (!is.darray(Y_train))))  || (((is.dframe(Y_train)) || (is.darray(Y_train))) && ((!is.dframe(X_train)) && (!is.darray(X_train)))) )
-       stop("Either both 'X_train' and 'Y_train' must be dobjects, or neither can be dobjects")
+  if (!is.vector(Y_train) && nrow(Y_train) == 0)
+    stop("'Y_train' must be non-empty")
 
-   if (missing(nExecutor))   
-       nExecutor <- sum(distributedR_status()$Inst)
+  if (is.vector(Y_train) && nrow(X_train) != length(Y_train)) 
+    stop("'Y_train' must have the same number of rows as 'X_train'")
 
-   if (!( (is.numeric(nExecutor)) && (length(nExecutor)==1) && (nExecutor%%1 == 0) && (nExecutor > 0) )) 
-        stop("'nExecutor' must be a positive integer number")
+  if (!is.vector(Y_train) && nrow(X_train) != nrow(Y_train))
+    stop("'Y_train' must have the same number of rows as 'X_train'")
 
-   if(missing(distribution))
-	stop("'distribution' is a required argument")
+  if (((distribution == "bernoulli") || 
+       (distribution == "adaboost")  || 
+       (distribution == "gaussian")) && is.dframe(Y_train))
+    stop("'Y_train' cannot be dframe for regression and binary classification")
 
-   if ( (is.na(distribution)) && (!(distribution=="gaussian")) && (!(distribution=="bernoulli")) && (!(distribution=="adaboost")) && (!(distribution=="multinomial"))  )
-       stop("'distribution' must be gaussian or bernoulli or adaboost or multinomial")
+  if ((.isdarrayorframe(X_train) && !.isdarrayorframe(Y_train)) ||
+      (.isdarrayorframe(Y_train) && !.isdarrayorframe(X_train)))
+    stop("Either both 'X_train' and 'Y_train' must be dobjects, or neither can be dobjects")
 
-  if (!( (is.numeric(n.trees)) && (length(n.trees)==1) && (n.trees%%1 == 0) && (n.trees > 0) )) 
-        stop("'n.trees' must be a positive integer")
+  if (missing(nExecutor)) {
+    if (.isdarrayorframe(X_train))
+      nExecutor <- npartitions(X_train) #sum(distributedR_status()$Inst)
+    else 
+      nExecutor <- sum(distributedR_status()$Inst)
+  }
+  if (.isdarrayorframe(X_train) && !samplingFlag &&
+      (nExecutor > npartitions(X_train))) {
+    nExecutor <- npartitions(X_train)
+    warning(paste("When samplingFlag is FALSE, 'nExecutor' may not be greater than
+            the number of input partitions. Setting nExecutor =", nExecutor))
+  }
 
-   if (!( (is.numeric(interaction.depth)) && (length(interaction.depth)==1) && (interaction.depth%%1 == 0) && (interaction.depth > 0) )) 
-        stop("'interaction.depth' must be a positive integer")
+  if (!.isPositiveInteger(nExecutor)) 
+    stop("'nExecutor' must be a positive integer")
 
-   if (!( (is.numeric(n.minobsinnode)) && (length(n.minobsinnode)==1) && (n.minobsinnode%%1 == 0) && (n.minobsinnode > 0) )) 
-        stop("'n.minobsinnode' must be a positive integer")
+  if(missing(distribution))
+    stop("'distribution' is a required argument")
 
-   if ( !( (is.numeric(shrinkage)) && (length(shrinkage)==1) && (shrinkage >= 0.001) && (shrinkage <= 1) ))
-        stop("'shrinkage' must be a number in the interval [0.001,1]")
+  if (is.na(distribution) || !(distribution == "gaussian"  || 
+                               distribution == "bernoulli" || 
+                               distribution == "adaboost"  || 
+                               distribution == "multinomial"))
+    stop("'distribution' must be gaussian or bernoulli or adaboost or multinomial")
 
-   if (!( (is.numeric(bag.fraction)) && (length(bag.fraction)==1) && (bag.fraction <= 1) && (bag.fraction > 0) )) 
-        stop("'bag.fraction' must be a number in the interval (0,1]")
+  if (!.isPositiveInteger(n.trees)) 
+    stop("'n.trees' must be a positive integer")
 
-   if(trace) {
-        cat("Start model training\n")
-        starttime <- Sys.time()
+  if (!.isPositiveInteger(interaction.depth)) 
+    stop("'interaction.depth' must be a positive integer")
+
+  if (!.isPositiveInteger(n.minobsinnode)) 
+    stop("'n.minobsinnode' must be a positive integer")
+
+  if (!(is.numeric(shrinkage) && length(shrinkage) == 1 && 
+        shrinkage >= 0.001 && shrinkage <= 1))
+    stop("'shrinkage' must be a number in the interval [0.001,1]")
+
+  if (!(is.numeric(bag.fraction) && length(bag.fraction) == 1 && 
+        bag.fraction <= 1 && bag.fraction > 0)) 
+    stop("'bag.fraction' must be a number in the interval (0,1]")
+
+  if(trace) {
+    cat("Start model training\n")
+    starttime <- Sys.time()
+  }
+
+  if (!(samplingFlag == TRUE || samplingFlag == FALSE))
+    stop("'samplingFlag' must be TRUE or FALSE")
+
+  if (missing(nClass)) {
+    if (samplingFlag) {
+      if (distribution == "gaussian")
+        nClass <- 1
+      else if (is.dframe(X_train) || is.darray(X_train))
+        stop("'nClass' is a required argument for X_train as dframe or darray and non-gaussian distribution and samplingFlag==TRUE")
     }
-
-   if (!((samplingFlag == TRUE) | (samplingFlag == FALSE)))
-         stop("'samplingFlag' must be TRUE or FALSE")
-
-   if ( (missing(nClass)) & (samplingFlag==TRUE)  & !(distribution=="gaussian")  & ( (is.dframe(X_train)) | (is.darray(X_train)) ) )
-	stop("'nClass' is a required argument for X_train as dframe or darray and non-gaussian distribution and samplingFlag==TRUE")
-
-
-   if (!( (is.numeric(nClass)) && (length(nClass)==1) && (nClass%%1 == 0) && (nClass > 0) )) 
-        stop("'nClass' must be a positive integer")
-
+  } else if (!.isPositiveInteger(nClass)) 
+    stop("'nClass' must be a positive integer")
   
-   if (!( (is.numeric(sampleThresh)) && (length(sampleThresh)==1) && (sampleThresh > 0) ))
-        stop("'sampleThresh' must be a positive number")
+  if (!(is.numeric(sampleThresh) && length(sampleThresh) == 1 && sampleThresh > 0))
+    stop("'sampleThresh' must be a positive number")
 
-   if (distribution == "gaussian")
-       nClass = 1
-
-
-   # Check the class number of each partition of Y_train (dframe/darray: must be be the same as nClass)
-   if ( !(distribution=="gaussian") && ((is.dframe(Y_train)) || is.darray(Y_train)) ){
-      npartition_Y = npartitions(Y_train)
-      dnClass <- darray(c(npartition_Y,1), c(1,1)) 
-      foreach(i, 1:npartition_Y, function(y=splits(Y_train,i), nClassPartition=splits(dnClass,i) ) {
-         nClassPartition <- as.matrix(as.numeric(min(table(y))))
-         update(nClassPartition)
-      })
-      if (min(getpartition(dnClass)) == 0) {
-           stop("Missing samples in the class of some partition")
-      }
-   }
- 
-
-          
+  if (distribution == "gaussian")
+    nClass = 1
+  ##########################################################################
+  # Model training
+  ##########################################################################
 
    # store trained gbm model
    dl_GBM_model <- dlist(nExecutor)
    dbest.iter <- darray(c(nExecutor,1), c(1,1))  
   
-   # model training
-   if ((!is.dframe(X_train)) & (!is.darray(X_train))) { # for small data, load the whole data into every core
-      # system parameters are transfered into foreach
-      foreach(i, 1:nExecutor, function(dGBM_modeli=splits(dl_GBM_model,i), best.iter=splits(dbest.iter,i), x=X_train,y=Y_train, 
-                  n.trees=n.trees, distribution=distribution, interaction.depth=interaction.depth, n.minobsinnode=n.minobsinnode, 
-                  shrinkage=shrinkage, bag.fraction=bag.fraction, .tryCatchWE=.tryCatchWE) {
-      library(gbm)
+   # For small data, load the whole data into every core
+   if ((!is.dframe(X_train)) & (!is.darray(X_train))) {       
+     foreach(i, 1:nExecutor, function(dGBM_modeli       = splits(dl_GBM_model,i), 
+                                      best.iter         = splits(dbest.iter,i),
+                                      x                 = X_train,
+                                      y                 = Y_train, 
+                                      n.trees           = n.trees,
+                                      distribution      = distribution,
+                                      interaction.depth = interaction.depth,
+                                      n.minobsinnode    = n.minobsinnode,
+                                      shrinkage         = shrinkage,
+                                      bag.fraction      = bag.fraction,
+                                      .tryCatchWE       = .tryCatchWE,
+                                      buildLocalModel   = .buildLocalGbmModel) {
+        buildLocalModel(dGBM_modeli, best.iter, x, y, n.trees,
+                            distribution, interaction.depth, n.minobsinnode,
+                            shrinkage, bag.fraction)
 
-      if (distribution=="multinomial") {
-         y <- unlist(y) #  convert it back to "factor" for multinomial distribution
-      }
-
-      # apply gbm.fit for GBM modeling: local GBM model
-      dGBM_model <- gbm.fit(x, y,  
-         offset = NULL, 
-         misc = NULL, 
-         n.trees = n.trees, 
-         distribution = distribution,
-         w = NULL,
-         var.monotone = NULL,
-         interaction.depth = interaction.depth, 
-         n.minobsinnode = n.minobsinnode,
-         shrinkage = shrinkage, 
-         bag.fraction = bag.fraction, 
-         nTrain = NULL,
-         train.fraction = NULL, 
-         keep.data = FALSE,
-         verbose = FALSE,
-         var.names = NULL,
-         response.name = "y",
-         group = NULL)
-
-       # estimate the best iteration
-       best.iter0 <- gbm.perf(dGBM_model, 
-              plot.it = FALSE, 
-              oobag.curve = FALSE, 
-              overlay = FALSE, 
-              method="OOB")
-
-       if (best.iter0 <50) best.iter0 <- 50
-       best.iter <- as.matrix(best.iter0)
-
-
-       # convert dGBM_model to a list
-       dGBM_modeli <- list(dGBM_model) 
-  
-       update(dGBM_modeli)
-       update(best.iter)
       })
     } else{  ### For big data: load each partition into every core
-     # X_train: dframe/darray
-     # Y_train: dframe/darray
-     # if nExecutor > npartition_train, distributed sampling can generate nExecutor partitions. nExecutor=npartition_of_sampled X_train. Or use one partition multiple times by i%%npartition_train+1
-     npartition_train <- npartitions(X_train)
+      # X_train: dframe/darray
+      # Y_train: dframe/darray
+      
+      ### distributed sampling
+      if (samplingFlag == TRUE) {
+        nTrain   <- nrow(X_train)
+        nFeature <- ncol(X_train)
+         
+        # Take at most 90% of the input data per output partition in order to
+        # maintain variety among the samples on which models are trained
+        sampleRatio <- min(0.9, (sampleThresh * nClass * nFeature) / nTrain)
 
-     ### distributed sampling: hpdsampling
-     if (samplingFlag == TRUE) {
-        sampledXY <- hpdsampling(X_train,Y_train, nClass, sampleThresh)
+        # Perform distributed sampling. The outputs contain as many models as
+        # executors to be built
+        sampledXY <- hpdsample(X_train, Y_train, nSampParts = nExecutor,
+                               sampRatio = sampleRatio)
         sX_train <- sampledXY[[1]]
         sY_train <- sampledXY[[2]]
-     } else {
+      } else { # Don't sample the data
         sX_train <- X_train
         sY_train <- Y_train
-     }
+      }
 
-     foreach(i, 1:nExecutor, function(dGBM_modeli=splits(dl_GBM_model,i), best.iter=splits(dbest.iter,i), x=splits(sX_train,i%%npartition_train+1),y=splits(sY_train,i%%npartition_train+1),
-                  n.trees=n.trees, distribution=distribution, interaction.depth=interaction.depth, n.minobsinnode=n.minobsinnode, 
-                  shrinkage=shrinkage, bag.fraction=bag.fraction, .tryCatchWE=.tryCatchWE) {
-         library(gbm)
+      # Check which classes are in each partition of Y_train. Each partition
+      # must contain all of the classes
+      if (distribution != "gaussian") {
+        npartition_Y <- npartitions(sY_train)
+        # Will store the class names contained in each partition
+        dpartClasses  <- dlist(npartition = npartition_Y) 
 
-         if (distribution=="multinomial") {
-            y <- unlist(y) #  convert it back to "factor" for multinomial distribution
-         }
-
-         ### apply gbm.fit for GBM modeling: local GBM model
-         dGBM_model <- gbm.fit(x, y,  
-            offset = NULL, 
-            misc = NULL, 
-            distribution = distribution,
-            w = NULL,
-            var.monotone = NULL,
-            n.trees = n.trees, 
-            interaction.depth = interaction.depth, 
-            n.minobsinnode = n.minobsinnode,
-            shrinkage = shrinkage,
-            bag.fraction = bag.fraction, 
-            nTrain = NULL,
-            train.fraction = NULL,
-            keep.data = FALSE,
-            verbose = FALSE,
-            var.names = NULL,
-            #response.name = "y",
-            group = NULL)
-
-          best.iter0 <- gbm.perf(dGBM_model, 
-              plot.it = FALSE, 
-              oobag.curve = FALSE, 
-              overlay = FALSE, 
-              method="OOB")
-
-          if (best.iter0 <50) best.iter0 <- 50
-
-          best.iter <- as.matrix(best.iter0)
-
-          dGBM_modeli <- list(dGBM_model) 
-  
-          update(dGBM_modeli)
-          update(best.iter)
+        foreach(i, 1:npartition_Y, function(y   = splits(sY_train, i),
+                                            pcs = splits(dpartClasses, i)) {
+          tab <- table(y)
+          # Store names of classes with non-zero count in this partition
+          pcs <- list(names(tab[which(tab != 0)]))
+          update(pcs)
         })
+
+        pclasses <- getpartition(dpartClasses)
+
+        if (!all(sapply(pclasses, function(cs) all(cs == pclasses[[1]])))) {
+          if (samplingFlag) 
+            stop("Bad sampling: Some partitions do not contain all classes. Please try again")
+          else 
+            stop("Some partitions do not contain all classes. Try using samplingFlag == TRUE")
+        }
+      }
+      # Build local model on each partition of sampled data
+      foreach(i, 1:nExecutor, function(dGBM_modeli      = splits(dl_GBM_model,i), 
+                                      best.iter         = splits(dbest.iter,i), 
+                                      x                 = splits(sX_train, i),
+                                      y                 = splits(sY_train, i),
+                                      n.trees           = n.trees,
+                                      distribution      = distribution,
+                                      interaction.depth = interaction.depth,
+                                      n.minobsinnode    = n.minobsinnode,
+                                      shrinkage         = shrinkage,
+                                      bag.fraction      = bag.fraction,
+                                      .tryCatchWE       = .tryCatchWE,
+                                      buildLocalModel   = .buildLocalGbmModel) {
+        buildLocalModel(dGBM_modeli, best.iter, x, y, n.trees,
+                            distribution, interaction.depth, n.minobsinnode,
+                            shrinkage, bag.fraction)
+      })
     }
   
     if(trace) {
-	timing_info <- Sys.time() - starttime
-	print(timing_info)
+      timing_info <- Sys.time() - starttime
+      print(timing_info)
     }
 
     # output of hpdegbm: GBM model and best iteration estiamtion
     GBM_model1 <- getpartition(dl_GBM_model)
     best.iter1 <- getpartition(dbest.iter)
 
-
-    finalModel <- list(GBM_model1, best.iter1)
+    finalModel <- list()
   
     cl <- match.call()
     cl[[1]] <- as.name("hpdegbm")
     finalModel$call <- cl
     class(finalModel) <- c("hpdegbm", "gbm")
 
-    finalModel$model <- finalModel[[1]]
-    finalModel$distribution <- finalModel[[1]][[1]]$distribution
-    finalModel$n.trees <- n.trees
-    finalModel$numGBMModel <- nExecutor
-    finalModel$bestIterations <- finalModel[[2]]
+    finalModel$model          <- GBM_model1 
+    finalModel$distribution   <- finalModel$model[[1]]$distribution
+    finalModel$n.trees        <- n.trees
+    finalModel$numGBMModel    <- nExecutor
+    finalModel$bestIterations <- best.iter1
+    finalModel$featureNames   <- colnames(X_train)
 
     return (finalModel)
 
@@ -350,18 +333,64 @@ hpdegbm <- function(
          warnings = list_of_Warnings)
 }
 
+# Used for error checking. Returns TRUE if x is a positive integer
+.isPositiveInteger <- function(x) 
+  return (is.numeric(x) && length(x) == 1 && x%%1 == 0 && x > 0)
 
-print.hpdegbm <- function(x, ...)
-{
-    print(x$call)
-    cat(paste("\n Number of GBM models: ", x$numGBMModel, "\n"))
-    cat(paste("distribution: ", x$distribution, "\n"))    
-    cat(paste("n.trees: ", x$ n.trees, "\n"))
-    cat(paste("best iterations of GBM models: ", x$bestIterations, "\n"))
-    #print(x$model[[1]]) 
+.isdarrayorframe <- function(x) return (is.darray(x) || is.dframe(x))
+
+print.hpdegbm <- function(x, ...) {
+  print(x$call)
+  cat(paste("Number of GBM models: ", x$numGBMModel, "\n"))
+  cat(paste("Distribution: ", x$distribution, "\n"))    
+  cat(paste("Number of trees: ", x$n.trees, "\n"))
+  cat(paste("Best iterations of GBM models: ", "\n"))
+  print(x$bestIterations)
+  cat(paste("Feature names: ", "\n"))
+  print(x$featureNames)
 }
 
+# Helper function to build a gbm model on a partition
+.buildLocalGbmModel <- function(dGBM_modeli, best.iter, x, y, n.trees,
+                                distribution, interaction.depth,
+                                n.minobsinnode, shrinkage, bag.fraction) {
+  library(gbm)
 
+  if (distribution=="multinomial") {
+    y <- unlist(y) #  convert it back to "factor" for multinomial distribution
+  }
 
+  ### apply gbm.fit for GBM modeling: local GBM model
+  dGBM_model <- gbm.fit(x, y,  
+    offset = NULL, 
+    misc = NULL, 
+    distribution = distribution,
+    w = NULL,
+    var.monotone = NULL,
+    n.trees = n.trees, 
+    interaction.depth = interaction.depth, 
+    n.minobsinnode = n.minobsinnode,
+    shrinkage = shrinkage,
+    bag.fraction = bag.fraction, 
+    nTrain = NULL,
+    train.fraction = NULL,
+    keep.data = FALSE,
+    verbose = FALSE,
+    var.names = NULL,
+    group = NULL)
 
+  best.iter0 <- gbm.perf(dGBM_model, 
+      plot.it = FALSE, 
+      oobag.curve = FALSE, 
+      overlay = FALSE, 
+      method="OOB")
 
+  if (best.iter0 <50) best.iter0 <- 50
+
+  best.iter <- as.matrix(best.iter0)
+
+  dGBM_modeli <- list(dGBM_model) 
+
+  update(dGBM_modeli)
+  update(best.iter)
+}
