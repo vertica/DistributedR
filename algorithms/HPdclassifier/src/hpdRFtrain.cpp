@@ -40,7 +40,7 @@ extern "C"
 		     SEXP R_bin_num, SEXP old_splits_info, SEXP R_cp,
 		     SEXP R_min_count);
   SEXP applySplits(SEXP R_forest, SEXP R_splits_info, SEXP R_active_nodes,
-		   SEXP R_max_depth);
+		   SEXP R_max_depth, SEXP R_summary_info);
   SEXP updateNodes(SEXP R_observations, SEXP R_responses, 
 		   SEXP R_forest, SEXP R_active_nodes, SEXP R_splits_info,
 		   SEXP R_max_depth);
@@ -73,6 +73,7 @@ extern "C"
      @param R_min_count - do not split node if child node has < min_cound obs
      @param R_starting_depth - the starting depth of the root tree nodes
      @param R_random_seed - seed to make results reproducible
+     @param R_summary_info - if true, provide summary information for each node
    */
   SEXP hpdRF_local(SEXP observations, SEXP responses, SEXP ntree, SEXP bin_max,
 		   SEXP features_cardinality, SEXP response_cardinality, 
@@ -82,8 +83,10 @@ extern "C"
 		   SEXP max_nodes, SEXP tree_ids, SEXP max_nodes_per_iteration,
 		   SEXP trace, SEXP scale, SEXP max_time, 
 		   SEXP R_cp, SEXP R_max_depth, SEXP R_min_count,
-		   SEXP R_starting_depth, SEXP R_random_seed)
+		   SEXP R_starting_depth, SEXP R_random_seed, 
+		   SEXP R_summary_info)
   {
+    printf("Training Function: \n");
     srand(INTEGER(R_random_seed)[0]);
     SEXP R_forest;
     printf("initializing forest\n");
@@ -181,7 +184,8 @@ extern "C"
 	printf("applying splits\n");
 	PROTECT(temp_active_nodes = applySplits(R_forest,splits_info,
 						active_nodes, 
-						R_max_depth));
+						R_max_depth,
+						R_summary_info));
 
 
 	UNPROTECT_PTR(active_nodes);

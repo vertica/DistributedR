@@ -174,6 +174,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	threshold = as.integer(floor(threshold))
 	max_nodes_per_iteration = as.integer(floor(max_nodes_per_iteration))
 	nodes_per_executor = as.integer(floor(nodes_per_executor))
+	threshold = 1
 
 	if(do.trace)
 		print(paste("threshold",
@@ -201,9 +202,10 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	     max_nodes_per_iteration = max_nodes_per_iteration,
 	     trace = do.trace, features_min = NULL, features_max = NULL,
 	     min_split = control$minbucket, max_depth = control$maxdepth, 
-	     cp = control$cp)
+	     cp = control$cp, summary_info = TRUE)
 	})
 	.Call("simplifyForest",tree$forest)
+	.Call("printForest",tree$forest,NULL,NULL)
 	if(keep.model)
 	{	     
 		if(do.trace)
@@ -309,20 +311,20 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 .convertToRpartModel <- function(tree, varnames)
 {
 	model <- .Call("rpartModel",tree)
-	csplit <- model[[8]]
-	splits <- cbind(count = 0, model[[7]], improve = 0, model[[6]],adj = 0)
-	model[[8]] <- NULL
+	csplit <- model[[10]]
+	splits <- cbind(count = 0, model[[9]], improve = 0, model[[8]],adj = 0)
+	model[[10]] <- NULL
 	varnames = c("<leaf>", varnames)
 	model[[2]] = varnames[model[[2]]+1]
 	leaf_ids = model[[1]]
-	model = data.frame(var = model[[2]], n = 0, wt = 0, 
+	model = data.frame(var = model[[2]], n = model[[6]], wt = model[[7]], 
 	      dev = model[[3]], yval = model[[4]], complexity = model[[5]])
 	colnames(model) <- c("var", "n","wt","dev", "yval", "complexity")
 	rownames(model) <- leaf_ids
 	model <- cbind(model, ncompete = 0, nsurrogate = 0)
 	valid_splits <- complete.cases(splits)
 	splits <- splits[valid_splits,]
-	if(!is.matrix(splits))
+	if(!is.matrix(splits))  n[node_index] = tree->summary_info->n;
 		splits <- matrix(splits,ncol = 5)
 	colnames(splits) <- c("count","ncat", "improve","index","adj")
 	rownames(splits) <- model$var[valid_splits]

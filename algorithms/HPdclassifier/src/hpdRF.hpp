@@ -29,6 +29,17 @@ struct HPDRFNode;
 
 typedef struct 
 {
+  double wt;
+  double complexity;
+  double deviance;
+  double* node_counts;
+  int n;
+  int node_counts_length;
+
+} hpdRFSummaryInfo;
+
+typedef struct 
+{
   int* indices;
   double* weights;
   int attempted, completed;
@@ -42,11 +53,10 @@ typedef struct
 typedef struct HPDRFNode
 {
   double prediction;
-  double deviance;
-  double complexity;
   hpdRFNodeInfo* additional_info;
   struct HPDRFNode* left;
   struct HPDRFNode* right;
+  hpdRFSummaryInfo* summary_info;
   double* split_criteria;
   int split_variable, split_criteria_length;
   int treeID;
@@ -99,6 +109,7 @@ SEXP printForest(SEXP R_forest, SEXP R_max_depth, SEXP classes);
 
 
 int convertTreetoRpart(hpdRFnode* tree, int* indices,
+		       int* n, double* wt,
 		       int* var, double* dev, 
 		       double* yval, double* complexity,
 		       double* split_index, int* ncat, 
