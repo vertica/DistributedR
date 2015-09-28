@@ -220,7 +220,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	if(is.na(response_cardinality))
 		model$method = "anova"
 	if(!is.na(response_cardinality))
-		model$method = "gini"
+		model$method = "class"
 	model$control = control
 	model$params = params
 	model$na.action = na.action
@@ -232,7 +232,12 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 
 	if(is.data.frame(data))
 		responses = getpartition(responses)
-
+	
+	variable.importance = cbind(data.frame(var = rownames(model$splits)),
+			    data.frame(improve =model$splits[,"improve"]))
+	variable.importance <- aggregate(improve ~ var, variable.importance, sum)
+	rownames(variable.importance) <- variable.importance$var
+	variable.importance$var <- NULL
 	if(completeModel)
 	{
 		if(do.trace)
