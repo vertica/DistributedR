@@ -10,6 +10,7 @@ context("Negative Tests: hpdsample()")
 ##############################################################################
 
 a <- as.darray(as.matrix(1:100))  
+adf <- as.dframe(as.data.frame(1:100))  
 
 ##############################################################################
 # Argument checks
@@ -56,6 +57,8 @@ test_that("number of output partitions is correct", {
   for (n in nSampParts) {
     sa <- hpdsample(a, nSampParts = n, sampRatio = 0.5)
     expect_equal(n, npartitions(sa), label = paste0("nSampParts = ",n))
+    sadf <- hpdsample(adf, nSampParts = n, sampRatio = 0.5)
+    expect_equal(n, npartitions(sadf), label = paste0("nSampParts = ",n))
   }
 })
 
@@ -114,15 +117,29 @@ test_that("when data1 and data2 provided, works with all combo of dframe/darray"
   sd <- hpdsample(d2, d2, nSampParts = n, sampRatio = sr)
 })
 
+
 test_that("works with diff data types", {
   d1 <- as.darray(as.matrix(1:1001))
-  d2 <- as.dframe(as.data.frame(rep('c', 1001)))
+  d2 <- as.dframe(data.frame(a = rep('c', 1001), 
+                             b = 1:1001, 
+                             c = runif(1001), 
+                             d = rep('a', 1001)))
   n  <- 6
   sr <- 0.1
   sd <- hpdsample(d1, d1, nSampParts = n, sampRatio = sr)
+
   sd <- hpdsample(d2, d1, nSampParts = n, sampRatio = sr)
+  # Make sure the classes of the output columns are the same as the ones of the
+  # input columns
+  all(sapply(getpartition(sd[[1]]), class) == 
+      sapply(getpartition(d2), class))
+
   sd <- hpdsample(d1, d2, nSampParts = n, sampRatio = sr)
+  all(sapply(getpartition(sd[[2]]), class) == 
+      sapply(getpartition(d2), class))
   sd <- hpdsample(d2, d2, nSampParts = n, sampRatio = sr)
+  all(sapply(getpartition(sd[[2]]), class) == 
+      sapply(getpartition(d2), class))
 })
 
 test_that("all output partitions have the same size", {

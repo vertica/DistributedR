@@ -56,11 +56,11 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
 }
 
 .hpdsamplesingle <- function(data, nSampParts, sampRatio, trace) {
+  # Function used to perform sampling on a single darray/dframe
   
   if (!(is.darray(data) || is.dframe(data))) 
     stop("'data' must be a darray or dframe")
 
-  ndrow     <- nrow(data)
   ndcol     <- ncol(data)
   # Contains the amount of data to be sampled from each data partition into the
   # output partitions
@@ -73,11 +73,11 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
                else if (is.dframe(data)) dframe(dim = ddim, blocks = dblocks)
 
   # We need metadata about which of the columns are factors so that we can
-  # keep track of factors locally within each partition: 
-  # These should only have values if data1 is a dframe. Otherwise they are NULL
-  dp1        <- if (is.dframe(data)) getpartition(data, 1) 
-  factorCols <- if (is.dframe(data)) which(sapply(dp1, is.factor))  
-  dLevels    <- if (is.dframe(data)) lapply(dp1[,factorCols], levels) 
+  # keep track of factors locally within each partition.  If data is a dframe,
+  # dLevels is an array of the global levels for each column of data that is a
+  # factor. Otherwise, it is NULL and isn't used later
+  # TODO ask about style
+  dLevels <- if(is.dframe(data)) .getGlobalLevels(data)
 
   for (k in 1:npartitions(data)) { # For each partition dk of the input data
     # Iterate over the output partitions si in parallel and copy some portion of
@@ -86,29 +86,27 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
     foreach(i, 1:nSampParts, function(si = splits(sdata, i),
                                       dk = splits(data, k),
                                       psizes = psizes,
-                                      factorCols = factorCols,
                                       dLevels = dLevels,
-                                      k = k) {
-      # When vars are factors, must convert them to chars
-#      if (is.data.frame(dk)) {
-#        factorCols      <- which(sapply(dk, is.factor))
-#        dk[,factorCols] <- as.character(dk[,factorCols])
-#      }
-      if (k == 1 && is.data.frame(si)) {
-        for (ci in seq_along(factorCols)) {
-          c <- factorCols[ci]
-          si[,c] <- as.factor(si[,c])
-          levels(si[,c]) <- dLevels[[ci]]
-        }
-      }
+                                      k = k, 
+                                      .coerceFactorsToGlobalLevels =
+                                        .coerceFactorsToGlobalLevels) {
       # Create a random index to choose which data items to copy from dk to si
       idx <- sample(1:nrow(dk), psizes[k], replace = TRUE)
-      # Based on the value of k we decide where to copy the data in splits si1
-      # and si2, since we don't want to overwrite data that was previously
-      # copied
+      # Based on the value of k we decide where to copy the data in splits si
+      # since we don't want to overwrite data that was previously copied.
+      # Effectively appends this data to previous data
       startRow <- if (k == 1) 1 else sum(psizes[1:(k - 1)]) + 1 
       endRow   <- startRow + length(idx) - 1
-      si[startRow:endRow,] <- dk[idx,] 
+
+      # If dLevels is non-null, need to convert its factor columns to use the
+      # same levels map as the global levels in case the levels aren't
+      # consistent from partition to partition of 'data'
+      if (!is.null(dLevels)) 
+        .coerceFactorsToGlobalLevels(dk, dLevels)
+
+      # Copy data items into sampled data
+      si[startRow:endRow,] <- dk[idx,,drop = F]
+
       update(si)
     }, progress = trace, scheduler = 1)
   }
@@ -117,6 +115,7 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
 }
 
 .hpdsampledual <- function(data1, data2, nSampParts, sampRatio, trace) {
+  # Function to sample two darrays/dframes in conjunction
   
   if (!(is.darray(data1) || is.dframe(data1))) 
     stop("'data1' must be a darray or dframe")
@@ -130,7 +129,6 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
   if (npartitions(data1) != npartitions(data2)) 
     stop("'data1' and 'data2' must have the same number of partitions")
 
-  ndrow     <- nrow(data1)
   ndcol1    <- ncol(data1)
   ndcol2    <- ncol(data2)
   # Contains the amount of data to be sampled from each data partition into the
@@ -151,15 +149,8 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
 
   # We need metadata about which of the columns are factors so that we can
   # keep track of factors locally within each partition: 
-  # These should only have values if data1 is a dframe. Otherwise they are NULL
-  d1p1        <- if (is.dframe(data1)) getpartition(data1, 1) 
-  factorCols1 <- if (is.dframe(data1)) which(sapply(d1p1, is.factor))  
-  d1Levels    <- if (is.dframe(data1)) lapply(d1p1[,factorCols1], levels) 
-
-  # These should only have values if data2 is a dframe. Otherwise they are NULL
-  d2p1        <- if (is.dframe(data2)) getpartition(data2, 1) 
-  factorCols2 <- if (is.dframe(data2)) which(sapply(d2p1, is.factor)) 
-  d2Levels    <- if (is.dframe(data2)) lapply(d2p1[,factorCols2], levels)
+  d1Levels <- if(is.dframe(data1)) .getGlobalLevels(data1)
+  d2Levels <- if(is.dframe(data2)) .getGlobalLevels(data2)
 
   for (k in 1:npartitions(data1)) { # For each partition dk of the input data
     # Iterate over the output partitions si in parallel and copy some portion of
@@ -171,49 +162,34 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
                                       dk2 = splits(data2, k),
                                       psizes = psizes,
                                       k = k, 
-                                      factorCols1 = factorCols1,
-                                      factorCols2 = factorCols2,
                                       d1Levels = d1Levels,
-                                      d2Levels = d2Levels, i = i) {
+                                      d2Levels = d2Levels,
+                                      .coerceFactorsToGlobalLevels =
+                                        .coerceFactorsToGlobalLevels) {
       if (nrow(dk1) != nrow(dk2)) 
         stop("nrow mismatch between data1 split and data2 split in foreach")
 
-#      # When vars are factors, must convert them to chars
-#      if (is.data.frame(dk1)) {
-#        #factorCols1       <- which(sapply(dk1, is.factor))
-#        dk1[,factorCols1] <- as.character(dk1[,factorCols1])
-#      }
-#      if (is.data.frame(dk2)) {
-#        #factorCols2       <- which(sapply(dk2, is.factor))
-#        dk2[,factorCols2] <- as.character(dk2[,factorCols2])
-#      }
-      if (k == 1) {
-        if (is.data.frame(si1)) {
-          for (ci in seq_along(factorCols1)) {
-            c <- factorCols1[ci]
-            si1[,c] <- as.factor(si1[,c])
-            levels(si1[,c]) <- d1Levels[[ci]]
-          }
-        }
-        if (is.data.frame(si2)) {
-          for (ci in seq_along(factorCols2)) {
-            c <- factorCols2[ci]
-            si2[,c] <- as.factor(si2[,c])
-            levels(si2[,c]) <- d2Levels[[ci]]
-          }
-        }
-      }
-
-
       # Create a random index to choose which data items to copy from dk to si
       idx <- sample(1:nrow(dk1), psizes[k], replace = TRUE)
+
       # Based on the value of k we decide where to copy the data in splits si1
       # and si2, since we don't want to overwrite data that was previously
-      # copied
+      # copied. Effectively appends this to the previous sampled data
       startRow <- if (k == 1) 1 else sum(psizes[1:(k - 1)]) + 1 
       endRow   <- startRow + length(idx) - 1
-      si1[startRow:endRow,] <- dk1[idx,, drop = F]
-      si2[startRow:endRow,] <- dk2[idx,, drop = F]
+
+      # If dLevels1/2 are non-null, need to convert its factor columns to use the
+      # same levels map as the global levels in case the levels aren't
+      # consistent from partition to partition of 'data'
+      if (is.data.frame(dk1))
+        .coerceFactorsToGlobalLevels(dk1, d1Levels)
+
+      if (is.data.frame(dk2))
+        .coerceFactorsToGlobalLevels(dk2, d2Levels)
+
+      # Copy data items into sampled data
+      si1[startRow:endRow,] <- dk1[idx,,drop = F]
+      si2[startRow:endRow,] <- dk2[idx,,drop = F]
 
       update(si1)
       update(si2)
@@ -226,3 +202,44 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
   list(sdata1 = sdata1, sdata2 = sdata2)
 }
 
+.getGlobalLevels <- function(data) {
+# Finds the columns of data that are factors and returns the global levels of
+# each column
+# 
+# Args:
+#   data: A dframe object
+# 
+# Value: 
+#   An object returned by levels.dframe  
+
+  dfactorCols <- darray(npartition = 1)
+  # Find out which columns of data are factors by looking at the first
+  # partition
+  foreach(i, 1:1, function(di = splits(data, i),
+                           fs = splits(dfactorCols, i)) {
+    fs <- as.matrix(which(sapply(di, is.factor)))
+    update(fs)
+  }, progress = F)
+
+  factorCols <- getpartition(dfactorCols)
+  # Finds the global levels of these columns (if there are any)
+  dLevels <- if (length(factorCols) > 1) {
+    levels.dframe(data, colID = factorCols)
+  } else NULL
+  return (dLevels)
+}
+
+.coerceFactorsToGlobalLevels <- function(df, dLevels) {
+# Converts the columns of df corresponding to factors into new factors using
+# the levels specified in dLevels
+#
+# Args:
+#   df: A data frame
+#   dLevels: An object returned by levels.dframe containing the global
+#            levels for a dframe
+#   
+  for (j in seq_along(dLevels$columns)) {
+    c <- dLevels$columns[j]
+    df[,c] <- factor(df[,c], levels = dLevels$Levels[[j]])
+  }
+}
