@@ -111,7 +111,7 @@ SEXP printForest(SEXP R_forest, SEXP R_max_depth, SEXP classes);
 int convertTreetoRpart(hpdRFnode* tree, int* indices,
 		       int* n, double* wt,
 		       int* var, double* dev, 
-		       double* yval, double* complexity,
+		       double* yval, double* complexity, double* improve,
 		       double* split_index, int* ncat, 
 		       int rowID, double parent_cp, int node_index,
 		       int* features_cardinality, int* csplit_count,

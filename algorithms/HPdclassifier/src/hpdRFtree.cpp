@@ -537,10 +537,13 @@ void convertTreeToRandomForest(hpdRFnode* tree, SEXP forest, int* index,
 /* this function converts trees to rpart format
    @param tree - tree to convert
    @param indices - output variable to write into
+   @param n - output variable to write into 
+   @param wt - output variable to write into
    @param var - output variable to write which  var was split on
    @param dev - deviance of node
    @param yval - output value of node
    @param complexity - complexity of node
+   @param improve - output variable to write into
    @param split_index - what is index of split to use
    @param ncat - ncat variable from rpart
    @param rowID - rowID of tree
@@ -554,6 +557,7 @@ void convertTreeToRandomForest(hpdRFnode* tree, SEXP forest, int* index,
 int convertTreetoRpart(hpdRFnode* tree, int* indices, int* n,
 		       double *wt, int* var, double* dev, 
 		       double* yval, double* complexity,
+		       double* improve,
 		       double* split_index, int* ncat, 
 		       int rowID, double parent_cp, int node_index,
 		       int* features_cardinality, int* csplit_count,
@@ -566,6 +570,8 @@ int convertTreetoRpart(hpdRFnode* tree, int* indices, int* n,
   dev[node_index] = tree->summary_info->deviance;
   yval[node_index] = tree->prediction;
   complexity[node_index] = parent_cp*tree->summary_info->complexity;
+  improve[node_index] = (1-tree->summary_info->complexity)
+    *tree->summary_info->deviance;
 
   if(tree->split_criteria_length == 0)
     {
@@ -587,15 +593,15 @@ int convertTreetoRpart(hpdRFnode* tree, int* indices, int* n,
 
   if(tree->left && current_depth < max_depth)
     node_index = convertTreetoRpart(tree->left, indices, n,wt,var, dev,
-				    yval, complexity, split_index, ncat,
-				    rowID*2, parent_cp, 
+				    yval, complexity, improve, split_index, 
+				    ncat, rowID*2, parent_cp, 
 				    node_index+1, features_cardinality,
 				    csplit_count,current_depth+1,
 				    max_depth);
   if(tree->right && current_depth < max_depth)
     node_index = convertTreetoRpart(tree->right, indices, n,wt,var, dev,
-				    yval, complexity, split_index, ncat,
-				    rowID*2+1, parent_cp, 
+				    yval, complexity, improve, split_index, 
+				    ncat, rowID*2+1, parent_cp, 
 				    node_index+1, features_cardinality,
 				    csplit_count,current_depth+1,
 				    max_depth);

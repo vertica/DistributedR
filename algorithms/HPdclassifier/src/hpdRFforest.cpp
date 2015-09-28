@@ -863,7 +863,7 @@ extern "C"
     hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
     hpdRFnode* tree = forest->trees[0];
     SEXP model;
-    PROTECT(model = allocVector(VECSXP, 10));
+    PROTECT(model = allocVector(VECSXP, 11));
     int max_depth = 30;
 
     int numNodes = countSubTree(tree, max_depth);
@@ -874,7 +874,7 @@ extern "C"
 	max_ncat = forest->features_cardinality[i];
 
     SEXP indices, var, dev, yval, complexity, split_index, ncat,
-      csplit, n, wt;
+      csplit, n, wt, improve;
     PROTECT(n = allocVector(INTSXP, numNodes));
     PROTECT(wt = allocVector(REALSXP, numNodes));
     PROTECT(indices = allocVector(INTSXP, numNodes));
@@ -884,10 +884,13 @@ extern "C"
     PROTECT(complexity = allocVector(REALSXP, numNodes));
     PROTECT(split_index = allocVector(REALSXP, numNodes));
     PROTECT(ncat = allocVector(INTSXP, numNodes));
+    PROTECT(improve = allocVector(REALSXP, numNodes));
+
     int csplit_count = 0;
     convertTreetoRpart(tree, INTEGER(indices), INTEGER(n), 
 		       REAL(wt),INTEGER(var), 
 		       REAL(dev), REAL(yval), REAL(complexity),
+		       REAL(improve),
 		       REAL(split_index),INTEGER(ncat),
 		       1, 1, 0, forest->features_cardinality,
 		       &csplit_count, 1, max_depth);
@@ -912,7 +915,9 @@ extern "C"
 
     SET_VECTOR_ELT(model,7,split_index);
     SET_VECTOR_ELT(model,8,ncat);
-    SET_VECTOR_ELT(model,9,csplit);
+    SET_VECTOR_ELT(model,9,improve);
+
+    SET_VECTOR_ELT(model,10,csplit);
 
     UNPROTECT(length(model)+1);
     return model;
