@@ -235,7 +235,7 @@ bool DistributedObject::Create(const string& name,
       arr->mutable_dim()->add_val(blocks[k]);
     }
     
-    if(dobject_subtype_ == FLEX_DECLARED) { 
+    if(dobject_subtype_ != STD) { 
       for (int k = 0; k < blocks.size(); ++k) {
           arr->mutable_psizes()->add_val(0);
       }

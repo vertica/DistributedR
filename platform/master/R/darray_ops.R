@@ -351,19 +351,8 @@ tail.darray <- function(x, n=6L,...) {
 # Darrays can initially be empty or flexible sized. Just returning the number of rows declared in the dframe dimensions is not a good.
 setMethod("nrow", signature("darray"), function(x)
     {
-        #Data may be block partitioned. We only need to look at the leftmost partitions.
-        nc<-ceiling(x@dim[2]/x@blocks[2])
-        nr<-ceiling(x@dim[1]/x@blocks[1])
-        temp <- darray(dim=c(nr,1), blocks=c(1,1), sparse=FALSE)
-        #Generate index numbers for the leftmost partitions.
-        lparts<-seq(1,npartitions(x),nc)
-        foreach(i,1:npartitions(temp),
-              localnrow <- function(v=splits(x,lparts[i]),res=splits(temp,i)) {
-                  res <- matrix(nrow(v))
-                  update(res)
-              }, progress=FALSE)
-        res <- getpartition(temp)
-        return(sum(as.numeric(res)))
+        rowPartitions <- seq(1,npartitions(x),by=x@npartitions[[2]])
+        sum(partitionsize(x)[rowPartitions,1])
     })
 
 setMethod("NROW", signature("darray"), function(x)
@@ -374,18 +363,8 @@ setMethod("NROW", signature("darray"), function(x)
 # Darrays can initially be empty or flexible sized. Just returning the number of cols declared in the dframe dimensions is not a good.
 setMethod("ncol", signature("darray"), function(x)
     {
-        #Data may be block partitioned. We only need to look at first row of partitions, i.e., first set of partitions from left to right
-        nc<-ceiling(x@dim[2]/x@blocks[2])
-        nr<-ceiling(x@dim[1]/x@blocks[1])
-        temp <- darray(dim=c(nc,1), blocks=c(1,1), sparse=FALSE)
-        #Generate index numbers for the topmost row of partitions.
-        foreach(i,1:npartitions(temp),
-              localnrow <- function(v=splits(x,i),res=splits(temp,i)) {
-                  res <- matrix(ncol(v))
-                  update(res)
-              }, progress=FALSE)
-        res <- getpartition(temp)
-        return(sum(as.numeric(res)))
+        colPartitions <- seq(1,x@npartitions[[2]])
+        sum(partitionsize(x)[colPartitions,2])
     })
 
 setMethod("NCOL", signature("darray"), function(x)

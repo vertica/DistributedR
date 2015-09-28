@@ -207,7 +207,7 @@ setMethod("partitionsize", signature("dobject","missing"),
     if(is.null(x)) return (0)
     nparts<-npartitions(x)
     
-    if(x@subtype == "FLEX_DECLARED"){
+    if(x@subtype != "STD"){
       return(x@dobject_ptr$parts_sizes())
     } else {
      #For non-flex objects we will reuse information from dimensions
