@@ -111,11 +111,18 @@ setMethod("==", signature("dobject", "dobject"),
                                        sComp = splits(comp, i)){
               sComp[1] = all(sA==sB)
               update(sComp)
-            })
+            }, progress=FALSE)
             output <- getpartition(comp)
             all(output==1)
           }
          )
+
+setMethod("!=", signature("dobject", "dobject"),
+          function(e1, e2) {
+	    !(e1==e2)
+	  }
+         )
+
 dimnames.dobject <- function(x) {
   list(x@dimnames[[1]], x@dimnames[[2]])
 }
@@ -130,14 +137,6 @@ dimnames.dobject <- function(x) {
   x@dimnames[[1]] <- value[[1]]
   x@dimnames[[2]] <- value[[2]]
   x
-}
-
-# get (row,col) offsets of split with index
-dobject.getoffsets <- function(fulldim, blockdim, index) {
-  blocks <- ceiling(fulldim/blockdim)
-  block.r <- (index-1)%/%blocks[2]+1
-  block.c <- (index-1)%%blocks[2]+1
-  return(c((block.r-1)*blockdim[1], (block.c-1)*blockdim[2]))
 }
  
 # get (r,c) offsets of partition with index
@@ -191,36 +190,6 @@ dobject.getAllOffsets <- function(obj) {
   ret<- (cbind(rep(roffsets,each=length(coffsets)),rep(coffsets,length(roffsets))))	
  }
   return (ret)
-}
-
-# get dims of split with index
-dobject.getdims <- function(fulldim, blockdim, index) {
-  res <- c(1,1)
-
-  blocks <- ceiling(fulldim/blockdim)
-  block.x <- (index-1)%/%blocks[2]+1
-  block.y <- (index-1)%%blocks[2]+1
-
-  if (block.x < blocks[1]) {
-    res[1] <- blockdim[1]
-  } else {
-    if (fulldim[1]%%blockdim[1] == 0) {
-      res[1] <- blockdim[1]
-    } else {
-      res[1] <- fulldim[1]%%blockdim[1]
-    }
-  }
-
-  if (block.y < blocks[2]) {
-    res[2] <- blockdim[2]
-  } else {
-    if (fulldim[2]%%blockdim[2] == 0) {
-      res[2] <- blockdim[2]
-    } else {
-      res[2] <- fulldim[2]%%blockdim[2]
-    }
-  }
-  return(as.integer(res))
 }
 
 setGeneric("getemptyflag", function(x) standardGeneric("getemptyflag"))

@@ -225,7 +225,9 @@ head.darray <- function(x, n=6L,...){
               if(n<0){
 		  n <- dim(x)[1]+n
               }
-              if(n<=0) return (0)
+              if(n<=0){
+      		return (array(0,dim=c(0,ncol(x)), dimnames=dimnames(x)))
+	      }
 
               #Define function that can return a subset of lines from a split
               headOfSplit <- function(x, id, nlines, bsize){
@@ -287,7 +289,11 @@ tail.darray <- function(x, n=6L,...) {
                   n <- dim(x)[1]+n
               }
               if(n<0) stop ("no. rows to be skipped is larger than array extent")
-              if(n==0) return (0)
+              if(n==0){
+	        #Match the behavior to standard R
+	        if(length(rownames(x))==0) return (tail(array(0,dim=c(1,1)),0))
+		return (array(0,dim=c(0,ncol(x)), dimnames=dimnames(x)))
+	       }
 
               #Define function to fetch subset of the partition data
               tailOfSplit <- function(x, id, nlines, bsize){

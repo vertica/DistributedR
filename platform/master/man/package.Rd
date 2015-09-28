@@ -7,7 +7,7 @@
   includes new language constructs to express distributed programs in R
   and an infrastructure to execute them. \pkg{distributedR} provides
   data-structures such as distributed array \code{\link{darray}} to
-  partition and share data across multiple R instances. Users can
+  partition and share data across multiple executors. Users can
   express parallel execution using \code{\link{foreach}} loops.}
 
 \section{Commands}{ \pkg{distributedR} contains the following commands. For

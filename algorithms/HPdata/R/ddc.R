@@ -58,17 +58,20 @@
 #'                                  "hdfsUser": "jorgem" \cr
 #'                                  \}
 #'
+#' @param skipHeader Treat first line as the CSV header and discard it.
 #' @return A distributed data frame representing the CSV file.
 #' @examples
 #' df <- csv2dframe(url=paste(system.file(package='HPdata'),'/tests/data/ex001.csv',sep=''), schema='a:int64,b:character')
 
 csv2dframe <- function(url, schema, delimiter=',', commentCharacter='#', 
-                       hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')) {
+                       hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep=''),
+                       skipHeader=FALSE) {
     options = list()
     options['schema'] = schema
     options['delimiter'] = delimiter
     options['commentCharacter'] = commentCharacter
     options['hdfsConfigurationFile'] = hdfsConfigurationFile
+    options['skipHeader'] = skipHeader
 
     options['fileType'] = 'csv'
     .ddc_read(url, options)
@@ -172,13 +175,17 @@ orc2dframe <- function(url, selectedStripes='',
     # 1. Schedule file across workers. Handles globbing also.
     library(hdfsconnector)
     plan <- hdfsconnector::create_plan(url, options, pm$worker_map())
-    if (Sys.getenv('DEBUG_DDC') != '') {
-        print(plan)  # for debugging
-    }
 
     hdfsConfigurationStr <- paste(readLines(as.character(options["hdfsConfigurationFile"])),collapse='\n')
     for (i in 1:length(plan$configs)) {
         plan$configs[[i]]["hdfsConfigurationStr"] = hdfsConfigurationStr
+        if("skipHeader" %in% names(options)) {
+            plan$configs[[i]]["skipHeader"] = as.logical(options["skipHeader"])
+        }
+    }
+
+    if (Sys.getenv('DEBUG_DDC') != '') {
+        print(plan)  # for debugging
     }
 
     # set chunk_worker_map in master so dframe partitions are created on the right workers
@@ -210,7 +217,8 @@ orc2dframe <- function(url, selectedStripes='',
                                          chunkEnd=config$chunk_end,
                                          delimiter=config$delimiter,
                                          commentCharacter=config$comment_character,
-                                         hdfsConfigurationStr=config$hdfsConfigurationStr)
+                                         hdfsConfigurationStr=config$hdfsConfigurationStr,
+                                         skipHeader=config$skipHeader)
                     update(dhs)
                 }
                 else if (config$file_type == "orc") {

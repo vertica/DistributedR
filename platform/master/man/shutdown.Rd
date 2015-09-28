@@ -7,7 +7,7 @@
   automatically in the following cases:
 
 \itemize{
-\item a worker or an R instance is killed 
+\item a worker or an executor is killed 
 \item user interrupts execution using CTRL-C and decides to shutdown the whole session
 }
 }
