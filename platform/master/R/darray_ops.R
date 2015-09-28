@@ -334,9 +334,12 @@ tail.darray <- function(x, n=6L,...) {
                   nprocessed <- nprocessed+nrow(temp)
               }
   
-              if(!is.null(dimnames(x)[[1]]) && length(dimnames(x)[[1]]) != 0 && length(dimnames(x)[[1]]) == nrow(res)) {
-                 rownames(res) <- dimnames(x)[[1]]
-              }   
+              if(!is.null(dimnames(x)[[1]]) && length(dimnames(x)[[1]]) != 0 && length(dimnames(x)[[1]]) >= nrow(x)) {
+                 rownames(res) <- dimnames(x)[[1]][(length(dimnames(x)[[1]])-nrow(res)+1):length(dimnames(x)[[1]])]
+              } else {
+  	         rownames(res) <- ((nrow(x)-nrow(res)+1):nrow(x))
+	      }  
+
               if(!is.null(dimnames(x)[[2]]) && length(dimnames(x)[[2]]) != 0 && length(dimnames(x)[[2]]) == ncol(res)) {
                  colnames(res) <- dimnames(x)[[2]]
               }

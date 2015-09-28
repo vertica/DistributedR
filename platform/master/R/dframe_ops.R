@@ -295,9 +295,10 @@ tail.dframe <- function(x, n=6L,...) {
                   nprocessed <- nprocessed+nrow(temp)
               }
 
-              if (length(x@dimnames[[1]]) < length(row.names(res))) {
-                row.names(res) <- NULL
-              }
+	      if(length(dimnames(res)[[1]]==0)) {
+  	         rownames(res) <- ((nrow(x)-nrow(res)+1):nrow(x))
+	      }  
+
               return(res)
           }
 
