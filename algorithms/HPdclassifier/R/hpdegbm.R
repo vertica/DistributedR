@@ -117,21 +117,17 @@ hpdegbm <- function(
   if (!is.vector(Y_train) && nrow(X_train) != nrow(Y_train))
     stop("'Y_train' must have the same number of rows as 'X_train'")
 
-  #if (((distribution == "bernoulli") || 
-  #     (distribution == "adaboost")  || 
-  #     (distribution == "gaussian")) && is.dframe(Y_train))
-  #  stop("'Y_train' cannot be dframe for regression and binary classification")
-
   if ((.isdarrayorframe(X_train) && !.isdarrayorframe(Y_train)) ||
       (.isdarrayorframe(Y_train) && !.isdarrayorframe(X_train)))
     stop("Either both 'X_train' and 'Y_train' must be dobjects, or neither can be dobjects")
 
   if (missing(nExecutor)) {
     if (.isdarrayorframe(X_train))
-      nExecutor <- npartitions(X_train) #sum(distributedR_status()$Inst)
+      nExecutor <- npartitions(X_train) 
     else 
       nExecutor <- sum(distributedR_status()$Inst)
   }
+
   if (.isdarrayorframe(X_train) && !samplingFlag &&
       (nExecutor > npartitions(X_train))) {
     nExecutor <- npartitions(X_train)
@@ -191,6 +187,7 @@ hpdegbm <- function(
 
   if (distribution == "gaussian")
     nClass = 1
+
   ##########################################################################
   # Model training
   ##########################################################################
@@ -211,11 +208,10 @@ hpdegbm <- function(
                                       n.minobsinnode    = n.minobsinnode,
                                       shrinkage         = shrinkage,
                                       bag.fraction      = bag.fraction,
-                                      .tryCatchWE       = .tryCatchWE,
                                       buildLocalModel   = .buildLocalGbmModel) {
-        buildLocalModel(dGBM_modeli, best.iter, x, y, n.trees,
-                            distribution, interaction.depth, n.minobsinnode,
-                            shrinkage, bag.fraction)
+        buildLocalModel(dGBM_modeli, best.iter, x, y, n.trees, distribution,
+                        interaction.depth, n.minobsinnode, shrinkage,
+                        bag.fraction)
 
       }, progress = trace)
     } else{  
@@ -227,8 +223,9 @@ hpdegbm <- function(
         nTrain   <- nrow(X_train)
         nFeature <- ncol(X_train)
          
-        # Take at most 90% of the input data per output partition in order to
-        # maintain variety among the samples on which models are trained
+        # Use a heuristic to compute a good sampleRatio, but only take at most
+        # 90% of the input data per output partition in order to maintain
+        # variety among the samples on which models are trained
         sampleRatio <- min(0.9, (sampleThresh * nClass * nFeature) / nTrain)
 
         # Perform distributed sampling. The outputs contain as many models as
@@ -266,22 +263,22 @@ hpdegbm <- function(
             stop("Some partitions do not contain all classes. Try using samplingFlag == TRUE")
         }
       }
+
       # Build local model on each partition of sampled data
-      foreach(i, 1:nExecutor, function(dGBM_modeli      = splits(dl_GBM_model,i), 
-                                      best.iter         = splits(dbest.iter,i), 
-                                      x                 = splits(sX_train, i),
-                                      y                 = splits(sY_train, i),
-                                      n.trees           = n.trees,
-                                      distribution      = distribution,
-                                      interaction.depth = interaction.depth,
-                                      n.minobsinnode    = n.minobsinnode,
-                                      shrinkage         = shrinkage,
-                                      bag.fraction      = bag.fraction,
-                                      .tryCatchWE       = .tryCatchWE,
-                                      buildLocalModel   = .buildLocalGbmModel) {
-        buildLocalModel(dGBM_modeli, best.iter, x, y, n.trees,
-                            distribution, interaction.depth, n.minobsinnode,
-                            shrinkage, bag.fraction)
+      foreach(i, 1:nExecutor, function(dGBM_modeli       = splits(dl_GBM_model,i), 
+                                       best.iter         = splits(dbest.iter,i), 
+                                       x                 = splits(sX_train, i),
+                                       y                 = splits(sY_train, i),
+                                       n.trees           = n.trees,
+                                       distribution      = distribution,
+                                       interaction.depth = interaction.depth,
+                                       n.minobsinnode    = n.minobsinnode,
+                                       shrinkage         = shrinkage,
+                                       bag.fraction      = bag.fraction,
+                                       buildLocalModel   = .buildLocalGbmModel) {
+        buildLocalModel(dGBM_modeli, best.iter, x, y, n.trees, distribution,
+                        interaction.depth, n.minobsinnode, shrinkage,
+                        bag.fraction)
       }, progress = trace)
     }
   
@@ -296,48 +293,20 @@ hpdegbm <- function(
 
     finalModel <- list()
   
-    cl <- match.call()
+    cl      <- match.call()
     cl[[1]] <- as.name("hpdegbm")
-    finalModel$call <- cl
-    class(finalModel) <- c("hpdegbm", "gbm")
 
+    finalModel$call           <- cl
     finalModel$model          <- GBM_model1 
-    finalModel$distribution   <- finalModel$model[[1]]$distribution
+    finalModel$distribution   <- distribution 
     finalModel$n.trees        <- n.trees
     finalModel$numGBMModel    <- nExecutor
     finalModel$bestIterations <- best.iter1
     finalModel$featureNames   <- colnames(X_train)
+    class(finalModel) <- c("hpdegbm", "gbm")
 
     return (finalModel)
-
 } # end of hpdegbm for model training
-
-
-##' We want to catch *and* save both errors and warnings, and in the case of
-##' a warning, also keep the computed result.
-##'
-##' @title tryCatch both warnings and errors
-##' @param expr
-##' @return a list with 'value' and 'warnings', where 
-##'  'value' may be an error caught.
-##' @author Modified version of a piece of code written by Martin Maechler
-.tryCatchWE <- function(expr)
-{
-    list_of_Warnings <- list()
-    w.handler <- function(w){ # warning handler
-        list_of_Warnings[[length(list_of_Warnings)+1]] <<- w
-        invokeRestart("muffleWarning")
-    }
-    list(withCallingHandlers(tryCatch(expr, error = function(e) e),
-                                     warning = w.handler),
-         warnings = list_of_Warnings)
-}
-
-# Used for error checking. Returns TRUE if x is a positive integer
-.isPositiveInteger <- function(x) 
-  return (is.numeric(x) && length(x) == 1 && x%%1 == 0 && x > 0)
-
-.isdarrayorframe <- function(x) return (is.darray(x) || is.dframe(x))
 
 print.hpdegbm <- function(x, ...) {
   print(x$call)
@@ -356,11 +325,11 @@ print.hpdegbm <- function(x, ...) {
                                 n.minobsinnode, shrinkage, bag.fraction) {
   library(gbm)
 
-  if (distribution=="multinomial") {
-    y <- unlist(y) #  convert it back to "factor" for multinomial distribution
-  }
+  # gbm.fit requires that y be a vector
+  if (is.data.frame(y))
+    y <- y[,1]
 
-  ### apply gbm.fit for GBM modeling: local GBM model
+  # Apply gbm.fit for GBM modeling: local GBM model
   dGBM_model <- gbm.fit(x, y,  
     offset = NULL, 
     misc = NULL, 
@@ -385,12 +354,37 @@ print.hpdegbm <- function(x, ...) {
       overlay = FALSE, 
       method="OOB")
 
-  if (best.iter0 < 50) best.iter0 <- 50
-
-  best.iter <- as.matrix(best.iter0)
+  best.iter <- max(50, as.matrix(best.iter0))
 
   dGBM_modeli <- list(dGBM_model) 
 
   update(dGBM_modeli)
   update(best.iter)
+}
+
+# Used for error checking. Returns TRUE if x is a positive integer
+.isPositiveInteger <- function(x) 
+  return (is.numeric(x) && length(x) == 1 && x%%1 == 0 && x > 0)
+
+# Used for error checking. Returns TRUE if x is a darray or a dframe
+.isdarrayorframe <- function(x) return (is.darray(x) || is.dframe(x))
+
+##' We want to catch *and* save both errors and warnings, and in the case of
+##' a warning, also keep the computed result.
+##'
+##' @title tryCatch both warnings and errors
+##' @param expr
+##' @return a list with 'value' and 'warnings', where 
+##'  'value' may be an error caught.
+##' @author Modified version of a piece of code written by Martin Maechler
+.tryCatchWE <- function(expr)
+{
+    list_of_Warnings <- list()
+    w.handler <- function(w){ # warning handler
+        list_of_Warnings[[length(list_of_Warnings)+1]] <<- w
+        invokeRestart("muffleWarning")
+    }
+    list(withCallingHandlers(tryCatch(expr, error = function(e) e),
+                                     warning = w.handler),
+         warnings = list_of_Warnings)
 }
