@@ -62,8 +62,7 @@ distributedR_start (inst = 0, mem=0, cluster_conf="", log=2)
         DISTRIBUTEDR_HOME is an environment variable holding path where 
         DistributedR is installed.
 
-     4. Default path where DistributedR is installed. Usually would be something like this:
-        /usr/lib64/R/library/DistributedR or /usr/local/lib64/R/library/DistributedR.} 
+     4. Default path where DistributedR is installed.} 
 
    \item{log}{sets level of information generated in log files. 
     The four severity levels are: 0 (ERROR), 1 (WARNING), 2
