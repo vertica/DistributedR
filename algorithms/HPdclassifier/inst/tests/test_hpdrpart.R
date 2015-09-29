@@ -92,7 +92,7 @@ expect_error(hpdrpart(X1 ~ .),
 expect_error(hpdrpart(X1 ~ .,data = matrix(1:9,3,3)),
 				   "'data' must be a dframe or data.frame")
 expect_error(hpdrpart(X1 ~ .,data = dframe(npartitions = c(1,2))),
-				   "'data' must be partitioned rowise")
+				   "'data' must have positive number of rows")
 
 })
 
@@ -125,7 +125,7 @@ expect_error(predict(model), "'newdata' is a required argument")
 expect_error(predict(model,newdata = matrix(1:9,3,3)),
 				   "'newdata' must be a dframe or data.frame")
 expect_error(predict(model,newdata = dframe(npartitions = c(1,2))),
-				   "'newdata' must be partitioned rowise")
+				   "'newdata' must have positive number of rows")
 })
 
 

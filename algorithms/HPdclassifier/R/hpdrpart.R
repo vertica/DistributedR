@@ -48,6 +48,10 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 		stop("'data' is a required argument")
 	if(!is.dframe(data) & !is.data.frame(data))
 		stop("'data' must be a dframe or data.frame")
+	if(nrow(data) <= 0)
+		stop("'data' must have a positive number of rows")
+	if(ncol(data) <= 0)
+		stop("'data' must have a positive number of columns")
 	if(is.dframe(data) & !is.dframe(weights) & !is.null(weights))
 		stop("'weights' must be same type as data")
 	if(is.data.frame(data) & !is.data.frame(weights) & !is.null(weights))
@@ -99,6 +103,10 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	xlevels = variables$x_classes
 	x_colnames = variables$x_colnames
 	weights = variables$weights
+
+	if(nrow(observations) <= 0)
+		stop("all observations eliminated after parsing formula and applying na.action")
+
 	if(length(classes) > 0)
 		classes = classes[[1]]
 	else
@@ -263,10 +271,20 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 
 predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 {
+	if(!inherits(model,"hpdrpart"))
+		stop("method is only for hpdrpart objects")
+	if(!inherits(model,"rpart"))
+		stop("model must inherit from rpart object")
+
 	if(missing(newdata))
 		stop("'newdata' is a required argument")
 	if(!is.dframe(newdata) & !is.data.frame(newdata))
 		stop("'newdata' must be a dframe or data.frame")
+
+	if(nrow(newdata) <= 0)
+		stop("'newdata' must have a positive number of rows")
+	if(ncol(newdata) <= 0)
+		stop("'newdata' must have a positive number of columns")
 
 	if(is.dframe(newdata))
 	{
@@ -281,7 +299,7 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 				args = list(...))
 			{
 				library(rpart)	
-				class(model) <- class(model)[-1]
+				class(model) <- class(model)[class(model) != "hpdrpart"]
 				args = c(list(object = model, newdata = newdata),args)
 				if(!is.element("type",names(args)))
 				{
@@ -297,6 +315,7 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 	if(is.data.frame(newdata))
 	{	
 		args = list(...)
+		old_class <- class(model)
 		class(model) <- "rpart"
 		args = c(list(object = model, newdata = newdata),args)
 		if(!is.element("type",names(args)))
@@ -307,7 +326,7 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 		}	
 		predictions = do.call(predict,args)
 		predictions = data.frame(predictions)
-		class(model) <- c("hpdrpart","rpart")
+		class(model) <- old_class
 	}
 	return(predictions)
 }
