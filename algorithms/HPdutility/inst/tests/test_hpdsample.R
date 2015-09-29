@@ -17,17 +17,36 @@ adf <- as.dframe(as.data.frame(1:100))
 ##############################################################################
 
 test_that("data1 must be a darray/dframe", {
-
+  e <- "'data1' must be a darray or dframe"
+  expect_error(hpdsample(data1 = NA, nSampParts = 1, sampRatio = 0.1), e)
+  expect_error(hpdsample(data1 = 1, nSampParts = 1, sampRatio = 0.1), e)
+  expect_error(hpdsample(data1 = data.frame(c(1, 2)), 
+                         nSampParts = 1, sampRatio = 0.1), e)
+  expect_error(hpdsample(data1 = "c", 
+                         nSampParts = 1, sampRatio = 0.1), e)
 })
 
 test_that("data2 must be a darray/dframe", {
-
+  e <- "'data2' must be a darray or dframe"
+  expect_error(hpdsample(data1 = a, data2 = NA, nSampParts = 1, sampRatio = 0.1), e)
+  expect_error(hpdsample(data1 = a, data2 = 1, nSampParts = 1, sampRatio = 0.1), e)
+  expect_error(hpdsample(data1 = a, data2 = data.frame(c(1, 2)), 
+                         nSampParts = 1, sampRatio = 0.1), e)
+  expect_error(hpdsample(data1 = a, data2 = "c", 
+                         nSampParts = 1, sampRatio = 0.1), e)
 })
 
 test_that("Errors are thrown when required arguments are missing", {
   # data1
+  expect_error(hpdsample(data2 = a, nSampParts = 1, sampRatio = 0.1),
+               'argument "data1" is missing, with no default')
   # nSampParts
-  # nSampPerPartition
+  expect_error(hpdsample(data1 = a, sampRatio = 0.1),
+               'argument "nSampParts" is missing, with no default')
+
+  # sampRatio
+  expect_error(hpdsample(data1 = a, nSampParts = 2),
+               'argument "sampRatio" is missing, with no default')
 })
 
 test_that("nSampParts must be a positive integer", {
@@ -123,23 +142,31 @@ test_that("works with diff data types", {
   d2 <- as.dframe(data.frame(a = rep('c', 1001), 
                              b = 1:1001, 
                              c = runif(1001), 
-                             d = rep('a', 1001)))
+                             d = c(rep('a', 501), rep('b', 500))))
+  print(str(getpartition(d2)))
   n  <- 6
   sr <- 0.1
+  # Shouldn't break
   sd <- hpdsample(d1, d1, nSampParts = n, sampRatio = sr)
 
+  sd <- hpdsample(d2, nSampParts = n, sampRatio = sr)
+  expect_true(all(sapply(getpartition(sd), class) == 
+      sapply(getpartition(d2), class)))
+
   sd <- hpdsample(d2, d1, nSampParts = n, sampRatio = sr)
+
   # Make sure the classes of the output columns are the same as the ones of the
   # input columns
-  all(sapply(getpartition(sd[[1]]), class) == 
-      sapply(getpartition(d2), class))
+  expect_true(all(sapply(getpartition(sd[[1]]), class) == 
+      sapply(getpartition(d2), class)))
+  print(str(getpartition(sd[[1]])))
 
   sd <- hpdsample(d1, d2, nSampParts = n, sampRatio = sr)
-  all(sapply(getpartition(sd[[2]]), class) == 
-      sapply(getpartition(d2), class))
+  expect_true(all(sapply(getpartition(sd[[2]]), class) == 
+      sapply(getpartition(d2), class)))
   sd <- hpdsample(d2, d2, nSampParts = n, sampRatio = sr)
-  all(sapply(getpartition(sd[[2]]), class) == 
-      sapply(getpartition(d2), class))
+  expect_true(all(sapply(getpartition(sd[[2]]), class) == 
+      sapply(getpartition(d2), class)))
 })
 
 test_that("all output partitions have the same size", {

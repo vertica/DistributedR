@@ -199,7 +199,7 @@ hpdegbm <- function(
    dl_GBM_model <- dlist(nExecutor)
    dbest.iter <- darray(c(nExecutor,1), c(1,1))  
   
-   # For small data, load the whole data into every core
+   # For small data, build nExecutor models on the whole dataset
    if ((!is.dframe(X_train)) & (!is.darray(X_train))) {       
      foreach(i, 1:nExecutor, function(dGBM_modeli       = splits(dl_GBM_model,i), 
                                       best.iter         = splits(dbest.iter,i),
