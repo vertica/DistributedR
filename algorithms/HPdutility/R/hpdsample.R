@@ -17,10 +17,10 @@
 #####################################################################################
 
 
-hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
+hpdsample <- function(data1, data2, nSamplePartitions, samplingRatio, trace = FALSE) {
   # Samples data from data1 (and when present, data2, maintaining the same
-  # order of samples between them) into a new darray/dframe with nSampParts
-  # partitions, each of which contains approximately sampRatio * nrow(data1)
+  # order of samples between them) into a new darray/dframe with nSamplePartitions
+  # partitions, each of which contains approximately samplingRatio * nrow(data1)
   # elements. 
   #
   # Args:
@@ -30,43 +30,43 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
   #                     row of data2 is assumed to correspond with the same row
   #                     of data1, and this correspondence will be maintained
   #                     when sampling.
-  #   nSampParts:       The number of output partitions for the sample data
-  #   sampRatio:        The percentage of data from data1/data2 to be sampled
+  #   nSamplePartitions:       The number of output partitions for the sample data
+  #   samplingRatio:        The percentage of data from data1/data2 to be sampled
   #                     in each output partition. E.g. if nrow(data1) = 100,
-  #                     and sampRatio is 0.1, each output partition will
+  #                     and samplingRatio is 0.1, each output partition will
   #                     contain approximately 100 * 0.1 = 10 rows.
   #   trace:            A boolean that states whether or not to print the
   #                     progress of the distributed foreach calls
   # Returns:
   #   If only data1 is present, an output dobject of the same type as data1
-  #   with nSampParts partitions, each of which contains sampRatio *
+  #   with nSamplePartitions partitions, each of which contains samplingRatio *
   #   nrow(data1) elements sampled randomly from data1. If data2 is present, a
   #   list with elements sdata1 (containing the data sampled from data1) and
   #   sdata2 (containing the data sampled from data2)
 
-  if (!is.numeric(nSampParts) || length(nSampParts) != 1 || nSampParts <= 0 ||
-      nSampParts %% 1 != 0) 
-    stop("'nSampParts' must be a positive integer")
+  if (!is.numeric(nSamplePartitions) || length(nSamplePartitions) != 1 || nSamplePartitions <= 0 ||
+      nSamplePartitions %% 1 != 0) 
+    stop("'nSamplePartitions' must be a positive integer")
 
-  if (!is.numeric(sampRatio) || length(sampRatio) != 1 || sampRatio <= 0) 
-    stop("'sampRatio' must be a positive number")
+  if (!is.numeric(samplingRatio) || length(samplingRatio) != 1 || samplingRatio <= 0) 
+    stop("'samplingRatio' must be a positive number")
   
   if (!(is.darray(data1) || is.dframe(data1))) 
     stop("'data1' must be a darray or dframe")
 
-  if (missing(data2)) .hpdsamplesingle(data1, nSampParts, sampRatio,  trace)
-  else                .hpdsampledual(data1, data2, nSampParts, sampRatio, trace)
+  if (missing(data2)) .hpdsamplesingle(data1, nSamplePartitions, samplingRatio,  trace)
+  else                .hpdsampledual(data1, data2, nSamplePartitions, samplingRatio, trace)
 }
 
-.hpdsamplesingle <- function(data, nSampParts, sampRatio, trace) {
+.hpdsamplesingle <- function(data, nSamplePartitions, samplingRatio, trace) {
   # Function used to perform sampling on a single darray/dframe
 
   ndcol     <- ncol(data)
   # Contains the amount of data to be sampled from each data partition into the
   # output partitions
-  psizes    <- ceiling(partitionsize(data)[,1] * sampRatio)
+  psizes    <- ceiling(partitionsize(data)[,1] * samplingRatio)
   finalnspp <- sum(psizes) # Number of samples per partition
-  ddim      <- c(finalnspp * nSampParts, ndcol)
+  ddim      <- c(finalnspp * nSamplePartitions, ndcol)
   dblocks   <- c(finalnspp, ndcol)
   # Contains sample data to be returned
   sdata     <- if      (is.darray(data)) darray(dim = ddim, blocks = dblocks)
@@ -82,7 +82,7 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
     # Iterate over the output partitions si in parallel and copy some portion of
     # the data from partition dk to sample partition si. This copied data will
     # be appended to the data copied from previous partitions
-    foreach(i, 1:nSampParts, function(si = splits(sdata, i),
+    foreach(i, 1:nSamplePartitions, function(si = splits(sdata, i),
                                       dk = splits(data, k),
                                       psizes = psizes,
                                       dLevels = dLevels,
@@ -122,7 +122,7 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
   sdata 
 }
 
-.hpdsampledual <- function(data1, data2, nSampParts, sampRatio, trace) {
+.hpdsampledual <- function(data1, data2, nSamplePartitions, samplingRatio, trace) {
   # Function to sample two darrays/dframes in conjunction
   
   if (!(is.darray(data1) || is.dframe(data1))) 
@@ -141,12 +141,12 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
   ndcol2    <- ncol(data2)
   # Contains the amount of data to be sampled from each data partition into the
   # output partitions
-  psizes    <- ceiling(partitionsize(data1)[,1] * sampRatio)
+  psizes    <- ceiling(partitionsize(data1)[,1] * samplingRatio)
   finalnspp <- sum(psizes) # Number of samples per partition 
 
-  d1dim     <- c(finalnspp * nSampParts, ndcol1)
+  d1dim     <- c(finalnspp * nSamplePartitions, ndcol1)
   d1blocks  <- c(finalnspp, ndcol1)
-  d2dim     <- c(finalnspp * nSampParts, ndcol2)
+  d2dim     <- c(finalnspp * nSamplePartitions, ndcol2)
   d2blocks  <- c(finalnspp, ndcol2)
   # dobject to contain the sampled data from data1
   sdata1 <- if (is.darray(data1))      darray(dim = d1dim, blocks = d1blocks) 
@@ -164,7 +164,7 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
     # Iterate over the output partitions si in parallel and copy some portion of
     # the data from partition dk to sample partition si. This copied data will
     # be appended to the data copied from previous partitions
-    foreach(i, 1:nSampParts, function(si1 = splits(sdata1, i),
+    foreach(i, 1:nSamplePartitions, function(si1 = splits(sdata1, i),
                                       si2 = splits(sdata2, i),
                                       dk1 = splits(data1, k),
                                       dk2 = splits(data2, k),
@@ -232,7 +232,7 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
   # Args:
   #   data: A dframe object
   # 
-  # Value: 
+  # Returns: 
   #   An object returned by levels.dframe  
 
   dfactorCols <- darray(npartition = 1)
@@ -260,6 +260,8 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
   #   df: A data frame
   #   dLevels: An object returned by levels.dframe containing the global
   #            levels for a dframe
+  # Returns:
+  #   The modified df
      
   for (j in seq_along(dLevels$columns)) {
     c <- dLevels$columns[j]
@@ -276,7 +278,8 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
   #   si: A data frame (presumed full of NAs)
   #   dLevels: An object returned by levels.dframe, or NULL
   #
-
+  # Returns:
+  #  The modified si
 
   # For each non-factor class, convert class type of columns of si to be the
   # same as class type of dk. Right now ordered factors aren't supported, which
@@ -286,7 +289,6 @@ hpdsample <- function(data1, data2, nSampParts, sampRatio, trace = FALSE) {
   for (ci in nonFactorCols) {
     si[,ci] <- as(si[,ci], class(dk[,ci]))
   }
-
 
   if (!is.null(dLevels)) {
     # For every factor column in dk, make sure that column in si is also a
