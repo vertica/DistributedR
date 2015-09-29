@@ -117,10 +117,10 @@ hpdegbm <- function(
   if (!is.vector(Y_train) && nrow(X_train) != nrow(Y_train))
     stop("'Y_train' must have the same number of rows as 'X_train'")
 
-  if (((distribution == "bernoulli") || 
-       (distribution == "adaboost")  || 
-       (distribution == "gaussian")) && is.dframe(Y_train))
-    stop("'Y_train' cannot be dframe for regression and binary classification")
+  #if (((distribution == "bernoulli") || 
+  #     (distribution == "adaboost")  || 
+  #     (distribution == "gaussian")) && is.dframe(Y_train))
+  #  stop("'Y_train' cannot be dframe for regression and binary classification")
 
   if ((.isdarrayorframe(X_train) && !.isdarrayorframe(Y_train)) ||
       (.isdarrayorframe(Y_train) && !.isdarrayorframe(X_train)))
@@ -200,7 +200,7 @@ hpdegbm <- function(
    dbest.iter <- darray(c(nExecutor,1), c(1,1))  
   
    # For small data, build nExecutor models on the whole dataset
-   if ((!is.dframe(X_train)) & (!is.darray(X_train))) {       
+   if (!is.dframe(X_train) && !is.darray(X_train)) {       
      foreach(i, 1:nExecutor, function(dGBM_modeli       = splits(dl_GBM_model,i), 
                                       best.iter         = splits(dbest.iter,i),
                                       x                 = X_train,
@@ -217,12 +217,12 @@ hpdegbm <- function(
                             distribution, interaction.depth, n.minobsinnode,
                             shrinkage, bag.fraction)
 
-      })
-    } else{  ### For big data: load each partition into every core
-      # X_train: dframe/darray
-      # Y_train: dframe/darray
+      }, progress = trace)
+    } else{  
+      # For big data: Sample the data into nExecutor partitions and build a
+      # model on each
       
-      ### distributed sampling
+      # Distributed sampling
       if (samplingFlag == TRUE) {
         nTrain   <- nrow(X_train)
         nFeature <- ncol(X_train)
@@ -233,8 +233,8 @@ hpdegbm <- function(
 
         # Perform distributed sampling. The outputs contain as many models as
         # executors to be built
-        sampledXY <- hpdsample(X_train, Y_train, nSampParts = nExecutor,
-                               sampRatio = sampleRatio)
+        sampledXY <- hpdsample(X_train, Y_train, nSamplePartitions = nExecutor,
+                               samplingRatio = sampleRatio)
         sX_train <- sampledXY[[1]]
         sY_train <- sampledXY[[2]]
       } else { # Don't sample the data
@@ -255,7 +255,7 @@ hpdegbm <- function(
           # Store names of classes with non-zero count in this partition
           pcs <- list(names(tab[which(tab != 0)]))
           update(pcs)
-        })
+        }, progress = trace)
 
         pclasses <- getpartition(dpartClasses)
 
@@ -282,7 +282,7 @@ hpdegbm <- function(
         buildLocalModel(dGBM_modeli, best.iter, x, y, n.trees,
                             distribution, interaction.depth, n.minobsinnode,
                             shrinkage, bag.fraction)
-      })
+      }, progress = trace)
     }
   
     if(trace) {
@@ -385,7 +385,7 @@ print.hpdegbm <- function(x, ...) {
       overlay = FALSE, 
       method="OOB")
 
-  if (best.iter0 <50) best.iter0 <- 50
+  if (best.iter0 < 50) best.iter0 <- 50
 
   best.iter <- as.matrix(best.iter0)
 
