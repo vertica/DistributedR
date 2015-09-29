@@ -385,7 +385,7 @@ extern "C"
   {
     hpdRFforest * forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
     SEXP R_buffer;
-    int buffer_size;
+    long long buffer_size;
     PROTECT(R_buffer = allocVector(VECSXP,forest->ntree+1));
     for(int i =0; i < forest->ntree; i++)
       {

@@ -94,7 +94,7 @@ hpdRFnode* createChildNode(hpdRFnode *parent,
 void cleanSingleNode(hpdRFnode *node);
 SEXP printNode(hpdRFnode *tree, int depth, int max_depth, SEXP classes);
 void destroyTree(hpdRFnode *tree);
-int calculateBufferSize(hpdRFnode* tree);
+long long calculateBufferSize(hpdRFnode* tree);
 int* serializeTree(hpdRFnode *tree, int* buffer);
 int* unserializeTree(hpdRFnode *tree, int* buffer, hpdRFnode**leaf_nodes);
 int countSubTree(hpdRFnode *tree, int remaining_depth);

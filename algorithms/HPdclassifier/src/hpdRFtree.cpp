@@ -25,9 +25,9 @@
 
 //8 bytes for prediction, 12 for treeID, split_variable, split_criteria_length
 //however many bytes for split_criteria + 4 bytes for indicating if left,right,additional_info are null, 16 possible bytes for additional_info and 12*num_obs bytes for indices, weights
-int calculateBufferSize(hpdRFnode* tree)
+long long calculateBufferSize(hpdRFnode* tree)
 {
-  int total = sizeof(double) + 4*sizeof(int);
+  long long total = sizeof(double) + 4*sizeof(int);
   total += tree->split_criteria_length*sizeof(double);
   if(tree->additional_info)
     total += 5*sizeof(int)+
@@ -420,6 +420,8 @@ hpdRFnode* createChildNode(hpdRFnode* parent,
       child->summary_info=(hpdRFSummaryInfo *) malloc(sizeof(hpdRFSummaryInfo));
       child->summary_info->deviance = 0;
       child->summary_info->complexity = 1;
+      child->summary_info->node_counts_length = 0;
+      child->summary_info->node_counts = NULL;
     }
   else
     child->summary_info = NULL;

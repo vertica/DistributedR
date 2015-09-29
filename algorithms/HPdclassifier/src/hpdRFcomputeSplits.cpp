@@ -567,6 +567,8 @@ extern "C"
 	  {
 	    node_curr->summary_info = (hpdRFSummaryInfo*) 
 	      malloc(sizeof(hpdRFSummaryInfo));
+	    node_curr->summary_info->node_counts_length = 0;
+	    node_curr->summary_info->node_counts = NULL;
 	    node_curr->summary_info->complexity = 
 	      REAL(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),3))[0];
 	    node_curr->summary_info->deviance = 
