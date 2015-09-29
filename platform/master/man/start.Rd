@@ -48,7 +48,21 @@ distributedR_start (executors = 0, mem=0, cluster_conf="", log=2)
      Currently, memory constraints are not enforced.  
 
      An example configuration file is present in
-     /opt/hp/distributedR/conf/cluster_conf.xml}
+     (/path/to/distributedR)/conf/cluster_conf.xml
+
+     The distributedR_start function can fetch the cluster_conf file in multiple ways with
+     the priority as follows:
+
+     1. cluster_conf parameter specified in the distributedR_start function.
+
+     2. fetch cluster_conf file from DR_CLUSTER_CONF environment variable. This should contain 
+        complete path to the cluster configuration file.
+
+     3. Fetch cluster_conf file from (DISTRIBUTEDR_HOME)/conf/cluster_conf.xml. Here 
+        DISTRIBUTEDR_HOME is an environment variable holding path where 
+        DistributedR is installed.
+
+     4. Default path where DistributedR is installed.} 
 
    \item{log}{sets level of information generated in log files. 
     The four severity levels are: 0 (ERROR), 1 (WARNING), 2
