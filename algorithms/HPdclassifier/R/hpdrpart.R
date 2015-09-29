@@ -315,8 +315,8 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 {
 	model <- .Call("rpartModel",tree)
 	csplit <- model[[11]]
-	splits <- cbind(count = 0,model[[9]],improve = model[[10]], model[[8]],adj = 0)
-	model[[10]] <- NULL
+	splits <- cbind(count = model[[6]],model[[9]],
+	       improve = model[[10]], model[[8]],adj = 0)
 	varnames = c("<leaf>", varnames)
 	model[[2]] = varnames[model[[2]]+1]
 	leaf_ids = model[[1]]
