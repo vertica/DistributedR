@@ -308,6 +308,142 @@ test_that("db2darrays() loads correctly", {
 
 })
 
+context("db2dframes View: Check data loading")
+
+test_that("db2dframes() loads correctly", {
+
+    ## 1:local + no specific columns
+    A <- db2dframes("view_10K", "distr_regression", resp=list("rowid"))
+    expect_that(A, is_a("list"))
+    expect_that(A$X, is_a("dframe"))
+    expect_that(A$Y, is_a("dframe"))
+    expect_equal(system("ls -lh | grep DR-loader- | wc -l", intern=TRUE), "0")
+    expect_equal(nrow(A$X), 10000)
+    expect_equal(ncol(A$X), 10)
+    expect_equal(nrow(A$Y), 10000)
+    expect_equal(ncol(A$Y), 1)
+    expect_equal(max(A$Y), 9999)
+    expect_equal(min(A$Y), 0)
+    minmax_da <- darray(c(npartitions(A$X), 1), c(1,1))
+    foreach(i, 1:npartitions(A$X), function(a=splits(A$X, i), m=splits(minmax_da, i), index=1) { m <- matrix(max(a[,index]), 1, 1); update(m); })
+    expect_equal(max(getpartition(minmax_da)), 1)
+    foreach(i, 1:npartitions(A$X), function(a=splits(A$X, i), m=splits(minmax_da, i), index=1) { m <- matrix(min(a[,index]), 1, 1); update(m); })
+    expect_equal(max(getpartition(minmax_da)), 0)
+    #Columns
+    resp_columns <- sqlQuery(connect, "select column_name from view_columns where table_name='view_10K' and column_name='rowid'", stringsAsFactors=FALSE)
+    expect_equal(colnames(A$Y), resp_columns$column_name)
+    pred_columns <- sqlQuery(connect, "select column_name from view_columns where table_name='view_10K' and column_name in ('col1', 'col2', 'col3', 'col4', 'col5', 'col5', 'col6', 'col7', 'col8', 'col9', 'col10')", stringsAsFactors=FALSE)
+    expect_equal(colnames(A$X), pred_columns$column_name)
+    #Check data type
+    part <- getpartition(A$X, 1)
+    expect_that(part[,1], is_a("integer"))
+    expect_that(part[,3], is_a("numeric"))
+    expect_that(part[,7], is_a("numeric"))
+   expect_that(part[,10], is_a("character"))
+    part <- getpartition(A$Y, 1)
+    expect_that(part[,1], is_a("integer"))
+
+    
+    ## 2: uniform + no specific columns
+    A <- db2dframes("view_10K", "distr_regression", resp=list("rowid"), loadPolicy="uniform")
+    expect_that(A, is_a("list"))
+    expect_that(A$X, is_a("dframe"))
+    expect_that(A$Y, is_a("dframe"))
+    expect_equal(system("ls -lh | grep DR-loader- | wc -l", intern=TRUE), "0")
+    expect_equal(nrow(A$X), 10000)
+    expect_equal(ncol(A$X), 10)
+    expect_equal(nrow(A$Y), 10000)
+    expect_equal(ncol(A$Y), 1)
+    expect_equal(max(A$Y), 9999)
+    expect_equal(min(A$Y), 0)
+    minmax_da <- darray(c(npartitions(A$X), 1), c(1,1))
+    foreach(i, 1:npartitions(A$X), function(a=splits(A$X, i), m=splits(minmax_da, i), index=1) { m <- matrix(max(a[,index]), 1, 1); update(m); })
+    expect_equal(max(getpartition(minmax_da)), 1)
+    foreach(i, 1:npartitions(A$X), function(a=splits(A$X, i), m=splits(minmax_da, i), index=1) { m <- matrix(min(a[,index]), 1, 1); update(m); })
+    expect_equal(max(getpartition(minmax_da)), 0)
+    #Columns
+    resp_columns <- sqlQuery(connect, "select column_name from view_columns where table_name='view_10K' and column_name='rowid'", stringsAsFactors=FALSE)
+    expect_equal(colnames(A$Y), resp_columns$column_name)
+    pred_columns <- sqlQuery(connect, "select column_name from view_columns where table_name='view_10K' and column_name in ('col1', 'col2', 'col3', 'col4', 'col5', 'col5', 'col6', 'col7', 'col8', 'col9', 'col10')", stringsAsFactors=FALSE)
+    expect_equal(colnames(A$X), pred_columns$column_name)
+    #Check data type
+    part <- getpartition(A$X, 1)
+    expect_that(part[,1], is_a("integer"))
+    expect_that(part[,3], is_a("numeric"))
+    expect_that(part[,7], is_a("numeric"))
+    expect_that(part[,10], is_a("character"))
+    part <- getpartition(A$Y, 1)
+    expect_that(part[,1], is_a("integer"))
+
+
+    ## 3: local + specific columns
+    A <- db2dframes("view_10K", "distr_regression", resp=list("rowid"), pred=list("col1", "col2", "col10"))
+    expect_that(A, is_a("list"))
+    expect_that(A$X, is_a("dframe"))
+    expect_that(A$Y, is_a("dframe"))
+    expect_equal(system("ls -lh | grep DR-loader- | wc -l", intern=TRUE), "0")
+    expect_equal(nrow(A$X), 10000)
+    expect_equal(ncol(A$X), 3)
+    expect_equal(nrow(A$Y), 10000)
+    expect_equal(ncol(A$Y), 1)
+    expect_equal(max(A$Y), 9999)
+    expect_equal(min(A$Y), 0)
+    minmax_da <- darray(c(npartitions(A$X), 2), c(1,2))
+    foreach(i, 1:npartitions(A$X), function(a=splits(A$X, i), m=splits(minmax_da, i), index=1) { m <- matrix(c(max(a[,index]), max(a[,index+1])), nrow=1, ncol=2); update(m); })
+    expect_equal(max(getpartition(minmax_da)[,1]), 1)
+    expect_equal(max(getpartition(minmax_da)[,2]), 0.999855)
+    foreach(i, 1:npartitions(A$X), function(a=splits(A$X, i), m=splits(minmax_da, i), index=1) { m <- matrix(c(min(a[,index]), min(a[,index+1])), nrow=1, ncol=2); update(m); })
+    expect_equal(min(getpartition(minmax_da)[,1]), 0)
+    expect_equal(min(getpartition(minmax_da)[,2]), 0.000018)
+    #Columns
+    resp_columns <- sqlQuery(connect, "select column_name from view_columns where table_name='view_10K' and column_name='rowid'", stringsAsFactors=FALSE)
+    expect_equal(colnames(A$Y), resp_columns$column_name)
+    pred_columns <- sqlQuery(connect, "select column_name from view_columns where table_name='view_10K' and column_name in ('col1', 'col2', 'col10')", stringsAsFactors=FALSE)
+    expect_equal(colnames(A$X), pred_columns$column_name)
+    #Check data type
+    part <- getpartition(A$X, 1)
+    expect_that(part[,1], is_a("integer"))
+    expect_that(part[,2], is_a("numeric"))
+    expect_that(part[,3], is_a("character"))
+
+    
+
+    ## 4: uniform + specific columns
+    A <- db2dframes("view_10K", "distr_regression", resp=list("rowid"), pred=list("col1", "col2", "col10"), loadPolicy="uniform")
+    expect_that(A, is_a("list"))
+    expect_that(A$X, is_a("dframe"))
+    expect_that(A$Y, is_a("dframe"))
+    expect_equal(system("ls -lh | grep DR-loader- | wc -l", intern=TRUE), "0")
+    expect_equal(nrow(A$X), 10000)
+    expect_equal(ncol(A$X), 3)
+    expect_equal(nrow(A$Y), 10000)
+    expect_equal(ncol(A$Y), 1)
+    expect_equal(max(A$Y), 9999)
+    expect_equal(min(A$Y), 0)
+    minmax_da <- darray(c(npartitions(A$X), 2), c(1,2))
+    foreach(i, 1:npartitions(A$X), function(a=splits(A$X, i), m=splits(minmax_da, i), index=1) { m <- matrix(c(max(a[,index]), max(a[,index+1])), nrow=1, ncol=2); update(m); })
+    expect_equal(max(getpartition(minmax_da)[,1]), 1)
+    expect_equal(max(getpartition(minmax_da)[,2]), 0.999855)
+    foreach(i, 1:npartitions(A$X), function(a=splits(A$X, i), m=splits(minmax_da, i), index=1) { m <- matrix(c(min(a[,index]), min(a[,index+1])), nrow=1, ncol=2); update(m); })
+    expect_equal(min(getpartition(minmax_da)[,1]), 0)
+    expect_equal(min(getpartition(minmax_da)[,2]), 0.000018)
+    #Columns
+    resp_columns <- sqlQuery(connect, "select column_name from view_columns where table_name='view_10K' and column_name='rowid'", stringsAsFactors=FALSE)
+    expect_equal(colnames(A$Y), resp_columns$column_name)
+    pred_columns <- sqlQuery(connect, "select column_name from view_columns where table_name='view_10K' and column_name in ('col1', 'col2', 'col10')", stringsAsFactors=FALSE)
+    expect_equal(colnames(A$X), pred_columns$column_name)
+    #Check data type
+    part <- getpartition(A$X, 1)
+    expect_that(part[,1], is_a("integer"))
+    expect_that(part[,2], is_a("numeric"))
+    expect_that(part[,3], is_a("character"))
+
+    ## 5: except argument
+    A <- db2dframes("view_10K", "distr_regression", resp=list("rowid"), except=list("col1", "col10"))
+    expect_equal(colnames(A$X), c("col2", "col3", "col4", "col5", "col6", "col7", "col8", "col9"))
+
+})
+
 context("db2dgraph View: Check data loading")
 
 test_that("db2dgraph() loads correctly", {
