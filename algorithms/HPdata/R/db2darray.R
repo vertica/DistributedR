@@ -313,7 +313,7 @@ db2darray <- function(tableName, dsn, features = list(...), except=list(...), np
             segment<-sqlQuery(connect, qryString, buffsize= end-start)
             odbcClose(connect)
 
-            x <- data.matrix(segment[,1:nFeatures])
+            x <- data.matrix(segment[,1:nFeatures,drop=FALSE])
             colnames(x) <- feature_columns
 
             update(x)
