@@ -113,8 +113,10 @@ int convertTreetoRpart(hpdRFnode* tree, int* indices,
 		       int* var, double* dev, 
 		       double* yval, double* complexity, double* improve,
 		       double* split_index, int* ncat, 
+		       double* node_count, int offset, 
 		       int rowID, double parent_cp, int node_index,
-		       int* features_cardinality, int* csplit_count,
+		       int* features_cardinality, int response_cardinality,
+		       int* csplit_count,
 		       int current_depth, int max_depth);
 
 

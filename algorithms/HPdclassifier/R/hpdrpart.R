@@ -209,7 +209,8 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 		if(do.trace)
 		print("converting to rpart model")
 		timing_info <- Sys.time()
-		model = .convertToRpartModel(tree$forest, x_colnames)
+		model = .convertToRpartModel(tree$forest, x_colnames, 
+		      length(classes), nrow(observations))
 		timing_info <- Sys.time() - timing_info
 		if(do.trace )
 		print(timing_info)
@@ -311,7 +312,7 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 	return(predictions)
 }
 
-.convertToRpartModel <- function(tree, varnames)
+.convertToRpartModel <- function(tree, varnames, nClasses, n)
 {
 	model <- .Call("rpartModel",tree)
 	csplit <- model[[11]]
@@ -320,9 +321,20 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 	varnames = c("<leaf>", varnames)
 	model[[2]] = varnames[model[[2]]+1]
 	leaf_ids = model[[1]]
+	yval2 = NULL
+	if(!is.null(model[[12]]))
+	{
+		node_counts = matrix(model[[12]],ncol = nClasses)
+		node_ratio = apply(node_counts,2,function(x) x/sum(x))
+		node_prob = rowSums(node_counts)/n
+		yval2 = cbind(matrix(model[[4]]),node_counts, node_ratio, node_prob)
+		colnames(yval2) <- c(paste("yval2.V",1:7,sep = ""),"yval2.nodeprob")
+	}
 	model = data.frame(var = model[[2]], n = model[[6]], wt = model[[7]], 
 	      dev = model[[3]], yval = matrix(model[[4]]), complexity = model[[5]])
 	colnames(model) <- c("var", "n","wt","dev", "yval", "complexity")
+	if(!is.null(yval2))
+		model = cbind(model,yval2)
 	rownames(model) <- leaf_ids
 	model <- cbind(model, ncompete = 0, nsurrogate = 0)
 	valid_splits <- complete.cases(splits)

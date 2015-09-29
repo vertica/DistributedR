@@ -101,21 +101,22 @@ double computeRegressionTreeStats(double* hist, int nbin, double* L0,
  */
 double computeClassificationTreeStats(double* hist, int nbin, 
 				      int classes, double* sum, 
-				      double* default_cost)
+				      double* default_cost,
+				      double* node_count)
 {
   double temp,max_count=0, prediction=0, sq = 0;
   for(int k = 0; k < classes; k++)
     {
-      temp = 0;
+      node_count[k] = 0;
       for(int i = 0; i < nbin; i ++)
-	temp += hist[nbin*k+i];
+	node_count[k] += hist[nbin*k+i];
 
-      *sum += temp;
-      sq += temp*temp;
-      if(temp > max_count)
+      *sum += node_count[k];
+      sq += node_count[k]*node_count[k];
+      if(node_count[k] > max_count)
 	{
 	  prediction = (double) k;
-	  max_count = temp;
+	  max_count = node_count[k];
 	}
     }
   *default_cost = 1-sq/(*sum)/(*sum);
@@ -430,11 +431,13 @@ extern "C"
 	*REAL(VECTOR_ELT(split_info,5)) = DBL_MAX;
 	*REAL(VECTOR_ELT(split_info,6)) = 0;
 	*INTEGER(VECTOR_ELT(split_info,7)) = 0;
+	SET_VECTOR_ELT(split_info,8,R_NilValue);
+
       }
     for(int i = length(old_splits_info); i < length(R_active_nodes); i++)
       {
 	SEXP split_info;
-	PROTECT(split_info = allocVector(VECSXP,8));
+	PROTECT(split_info = allocVector(VECSXP,9));
 	SET_VECTOR_ELT(splits_info,i,split_info);
 	SET_VECTOR_ELT(split_info,0,ScalarInteger(0));
 	SET_VECTOR_ELT(split_info,1,R_NilValue);
@@ -444,6 +447,7 @@ extern "C"
 	SET_VECTOR_ELT(split_info,5,ScalarReal(DBL_MAX));
 	SET_VECTOR_ELT(split_info,6,ScalarReal(0));
 	SET_VECTOR_ELT(split_info,7,ScalarInteger(0));
+	SET_VECTOR_ELT(split_info,8,R_NilValue);
 	UNPROTECT(1);
       }
     
@@ -461,6 +465,8 @@ extern "C"
  	double default_cost;
 	int featureIndex = INTEGER(getAttrib(VECTOR_ELT(node_histograms,0),
 					     install("feature")))[0]-1;
+	SEXP node_count = R_NilValue;
+
 	if(!response_categorical)
 	  prediction = computeRegressionTreeStats(REAL(VECTOR_ELT(node_histograms,0)), 
 						  bin_num[featureIndex],
@@ -468,12 +474,17 @@ extern "C"
 						  &default_cost);
 	else
 	  {
+	    PROTECT(node_count = allocVector(REALSXP,response_cardinality));
 	    prediction = computeClassificationTreeStats(REAL(VECTOR_ELT(node_histograms,0)),
 							bin_num[featureIndex], 
 							response_cardinality, 
 							&L0,
-							&default_cost);
+							&default_cost,
+							REAL(node_count));
 	    prediction = prediction + 1;
+	    SET_VECTOR_ELT(split_info,8,node_count);
+	    UNPROTECT(1);
+
 	  }
 	*REAL(VECTOR_ELT(split_info,4)) = prediction;
 	int best_featureIndex = -1;
@@ -562,13 +573,27 @@ extern "C"
 	int tree_id = node_curr->treeID-1;
 	node_curr->prediction = 
 	  *REAL(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),4));
-
 	if(summary_info)
 	  {
-	    node_curr->summary_info = (hpdRFSummaryInfo*) 
-	      malloc(sizeof(hpdRFSummaryInfo));
-	    node_curr->summary_info->node_counts_length = 0;
-	    node_curr->summary_info->node_counts = NULL;
+	    if(!node_curr->summary_info)
+	      node_curr->summary_info = (hpdRFSummaryInfo*) 
+		malloc(sizeof(hpdRFSummaryInfo));
+
+	    if(forest->response_cardinality != NA_INTEGER)
+	      {
+		node_curr->summary_info->node_counts_length = 
+		  forest->response_cardinality;
+		node_curr->summary_info->node_counts = (double *)
+		  malloc(sizeof(double)* forest->response_cardinality);
+		memcpy(node_curr->summary_info->node_counts,
+		       REAL(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),8)),
+		       sizeof(double)*forest->response_cardinality);
+	      }
+	    else
+	      {
+		node_curr->summary_info->node_counts_length = 0;
+		node_curr->summary_info->node_counts = NULL;
+	      }
 	    node_curr->summary_info->complexity = 
 	      REAL(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),3))[0];
 	    node_curr->summary_info->deviance = 

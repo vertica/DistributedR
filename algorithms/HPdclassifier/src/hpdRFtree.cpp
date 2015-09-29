@@ -96,7 +96,7 @@ int* serializeTree(hpdRFnode *tree, int* buffer)
       *(temp++) = tree->summary_info->complexity;
       *(temp++) = tree->summary_info->deviance;
       for(int i = 0; i < tree->summary_info->node_counts_length; i++)
-	temp[i] = tree->summary_info->node_counts[i];
+	*(temp++) = tree->summary_info->node_counts[i];
       buffer = (int *) temp;
     }
 
@@ -182,7 +182,7 @@ int* unserializeTree(hpdRFnode *tree, int* buffer, hpdRFnode**leaf_nodes)
       tree->summary_info->complexity = *(temp++);
       tree->summary_info->deviance = *(temp++);
       for(int i = 0; i < tree->summary_info->node_counts_length; i++)
-	tree->summary_info->node_counts[i] = temp[i];
+	tree->summary_info->node_counts[i] = *(temp++);
       buffer = (int *) temp;
     }
   else
@@ -282,6 +282,11 @@ SEXP printNode(hpdRFnode *tree, int depth, int max_depth, SEXP classes)
 	printf("complexity: %f\n",tree->summary_info->complexity);
 	tab;
 	printf("deviance: %f\n",tree->summary_info->deviance);
+	tab;
+	printf("node_counts: ");
+	for(int i = 0; i < tree->summary_info->node_counts_length; i++)
+	  printf("%f ",tree->summary_info->node_counts[i]);
+	printf("\n");
       }
     if(tree->left != NULL)
       {
@@ -561,8 +566,10 @@ int convertTreetoRpart(hpdRFnode* tree, int* indices, int* n,
 		       double* yval, double* complexity,
 		       double* improve,
 		       double* split_index, int* ncat, 
+		       double* node_count, int offset, 
 		       int rowID, double parent_cp, int node_index,
-		       int* features_cardinality, int* csplit_count,
+		       int* features_cardinality, int response_cardinality,
+		       int* csplit_count,
 		       int current_depth, int max_depth)
 {
   indices[node_index] = rowID;
@@ -574,6 +581,10 @@ int convertTreetoRpart(hpdRFnode* tree, int* indices, int* n,
   complexity[node_index] = parent_cp*tree->summary_info->complexity;
   improve[node_index] = (1-tree->summary_info->complexity)
     *tree->summary_info->deviance;
+  if(response_cardinality != NA_INTEGER)
+    for(int i = 0; i < response_cardinality; i ++)
+      node_count[node_index + i*offset] = tree->summary_info->node_counts[i];
+
 
   if(tree->split_criteria_length == 0)
     {
@@ -596,15 +607,19 @@ int convertTreetoRpart(hpdRFnode* tree, int* indices, int* n,
   if(tree->left && current_depth < max_depth)
     node_index = convertTreetoRpart(tree->left, indices, n,wt,var, dev,
 				    yval, complexity, improve, split_index, 
-				    ncat, rowID*2, parent_cp, 
+				    ncat, node_count, offset, 
+				    rowID*2, parent_cp, 
 				    node_index+1, features_cardinality,
+				    response_cardinality,
 				    csplit_count,current_depth+1,
 				    max_depth);
   if(tree->right && current_depth < max_depth)
     node_index = convertTreetoRpart(tree->right, indices, n,wt,var, dev,
-				    yval, complexity, improve, split_index, 
-				    ncat, rowID*2+1, parent_cp, 
+				    yval, complexity, improve, split_index,
+ 				    ncat, node_count, offset, 
+				    rowID*2+1, parent_cp, 
 				    node_index+1, features_cardinality,
+				    response_cardinality,
 				    csplit_count,current_depth+1,
 				    max_depth);
   return node_index;

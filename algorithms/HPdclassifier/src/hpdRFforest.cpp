@@ -98,7 +98,17 @@ void updateLeafNodeWithPredictions(SEXP R_responses, hpdRFnode *node,
 	    max = predictions[i];
 	  }
       node->prediction = bin+1;
+      if(node->summary_info)
+	{
+	  node->summary_info->node_counts_length = response_cardinality;
+	  if(!node->summary_info->node_counts)
+	    node->summary_info->node_counts = (double *)
+	      malloc(sizeof(double)*response_cardinality);
+	  memcpy(node->summary_info->node_counts,predictions,
+		 sizeof(double)*node->summary_info->node_counts_length);
+	}
       free(predictions);
+
     }
   else
     {
@@ -109,6 +119,13 @@ void updateLeafNodeWithPredictions(SEXP R_responses, hpdRFnode *node,
 	  L0 += weights[i];
 	}
       node->prediction = L1/L0;
+    }
+  if(node->summary_info)
+    {
+      node->summary_info->n = num_obs;
+      node->summary_info->wt = 0;
+      for(int i = 0; i < num_obs;i++)
+	node->summary_info->wt += weights[i];
     }
 }
 
@@ -863,7 +880,7 @@ extern "C"
     hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
     hpdRFnode* tree = forest->trees[0];
     SEXP model;
-    PROTECT(model = allocVector(VECSXP, 11));
+    PROTECT(model = allocVector(VECSXP, 12));
     int max_depth = 30;
 
     int numNodes = countSubTree(tree, max_depth);
@@ -874,7 +891,7 @@ extern "C"
 	max_ncat = forest->features_cardinality[i];
 
     SEXP indices, var, dev, yval, complexity, split_index, ncat,
-      csplit, n, wt, improve;
+      csplit, n, wt, improve, R_node_counts = R_NilValue;
     PROTECT(n = allocVector(INTSXP, numNodes));
     PROTECT(wt = allocVector(REALSXP, numNodes));
     PROTECT(indices = allocVector(INTSXP, numNodes));
@@ -885,6 +902,14 @@ extern "C"
     PROTECT(split_index = allocVector(REALSXP, numNodes));
     PROTECT(ncat = allocVector(INTSXP, numNodes));
     PROTECT(improve = allocVector(REALSXP, numNodes));
+    double *node_counts = NULL;
+    if(forest->response_cardinality != NA_INTEGER)
+      {
+	PROTECT(R_node_counts=allocVector(REALSXP,
+					  numNodes*forest->response_cardinality));
+	node_counts = REAL(R_node_counts);
+      }
+
 
     int csplit_count = 0;
     convertTreetoRpart(tree, INTEGER(indices), INTEGER(n), 
@@ -892,7 +917,9 @@ extern "C"
 		       REAL(dev), REAL(yval), REAL(complexity),
 		       REAL(improve),
 		       REAL(split_index),INTEGER(ncat),
+		       node_counts, numNodes,
 		       1, 1, 0, forest->features_cardinality,
+		       forest->response_cardinality,
 		       &csplit_count, 1, max_depth);
 
     int nrow = csplit_count;
@@ -918,8 +945,11 @@ extern "C"
     SET_VECTOR_ELT(model,9,improve);
 
     SET_VECTOR_ELT(model,10,csplit);
+    SET_VECTOR_ELT(model,11,R_node_counts);
+    if(R_node_counts != R_NilValue)
+      UNPROTECT(1);
 
-    UNPROTECT(length(model)+1);
+    UNPROTECT(length(model));
     return model;
     
   }

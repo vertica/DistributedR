@@ -520,7 +520,6 @@
 			starting_depth = starting_depth, random_seed = random_seed,
 			summary_info = summary_info)
 
-		
 		dforest = list(.Call("serializeForest",forest))
 		.Call("garbageCollectForest",forest)
 		update(dforest)
