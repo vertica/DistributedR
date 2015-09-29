@@ -1,5 +1,6 @@
 library(HPdata)
-distributedR_start()
+
+context("Distributed Data Connector")
 
 test_that("ex001.csv", {
   df <- csv2dframe(paste(getwd(),'/data/ex001.csv',sep=''), schema='a:int64,b:string')
