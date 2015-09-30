@@ -13,26 +13,24 @@ hpdsample(data1, data2, nSamplePartitions, samplingRatio, trace = FALSE)
 
 \arguments{
   \item{data1}{
-      A darray/dframe to sample
+      a darray/dframe to sample. It must be row-wise partitioned.
   }
   \item{data2}{
-      (Optional) A darray/dframe to sample along with data1. Must have the same number 
-      of rows and partitions as data1. Each row of data2 is assumed to correspond 
-      with the same row of data1, and this correspondence will be maintained
-      when sampling.
+      (optional) a darray/dframe to sample along with data1. Must have the same number 
+      of rows and partitions as data1. It must also be row-wise partitioned. Each row of data2 is assumed to correspond with the same row of data1, and this correspondence will be maintained when sampling.
   }
   \item{nSamplePartitions}{
-      The number of output partitions for the sample data
+      the number of output partitions for the sample data
   }
   \item{samplingRatio}{
-      The fraction of data from data1/data2 to be sampled
-      in each output partition. E.g. if nrow(data1) = 100,
-      and samplingRatio is 0.1, each output partition will
-      contain approximately 100 * 0.1 = 10 rows.
+      the fraction of data from data1/data2 to be sampled
+      in each output partition. Must be in the interval (0, 1]. E.g. if 
+      nrow(data1) = 100, and samplingRatio is 0.1, each output partition 
+      will contain approximately 100 * 0.1 = 10 rows.
   }
   \item{trace}{
-      A boolean that states whether or not to print the
-      progress of the distributed foreach calls
+      a boolean that states whether or not to print the
+      progress of the algorithm  
   }
 }
 

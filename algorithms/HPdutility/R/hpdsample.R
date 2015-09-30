@@ -48,14 +48,36 @@ hpdsample <- function(data1, data2, nSamplePartitions, samplingRatio, trace = FA
       nSamplePartitions %% 1 != 0) 
     stop("'nSamplePartitions' must be a positive integer")
 
-  if (!is.numeric(samplingRatio) || length(samplingRatio) != 1 || samplingRatio <= 0) 
-    stop("'samplingRatio' must be a positive number")
+  if (!is.numeric(samplingRatio) || length(samplingRatio) != 1 || 
+      samplingRatio <= 0 || samplingRatio > 1) 
+    stop("'samplingRatio' must be a number in the interval (0, 1]")
   
   if (!(is.darray(data1) || is.dframe(data1))) 
     stop("'data1' must be a darray or dframe")
 
-  if (missing(data2)) .hpdsamplesingle(data1, nSamplePartitions, samplingRatio,  trace)
-  else                .hpdsampledual(data1, data2, nSamplePartitions, samplingRatio, trace)
+  if (!.isRowPartitioned(data1))
+    stop("'data1' must be partitioned row-wise")
+
+  if (missing(data2)) {
+    # Sample only data1
+    .hpdsamplesingle(data1, nSamplePartitions, samplingRatio,  trace)
+  } else {
+    # Further argument checks, then sample both data1 and data2 in conjunction
+    if (!(is.darray(data2) || is.dframe(data2))) 
+      stop("'data2' must be a darray or dframe")
+
+    if (!.isRowPartitioned(data2))
+      stop("'data2' must be partitioned row-wise")
+
+    partsize1 <- partitionsize(data1)
+    partsize2 <- partitionsize(data2)
+
+    if (!all(dim(partsize1) == dim(partsize2)) || !all(partsize1[,1] ==
+                                                       partsize2[,1]))
+      stop("'data1' and 'data2' must have the same number of partitions, and corresponding partitions must have the same size")
+
+    .hpdsampledual(data1, data2, nSamplePartitions, samplingRatio, trace)
+  }
 }
 
 .hpdsamplesingle <- function(data, nSamplePartitions, samplingRatio, trace) {
@@ -125,18 +147,6 @@ hpdsample <- function(data1, data2, nSamplePartitions, samplingRatio, trace = FA
 .hpdsampledual <- function(data1, data2, nSamplePartitions, samplingRatio, trace) {
   # Function to sample two darrays/dframes in conjunction
   
-  if (!(is.darray(data1) || is.dframe(data1))) 
-    stop("'data1' must be a darray or dframe")
-
-  if (!(is.darray(data2) || is.dframe(data2))) 
-    stop("'data2' must be a darray or dframe")
-
-  if (nrow(data1) != nrow(data2)) 
-    stop("'data1' and 'data2' must be the same length")
-
-  if (npartitions(data1) != npartitions(data2)) 
-    stop("'data1' and 'data2' must have the same number of partitions")
-
   ndcol1    <- ncol(data1)
   ndcol2    <- ncol(data2)
   # Contains the amount of data to be sampled from each data partition into the
@@ -175,9 +185,6 @@ hpdsample <- function(data1, data2, nSamplePartitions, samplingRatio, trace = FA
                                       .coerceFactorsToGlobalLevels =
                                         .coerceFactorsToGlobalLevels,
                                       .copyClassStructure = .copyClassStructure) {
-      if (nrow(dk1) != nrow(dk2)) 
-        stop("nrow mismatch between data1 split and data2 split in foreach")
-
       # Create a random index to choose which data items to copy from dk to si
       idx <- sample(1:nrow(dk1), psizes[k], replace = TRUE)
 
@@ -274,7 +281,7 @@ hpdsample <- function(data1, data2, nSamplePartitions, samplingRatio, trace = FA
   # Coerces the columns of si to have the same class types as dk
   #
   # Args:
-  #   df: A data frame
+  #   dk: A data frame
   #   si: A data frame (presumed full of NAs)
   #   dLevels: An object returned by levels.dframe, or NULL
   #
@@ -300,4 +307,15 @@ hpdsample <- function(data1, data2, nSamplePartitions, samplingRatio, trace = FA
     }
   }
   return (si)
+}
+
+.isRowPartitioned <- function(d) {
+  # Tells whether d is row-wise partitioned or not
+  #
+  # Args:
+  #   d: A darray/dframe
+  #
+  # Returns:
+  #   A boolean that is TRUE if d is row-wise partitioned and FALSE otherwise
+  return (all(partitionsize(d)[,2] == ncol(d)))
 }

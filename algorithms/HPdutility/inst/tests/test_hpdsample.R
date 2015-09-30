@@ -1,7 +1,5 @@
 
-library(distributedR)
 library(HPdutility)
-distributedR_start()
 
 context("Negative Tests: hpdsample()")
 
@@ -60,12 +58,57 @@ test_that("nSamplePartitions must be a positive integer", {
 })
 
 test_that("samplingRatio must be a positive number", {
-  e <- "'samplingRatio' must be a positive number"
+  e <- "'samplingRatio' must be a number in the interval \\(0, 1\\]"
   expect_error(hpdsample(a, nSamplePartitions = 6, samplingRatio = -1), e)
   expect_error(hpdsample(a, nSamplePartitions = 6, samplingRatio = 0), e)
+  expect_error(hpdsample(a, nSamplePartitions = 6, samplingRatio = 2), e)
   expect_error(hpdsample(a, nSamplePartitions = 6, samplingRatio = NA), e)
   expect_error(hpdsample(a, nSamplePartitions = 6, samplingRatio = c(1, 2)), e)
   expect_error(hpdsample(a, nSamplePartitions = 6, samplingRatio = c('a')), e)
+})
+
+test_that("data1 and data2 must have the same partition structure", {
+  e <- "'data1' and 'data2' must have the same number of partitions, and corresponding partitions must have the same size"
+  # Diff # rows
+  d1 <- as.darray(as.matrix(1:100))
+  d2 <- as.darray(as.matrix(1:101))
+  expect_error(hpdsample(d1, d2, 6, 0.1), e)
+
+  # Same number of rows, different # partitions
+  d1 <- darray(npartition = 1)
+  foreach(i, 1:npartitions(d1), function(ds = splits(d1, i)) {
+    ds <- as.matrix(1:100)
+    update(ds)
+  }, progress = F)
+  d2 <- as.darray(as.matrix(1:100))
+  expect_true(nrow(d1) == nrow(d2))
+  expect_error(hpdsample(d1, d2, 6, 0.1), e)
+
+  # Same number of rows, same number of partitions, different partition sizes
+  d1 <- darray(npartition = 6)
+  foreach(i, 1:npartitions(d1), function(ds = splits(d1, i),
+                                         i = i) {
+    ds <- as.matrix(1:i)
+    update(ds)
+  }, progress = F)
+  d2 <- as.darray(as.matrix(1:21)) 
+  expect_true(nrow(d1) == nrow(d2))
+  expect_error(hpdsample(d1, d2, 6, 0.1), e)
+})
+
+test_that("data1 must be row-wise partitioned", {
+  e <- "'data1' must be partitioned row-wise"
+  d1 <- darray(dim = c(9, 9), blocks = c(3, 3), data = 1)
+  d2 <- as.darray(as.matrix(1:9))
+  expect_error(hpdsample(d1, nSamplePartitions = 4, samplingRatio = 0.1), e)
+  expect_error(hpdsample(d1, d2, nSamplePartitions = 4, samplingRatio = 0.1), e)
+})
+
+test_that("data2 must be row-wise partitioned", {
+  e <- "'data2' must be partitioned row-wise"
+  d1 <- as.darray(as.matrix(1:9))
+  d2 <- darray(dim = c(9, 9), blocks = c(3, 3), data = 1)
+  expect_error(hpdsample(d1, d2, nSamplePartitions = 4, samplingRatio = 0.1), e)
 })
 
 context("Positive Tests: hpdsample()")
@@ -113,7 +156,7 @@ test_that("when data1 and data2 provided, samples correspond", {
   d1 <- as.darray(as.matrix(1:1001))
   d2 <- as.darray(as.matrix(1:1001) + 1)
   nSamplePartitions <- 1:6
-  samplingRatios <- seq(0.1, 2, 0.5)
+  samplingRatios <- seq(0.1, 1, 0.2)
   for (n in nSamplePartitions) {
     for (sr in samplingRatios) {
       sd <- hpdsample(d1, d2, nSamplePartitions = n, samplingRatio = sr)
@@ -134,7 +177,6 @@ test_that("when data1 and data2 provided, works with all combo of dframe/darray"
   sd <- hpdsample(d1, d2, nSamplePartitions = n, samplingRatio = sr)
   sd <- hpdsample(d2, d2, nSamplePartitions = n, samplingRatio = sr)
 })
-
 
 test_that("works with diff data types", {
   d1 <- as.darray(as.matrix(1:1001))
@@ -176,5 +218,3 @@ test_that("all output partitions have the same size", {
   }
 })
 
-
-distributedR_shutdown()
