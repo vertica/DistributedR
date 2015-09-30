@@ -67,9 +67,17 @@ darray <- function(dim = NA, blocks = NA, sparse=FALSE, data=0, npartitions=NA, 
    d <- new ("darray", dim, blocks, sparse, npartitions, subtype=stype, distribution_policy=distribution_policy)
    success <- FALSE
 
+   nExecutors <- sum(distributedR_status()$Inst)  
+   indices <- function(i,npartitions,nExecutors){
+     as.list(seq(from=i,to=npartitions,by=nExecutors))
+   }
+
+   range = 1:(min(npartitions(d),nExecutors))
+
   if (!sparse) {
-    success <- foreach(i,1:npartitions(d),
-            initdata <- function(dhs = splits(d,i),
+    success <- foreach(i,range,
+            initdata <- function(dhs = splits(d,indices(i,npartitions(d),nExecutors)),
+                                 indexes = indices(i,npartitions(d),nExecutors),
                                  val = data,
                                  fulldim = d@dim,
                                  blockdim = d@blocks,
@@ -78,29 +86,42 @@ darray <- function(dim = NA, blocks = NA, sparse=FALSE, data=0, npartitions=NA, 
                                  ) {
               #Empty means that we can leave the darray uninitialized. It saves space. The user is probably going to update it anyway.
 	      if(isempty){
-			dhs <- array(0,dim=c(0,0))              
+                        dhs <- lapply(1:length(dhs),function(x) { array(0,dim=c(0,0)) })
               }else{
-			dim=dobject.getdims(fulldim, blockdim, ii)
-  	                dhs <- matrix(data=as.numeric(val), nrow=dim[1], ncol=dim[2])
+                        getdim <- function(x) {
+                          dobject.getdims(fulldim, blockdim, indexes[[x]])
+                        }   
+                        dhs <- lapply(1:length(dhs),function(x) {
+                          dim <- getdim(x)
+                          matrix(data=as.numeric(val), nrow=dim[1], ncol=dim[2])
+                        })
               }
               update(dhs)
             }, progress=FALSE)
   } else {
-    success <- foreach(i,1:npartitions(d),
-            initdata <- function(dhs = splits(d,i),
+    success <- foreach(i, range,
+            initdata <- function(dhs = splits(d,indices(i,npartitions(d),nExecutors)),
+                                 indexes = indices(i,npartitions(d),nExecutors),
                                  val = data,
                                  fulldim = d@dim,
                                  blockdim = d@blocks,
                                  ii = i,
 				 isempty= empty
                                  ) {
-			
-              dim_d <- dobject.getdims(fulldim, blockdim, ii)
-	      if(isempty) dim_d <-c(0,0)
-              dhs <- new("dgCMatrix", i=as.integer({}),
-                                      x=as.numeric({}), 
-                                      p=as.integer(rep(val, dim_d[2] + 1)),
-                                      Dim=as.integer(dim_d))
+	
+              getdim <- function(x) {
+                 dobject.getdims(fulldim, blockdim, indexes[[x]])
+              }
+
+              dhs <- lapply(1:length(dhs), function(x) {
+                if(isempty) dim_d <- c(0,0)
+                else dim_d <- getdim(x)
+
+                new("dgCMatrix", i=as.integer({}),
+                                 x=as.numeric({}), 
+                                 p=as.integer(rep(val, dim_d[2] + 1)),
+                                 Dim=as.integer(dim_d))
+              })
               update(dhs)
             }, progress=FALSE)
   }
