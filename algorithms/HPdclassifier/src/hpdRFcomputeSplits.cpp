@@ -410,13 +410,13 @@ extern "C"
 		     SEXP R_cp, SEXP R_min_count)
   {
 
-
     int* features_categorical = INTEGER(R_features_cardinality);
     int response_cardinality = INTEGER(R_response_cardinality)[0];
     bool response_categorical = response_cardinality != NA_INTEGER;
     int* bin_num = INTEGER(R_bin_num);
     SEXP splits_info;
     double cp = REAL(R_cp)[0];
+    double min_count = REAL(R_min_count)[0];
 
     PROTECT(splits_info = allocVector(VECSXP,length(R_active_nodes)));
     for(int i = 0; i < length(old_splits_info) && i <length(splits_info); i++)
@@ -451,7 +451,6 @@ extern "C"
 	UNPROTECT(1);
       }
     
-
     int total_completed=0;
     for(int i = 0; i < length(R_active_nodes); i++)
       {
@@ -484,7 +483,7 @@ extern "C"
 	    prediction = prediction + 1;
 	    SET_VECTOR_ELT(split_info,8,node_count);
 	    UNPROTECT(1);
-
+ 
 	  }
 	*REAL(VECTOR_ELT(split_info,4)) = prediction;
 	int best_featureIndex = -1;
@@ -495,7 +494,6 @@ extern "C"
 	*REAL(VECTOR_ELT(split_info,6)) = L0;
 	*INTEGER(VECTOR_ELT(split_info,7)) = 
 	  INTEGER(getAttrib(node_histograms,install("n")))[0];
-
 	for(int feature = 0; feature < length(node_histograms); feature++)
 	  {
 	    SEXP histogram = VECTOR_ELT(node_histograms,feature);
@@ -507,10 +505,11 @@ extern "C"
 					   bin_num[featureIndex], 
 					   response_cardinality,
 					   &hist_cost, 
-					   features_categorical[featureIndex] != NA_INTEGER,
+					   features_categorical[featureIndex] 
+					   != NA_INTEGER,
 					   response_categorical, L0, L1, 
 					   &complete, &curr_split_length,
-					   cp, REAL(R_min_count)[0]);
+					   cp, min_count);
 	    if((complete && hist_cost < REAL(VECTOR_ELT(split_info,3))[0]) ||
 	       (complete && hist_cost == REAL(VECTOR_ELT(split_info,3))[0] && 
 		featureIndex > best_featureIndex &&
