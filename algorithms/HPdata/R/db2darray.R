@@ -119,8 +119,9 @@ db2darray <- function(tableName, dsn, features = list(...), except=list(...), np
     }
 
     # excluding the elements in the except list
+    `%notin%` <- function(x,y) !(tolower(x) %in% tolower(y))
     if(!missing(except) && length(except)!=0 && except!="")
-        feature_columns <- feature_columns[sapply(feature_columns, function(x) !(x %in% except))]
+        feature_columns <- feature_columns[feature_columns %notin% except]
 
     # we have columns, construct column string
     nFeatures <- length(feature_columns)  # number of features
@@ -312,10 +313,7 @@ db2darray <- function(tableName, dsn, features = list(...), except=list(...), np
             segment<-sqlQuery(connect, qryString, buffsize= end-start)
             odbcClose(connect)
 
-            x <- NULL
-            for (i in 1:nFeatures) {
-                x <- cbind(x, segment[[i]])
-            }
+            x <- data.matrix(segment[,1:nFeatures,drop=FALSE])
             colnames(x) <- feature_columns
 
             update(x)

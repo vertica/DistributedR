@@ -166,6 +166,42 @@ stopDataLoader <- function() {
   d
 }
 
+.vertica.dframes <- function(result, nResponses, nPredictors, 
+                             predictor_columns=list(), response_columns=list()) {
+  nparts <- result$npartitions
+  file_ids <- result$file_ids
+  file_prefix <- paste("/dev/shm/", .get.file.prefix(), sep="")
+
+  X <- dframe(npartitions=c(nparts,1), distribution_policy='custom')
+  Y <- dframe(npartitions=c(nparts,1), distribution_policy='custom')
+  if(length(predictor_columns) > 0)
+     X@dimnames[[2]] <- as.character(predictor_columns)
+  if(length(response_columns) > 0)
+     Y@dimnames[[2]] <- as.character(response_columns) 
+
+  foreach(i, 1:npartitions(X), func <- function(x = splits(X,i), y = splits(Y,i), file_idx = file_ids[[i]], 
+            nResponses=nResponses, nPredictors=nPredictors, file_prefix = file_prefix,
+            predictor_columns=predictor_columns, response_columns=response_columns) {
+    library(data.table)
+    file_name <- paste(file_prefix, file_idx,sep="")
+    dhs_dt <- fread(file_name, sep=',', header=FALSE, stringsAsFactors=FALSE, integer64='double')
+    setattr(dhs_dt,"class","data.frame")
+    unlink(file_name)
+ 
+    y <- dhs_dt[,1:nResponses,drop=FALSE]
+    x <- dhs_dt[,(nResponses+1):(nResponses+nPredictors),drop=FALSE]
+    
+    rm(dhs_dt)
+    gc()
+    
+    colnames(x) <- predictor_columns
+    colnames(y) <- response_columns
+    update(x)
+    update(y)
+  })
+  list(Y=Y, X=X)
+}
+
 .vertica.connector <- function(error) {
   stop(error$message)
 }

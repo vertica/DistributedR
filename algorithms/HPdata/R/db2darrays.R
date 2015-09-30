@@ -133,7 +133,7 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), excep
 
     # excluding the elements in the except list
     if(!missing(except) && length(except)!=0 && except!="")
-        pred_columns <- pred_columns[sapply(pred_columns, function(x) !(x %in% except))]
+        pred_columns <- pred_columns[pred_columns %notin% except]
 
     # we have columns, construct column string
     nResponses <- length(resp)   # number of responses (1 for 'binomial logistic' and 'multiple linear' regression)
@@ -341,17 +341,9 @@ db2darrays <- function(tableName, dsn, resp = list(...), pred = list(...), excep
             )
             segment<-sqlQuery(connect, qryString, buffsize= end-start)
             odbcClose(connect)
-            y <- NULL
-            for(i in 1:nResponses) {
-                #y <- cbind(y, as.numeric(unlist(segment[i])))
-                y <- cbind(y, segment[[i]])
-            }
 
-            x <- NULL
-            for(i in (nResponses+1):(nResponses+nPredictors)) {
-                #x <- cbind(x, as.numeric(unlist(segment[i])))
-                x <- cbind(x, segment[[i]])
-            }
+            y <- data.matrix(segment[,1:nResponses,drop=FALSE])
+            x <- data.matrix(segment[,(nResponses+1):(nResponses+nPredictors),drop=FALSE])
 
             colnames(x) <- pred
             colnames(y) <- resp
