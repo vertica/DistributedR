@@ -16,26 +16,29 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.    #
 #####################################################################################
 
- 
-## A simple function for reading a dframe from a table
-# tableName: name of the table
-# dsn: ODBC DSN name
-# features: a list containing the name of columns corresponding to attributes of the dframe (features of samples)
-# except: the list of column names that should be excluded (optional)
-# npartitions: number of partitions in the dframe (it is an optional argument)
+
+## A simple function for reading responses and predictors from a table into two dframes
+## tableName: name of the table
+## dsn: ODBC DSN name
+## resp: a list containing the name of columns corresponding to responses 
+## pred: a list containing the name of columns corresponding to predictors (optional)
+# except: the list of column names that should be excluded from pred (optional)
+## npartitions: number of partitions in dframes (it is an optional argument)
 # verticaConnector: when it is TRUE (default), Vertica Connector for Distributed R will be used
-# loadPolicy: it determines data loading policy of the Vertica Connector for Distributed R
-db2dframe <- function(tableName, dsn, features = list(...), except=list(...), npartitions, verticaConnector=TRUE, loadPolicy="local") {
+# loadPolicy: it determines the data loading policy of the Vertica Connector for Distributed R
+db2dframes <- function(tableName, dsn, resp = list(...), pred = list(...), except=list(...), npartitions, verticaConnector=TRUE, loadPolicy="local") {
 
     if(!is.character(tableName))
         stop("The name of the table should be specified")
     if(is.null(dsn))
         stop("The ODBC DSN should be specified")
+    if(missing(resp) || length(resp)==0 || resp=="")
+        stop("Response column names should be specified")   
     if(!is.logical(verticaConnector))
         stop("verticaConnector can be either TRUE or FALSE")
     if(!is.character(loadPolicy) || (tolower(loadPolicy)!='local' && tolower(loadPolicy)!='uniform'))
         stop("loadPolicy can be either 'local' or 'uniform'")
-
+   
     # loading vRODBC or RODBC library for master
     if (! require(vRODBC) )
         library(RODBC)
@@ -47,46 +50,47 @@ db2dframe <- function(tableName, dsn, features = list(...), except=list(...), np
     #Close the connection on exit
     on.exit(odbcClose(db_connect))
 
-    #Validate table name
+    #get projection_name
     table <- ""
     schema <- ""
     table_info <- unlist(strsplit(tableName, split=".", fixed=TRUE))
     if(length(table_info) > 2) {
        stop("Invalid table name. Table name should be in format <schema_name>.<table_name>. If the table is in 'public' schema, Schema name can be ignored while specifying table name")
-    } else if(length(table_info) == 2){
+    } else if(length(table_info) == 2){ 
        schema <- table_info[1]
        table <- table_info[2]
     } else {
        table <- table_info[1]
        schema <- "public"
-    }
+    }  
+
 
     # get columns of the table/view
-    feature_columns <- ""
-    feature_data_type <- ""
+    pred_columns <- ""
     norelation <- FALSE
     relation_type <- ""
-    if(missing(features) || length(features)==0 || features=="") {
-      table_columns <- sqlQuery(db_connect, paste("select column_name, data_type_id from columns where table_schema ILIKE '", schema ,"' and table_name ILIKE '", table,"'", sep=""))
+    `%notin%` <- function(x,y) !(tolower(x) %in% tolower(y))
+    if(missing(pred) || length(pred)==0 || pred=="") {
+      table_columns <- sqlQuery(db_connect, paste("select column_name from columns where table_schema ILIKE '", schema ,"' and table_name ILIKE '", table,"'", sep=""))
       if(!is.data.frame(table_columns)) {
         stop(table_columns)
       }
 
       if(nrow(table_columns) == 0) {
          ## check if its a view
-         view_columns <- sqlQuery(db_connect, paste("select column_name, data_type_id from view_columns where table_schema ILIKE '", schema ,"' and table_name ILIKE '", table,"'", sep=""))
+         view_columns <- sqlQuery(db_connect, paste("select column_name from view_columns where table_schema ILIKE '", schema ,"' and table_name ILIKE '", table,"'", sep=""))
          if(!is.data.frame(view_columns)) {
            stop(view_columns)
-         } 
-
-         if(nrow(view_columns) == 0) {
-           norelation <- TRUE
-           stop(paste("Table/View ", schema, ".", table, " does not exist", sep=""))
-         } else { 
-           relation_type <- "view"
-           feature_columns <- view_columns[[1]] 
-           feature_data_type <- view_columns[[2]]        
          }
+
+         if(nrow(view_columns) == 0)
+           norelation <- TRUE
+         else {
+           relation_type <- "view"
+           pred_columns <- as.list(as.character(view_columns[[1]]))
+           pred_columns <- pred_columns[pred_columns %notin% resp]
+        
+         } 
       } else {
         # get type of table - external or regular
         table_type <- sqlQuery(db_connect, paste("select table_definition from tables where table_schema ILIKE '", schema, "' and table_name ILIKE '", table, "'", sep=""))
@@ -94,43 +98,50 @@ db2dframe <- function(tableName, dsn, features = list(...), except=list(...), np
            stop(table_columns)
         }
         relation_type <- ifelse((is.null(table_type[[1]][[1]]) || is.na(table_type[[1]][[1]])), "table", "external_table")
-        feature_columns <- table_columns[[1]]
-        feature_data_type <- table_columns[[2]]
+        pred_columns <- as.list(as.character(table_columns[[1]]))
+        pred_columns <- pred_columns[pred_columns %notin% resp]
       }
     } else {
-      # get column data types
-      istable <- sqlQuery(db_connect, paste("select data_type_id from columns where table_name ILIKE '", table, "' and table_schema ILIKE '", schema, "' and lower(column_name) in (", tolower(.toColumnString(features, TRUE)), ")", sep=""))
-      if(nrow(istable) == 0) {
-         isview <- sqlQuery(db_connect, paste("select data_type_id from view_columns where table_name ILIKE '", table, "' and table_schema ILIKE '", schema, "' and lower(column_name) in (", tolower(.toColumnString(features, TRUE)), ")", sep=""))
-         if(nrow(isview) == 0) {
+      istable <- sqlQuery(db_connect, paste("select count(*) from tables where table_name ILIKE '", table, "' and table_schema ILIKE '", schema, "'", sep=""))
+      if(istable == 0) {
+         isview <- sqlQuery(db_connect, paste("select count(*) from views where table_name ILIKE '", table, "' and table_schema ILIKE '", schema, "'", sep=""))
+         if(isview == 0)
            norelation <- TRUE
-           stop(paste("Table/View ", schema, ".", table, " does not exist with specified 'features'", sep=""))
-         } else {
+         else
            relation_type <- "view"
-           feature_data_type <- isview[[1]]
-         }
-
       } else {
-        # get type of table - external or regular
+         # get type of table - external or regular
         table_type <- sqlQuery(db_connect, paste("select table_definition from tables where table_schema ILIKE '", schema, "' and table_name ILIKE '", table, "'", sep=""))
         if(!is.data.frame(table_type)) {
            stop(table_columns)
         }
         relation_type <- ifelse((is.null(table_type[[1]][[1]]) || is.na(table_type[[1]][[1]])), "table", "external_table")
-        feature_data_type <- istable[[1]]
       }
 
-      feature_columns <- features
+      pred_columns <- pred
+    }
+
+    if(norelation) {
+      stop(paste("Table/View ", schema, ".", table, " does not exist", sep=""))
     }
 
     # excluding the elements in the except list
-    `%notin%` <- function(x,y) !(tolower(x) %in% tolower(y))
     if(!missing(except) && length(except)!=0 && except!="")
-        feature_columns <- feature_columns[feature_columns %notin% except]
+        pred_columns <- pred_columns[pred_columns %notin% except]
 
     # we have columns, construct column string
-    nFeatures <- length(feature_columns)  # number of features
-    columns <- .toColumnString(feature_columns)
+    nResponses <- length(resp)   # number of responses (1 for 'binomial logistic' and 'multiple linear' regression)
+    nPredictors <- length(pred_columns)  # number of predictors
+
+    if(nResponses == 0) {
+      stop("No response columns to fetch from table/view")
+    }
+    if(nPredictors == 0) {
+       stop("No predictor columns to fetch from table/view")
+    }
+
+    # the desired columns of the tabel
+    columns <- .toColumnString(c(resp,pred_columns), FALSE)
 
     # when npartitions is not specified it should be calculated based on the number of executors
     missingNparts <- FALSE
@@ -156,12 +167,23 @@ db2dframe <- function(tableName, dsn, features = list(...), except=list(...), np
     }
 
     ## data type check
+    if(relation_type == "view") {
+        columnTypes <- sqlQuery(db_connect, paste("select data_type_id from view_columns where table_name ILIKE '", table, "' and table_schema ILIKE '", schema, 
+                                                        "' and lower(column_name) in (", tolower(.toColumnString(c(resp,pred_columns), TRUE)), ")", sep=""))
+    } else {
+        columnTypes <- sqlQuery(db_connect, paste("select data_type_id from columns where table_name ILIKE '", table, "' and table_schema ILIKE '", schema, 
+                                                        "' and lower(column_name) in (", tolower(.toColumnString(c(resp,pred_columns), TRUE)), ")", sep=""))
+    }
+    if (! is.data.frame(columnTypes))
+        stop(columnTypes)
+    feature_data_type <- columnTypes[[1]]
+
     supported_types <- list("Integer", "Boolean", "Float", "Numeric", "Char", "Varchar", "Long Varchar")     # derived from types table
     supported_type_ids <- sqlQuery(db_connect, paste("select type_id from types where type_name in (", .toColumnString(supported_types, TRUE), ")", sep=""))
     if(!all(feature_data_type %in% supported_type_ids[[1]])) {
       stop("Only numeric, logical and character data types are supported")
     }
-    
+
     # reading the number of observations in the table
     qryString <- paste("select count(*) from", tableName)
     nobs <- sqlQuery(db_connect, qryString)
@@ -172,11 +194,12 @@ db2dframe <- function(tableName, dsn, features = list(...), except=list(...), np
     if(nobs == 0) {
         stop("The table is empty!")
     }
-    X <- FALSE
+    dResult <- FALSE
 
     if (verticaConnector) {
         tryCatch ({
-        .checkUnsegmentedProjections(schema, table, relation_type, db_connect)
+        #check for unsegmented projection
+        .checkUnsegmentedProjections(schema, table, relation_type, db_connect) 
 
         if(relation_type == "table" && loadPolicy == "local") {
            #get projection name
@@ -239,8 +262,8 @@ db2dframe <- function(tableName, dsn, features = list(...), except=list(...), np
 
           #issue UDx query
           qryString <- paste("select ExportToDistributedR(", columns, " USING PARAMETERS DR_worker_info='", udx_param$parameter_str,"', DR_partition_size=", partition_size, ", data_distribution_policy='", type, "') over(PARTITION BEST) from ", tableName, sep="")
-
-          message(paste("Loading total", nRows, "rows from", tableName, "from Vertica with approximate partition of", partition_size,"rows"))
+         
+          message(paste("Loading total", nRows, "rows from", tableName, "from Vertica with approximate partition of", partition_size,"rows")) 
           load_result <- sqlQuery(db_connect, qryString)
           if(!is.data.frame(load_result)) {
             sqlQuery(db_connect, paste("select set_config_parameter('MaxQueryRetries', ", retries_allowed, ");"))
@@ -257,32 +280,36 @@ db2dframe <- function(tableName, dsn, features = list(...), except=list(...), np
           if(!is.list(result))
             stop(result)
 
-          X <- .vertica.dframe(result, nFeatures, feature_columns)
+          dResult <- .vertica.dframes(result, nResponses, nPredictors, pred_columns, resp)
 
           }, interrupt = function(e) {}
            , error = function(e) {
              .vertica.connector(e)
-          } , finally = {
+          } , finally = { 
              stopDataLoader()
           })
 
-
     # end of verticaConnector
     } else {
-        # check valid number of rows based on rowid assumptions    
+        # check valid number of rows based on rowid assumptions
         qryString <- paste("select count(distinct rowid) from", tableName, "where rowid >=0 and rowid <", nobs)
         distinct_nobs <- sqlQuery(db_connect, qryString)
         if( nobs != distinct_nobs ) {
             stop("There is something wrong with rowid. Check the assumptions about rowid column in the manual.")
         }
-    
+        
         nobs <- as.numeric(nobs)
         rowsInBlock <- ceiling(nobs/npartitions) # number of rows in each partition
-  
-        # creating dframe for features
-        X <- dframe(dim=c(nobs, nFeatures), blocks=c(rowsInBlock,nFeatures))
-        if(length(feature_columns) > 0)
-           X@dimnames[[2]] <- as.character(feature_columns)
+      
+        # creating dframe for predictors
+        X <- dframe(dim=c(nobs, nPredictors), blocks=c(rowsInBlock,nPredictors))
+        #Binary response vector: value one shows sucess and zero failure 
+        Y <- dframe(dim=c(nobs,nResponses), blocks=c(rowsInBlock,nResponses))
+
+        if(length(pred_columns) > 0)
+           X@dimnames[[2]] <- as.character(pred_columns)
+        if(length(resp) > 0)
+           Y@dimnames[[2]] <- as.character(resp)
 
         if(!missingNparts) {
             nparts <- npartitions(X)
@@ -290,20 +317,20 @@ db2dframe <- function(tableName, dsn, features = list(...), except=list(...), np
                 warning("The number of splits changed to ", nparts)
         }
 
-        #Load data from Vertica to dframe
-        foreach(i, 1:npartitions(X), initArrays <- function(x = splits(X,i), myIdx = i, rowsInBlock = rowsInBlock, 
-                nFeatures=nFeatures, tableName=tableName, dsn=dsn, columns=columns, feature_columns=feature_columns) {
+        #Load data from Vertica to dframes
+        foreach(i, 1:npartitions(X), initArrays <- function(x = splits(X,i), y = splits(Y,i), myIdx = i, rowsInBlock = rowsInBlock, 
+                nResponses=nResponses, nPredictors=nPredictors, tableName=tableName, resp=resp, pred=pred_columns, dsn=dsn, columns=columns,
+                size=partitionsize(X,i)) {
 
             # loading RODBC for each worker
             if (! require(vRODBC) )
                 library(RODBC)
-        
-            start <- (myIdx-1) * rowsInBlock # start row in the block, rowid starts from 0
-            end <- rowsInBlock + start   # end row in the block
+            start <- (myIdx-1) * rowsInBlock # start row in the block
+            end <- size[1] + start   # end row in the block
 
-            qryString <- paste("select",columns, " from", tableName, "where rowid >=", start,"and rowid <", end)
+            qryString <- paste("select", columns, "from", tableName, "where rowid >=", start,"and rowid <", end)
 
-            # each worker connects to Vertica to load its partition of the dframe
+            # each worker connects to Vertica to load its partition of the dframe 
             connect <- -1
             tryCatch(
                 {
@@ -313,15 +340,24 @@ db2dframe <- function(tableName, dsn, features = list(...), except=list(...), np
                     stop(war$message)
                 }
             )
-            x <- sqlQuery(connect, qryString, buffsize= end-start, stringsAsFactors=FALSE)
+            segment<-sqlQuery(connect, qryString, buffsize= end-start, stringsAsFactors=FALSE)
             odbcClose(connect)
 
-            colnames(x) <- feature_columns
+            y <- segment[,1:nResponses,drop=FALSE]
+            x <- segment[,(nResponses+1):(nResponses+nPredictors),drop=FALSE]
+
+            colnames(x) <- pred
+            colnames(y) <- resp
+
             update(x)
+            update(y)
         })
+        
+        dResult <- list(Y=Y, X=X)
+
     } # if-else (verticaConnector)
 
-    X
+    dResult
 }
 
 .toColumnString <- function(x, withQuotes=FALSE) {
@@ -345,4 +381,4 @@ db2dframe <- function(tableName, dsn, features = list(...), except=list(...), np
 }
 
 # Example:
-# loadedSamples <- db2dframe("mortgage1e4", dsn="RTest", list("mltvspline1", "mltvspline2", "agespline1", "agespline2", "hpichgspline", "ficospline"))
+# loadedData <- db2dframes("mortgage_1000", dsn="Dloader", list("def"), list("mltvspline1", "mltvspline2", "agespline1", "agespline2", "hpichgspline", "ficospline"))

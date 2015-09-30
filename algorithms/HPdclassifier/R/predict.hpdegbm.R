@@ -45,8 +45,7 @@
 ####################################################################################
 ###                     Data-distributed and model-centralized prediction function of distributed GBM
 ####################################################################################
-predict.hpdegbm <- function(object, newdata, trace = FALSE)
-{
+predict.hpdegbm <- function(object, newdata, trace = FALSE) {
   # model: assembled GBM model
   # best.iter: best iteration of sub-models
   # newdata: testing data in dframe/darray
@@ -58,23 +57,23 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE)
   # test data : npartition_test/nExecutor_test. maybe different from train data
 
   # extract GBM models and corresponding best iterations (n.trees)
-  model <- object[[1]]
-  best.iter <- object[[2]]
-
+  model     <- object$model
+  best.iter <- object$bestIterations
 
   # extract distribution from trained model
-  firstModelDistr <- object[[1]][[1]]$distribution
+  firstModelDistr <- object$distribution
   distributionGBM <- firstModelDistr[[1]] 
 
   # check function arguments
   if(missing(object))
-     stop("'object' is a required argument")
+    stop("'object' is a required argument")
  
-  if ( (is.null(object$n.trees)) | (is.null(object$distribution)) | (is.null(object$bestIterations)))
-     stop("The input hpdegbm model is invalid")
+  if (is.null(object$n.trees) || is.null(object$distribution) || 
+      is.null(object$bestIterations))
+    stop("The input hpdegbm model is invalid")
   
   if(missing(newdata))
-     stop("'newdata' is a required argument")
+    stop("'newdata' is a required argument")
 
   if(!is.dframe(newdata) && !is.darray(newdata) && !is.data.frame(newdata) && !is.matrix(newdata))
      stop("'newdata' must be a dframe or darray or data.frame or matrix")
@@ -93,7 +92,12 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE)
      }
 
      # distributed prediction
-     foreach(i, 1:nExecutor_test, function(GBM_model=model, best.iter=best.iter, predi=splits(daPredict,i), data2=splits(newdata,i), distributionGBM=distributionGBM, type="link") { 
+     foreach(i, 1:nExecutor_test, function(GBM_model       = model, 
+                                           best.iter       = best.iter, 
+                                           predi           = splits(daPredict,i),  
+                                           data2           = splits(newdata,i),
+                                           distributionGBM = distributionGBM, 
+                                           type            = "link") { 
         library(gbm)
 
         # Gaussian distribution for regression

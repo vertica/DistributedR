@@ -1,18 +1,18 @@
-\name{db2darrays}
-\alias{db2darrays}
+\name{db2dframes}
+\alias{db2dframes}
 \title{
-    A Simple Data Loader which loads two aligned darrays from Database
+    A Simple Data Loader which loads two aligned dframes from Database
 }
 \description{
-    db2darrays function is a simple function to load a labeled dataset (a set of labeled samples) from a table/view in Vertica database to a pair of darrays which correspond to responses and predictors of a predictive model. It is assumed that samples (including responses and predictors) are stored in a single table. By default, Vertica Connector for Distributed R is used to load data from a Vertica database to a pair of darrays. When it is selected not to use Vertica Connector for Distributed R, vRODBC or RODBC will be used to connect to the database and extract data from the table. In the latter case, the table must contain a column called 'rowid'. It is also assumed that 'rowid' starts from 0, and there is no missed 'rowid'.
+    db2dframes function is a simple function to load a labeled dataset (a set of labeled samples) from a table/view in Vertica database to a pair of dframes which correspond to responses and predictors of a predictive model. It is assumed that samples (including responses and predictors) are stored in a single table. By default, Vertica Connector for Distributed R is used to load data from a Vertica database to a pair of dframes. When it is selected not to use Vertica Connector for Distributed R, vRODBC or RODBC will be used to connect to the database and extract data from the table. In the latter case, the table must contain a column called 'rowid'. It is also assumed that 'rowid' starts from 0, and there is no missed 'rowid'.
 }
 \usage{
-db2darrays(tableName, dsn, resp = list(...), pred = list(...), except=list(...),  
+db2dframes(tableName, dsn, resp = list(...), pred = list(...), except=list(...),  
            npartitions, verticaConnector=TRUE, loadPolicy="local")
 }
 \arguments{
   \item{tableName}{
-    it is the name of a table or a view in the database to be loaded into the darray.
+    it is the name of a table or a view in the database to be loaded into the dframe.
   }
   \item{dsn}{
     the Data Source Name(DSN) as provided in ODBC.INI file to connect to the database.
@@ -27,7 +27,7 @@ db2darrays(tableName, dsn, resp = list(...), pred = list(...), except=list(...),
     this is an optional argument to specify the list of column names that should be excluded from pred.
   }
   \item{npartitions}{
-    this optional argument specifies the desired number of partitions in the distributed array. If not specified, it will be equal to the number of active R instances in the distributed R cluster. It should be noted that the number of splits in the returned result might not be exactly the same as npartitions. Please read the details for more information.
+    this optional argument specifies the desired number of partitions in the distributed data.frame. If not specified, it will be equal to the number of active R instances in the distributed R cluster. It should be noted that the number of splits in the returned result might not be exactly the same as npartitions. Please read the details for more information.
   }
   \item{verticaConnector}{
     when it is TRUE (default), Vertica Connector for Distributed R will be used to load data. Must install Distributed R Extensions package in Vertica to use Vertica Connector.
@@ -38,15 +38,15 @@ db2darrays(tableName, dsn, resp = list(...), pred = list(...), except=list(...),
 }
 
 \details{
-The number of partitions of the resultant darrays will be approximately equal to value provided in argument 'npartitions'.
+The number of partitions of the resultant dframes will be approximately equal to value provided in argument 'npartitions'.
 When Vertica Connector for Distributed R is used, argument 'loadPolicy' defines the data loading policy between Distributed R and Vertica. loadPolicy "local" is employed when number of Distributed R worker is same as number for Vertica nodes containing data for table specified in argument 'tableName'. With this policy, there is one-to-one data load from a Vertica node to a Distributed R worker. For the alternate scenario, loadPolicy "uniform" is used where each Vertica nodes involves all Distributed R nodes in the data loading process. By default, loadPolicy "local" is used but it is automatically changed to "uniform" when the conditions for loadPolicy "local" are not met.
 
-db2darrays supports numeric and logical data types.
+db2dframes supports numeric, logical, and character data types.
 }
 
 \value{
-  \item{Y }{the darray of responses}
-  \item{X }{the darray of predictors}
+  \item{Y }{the dframe of responses}
+  \item{X }{the dframe of predictors}
 }
 
 \author{
@@ -61,14 +61,14 @@ db2darrays supports numeric and logical data types.
     # The name of response column is def,
     # and the names of predictive columns are mltvspline1, mltvspline2, 
     # agespline1, agespline2, hpichgspline, and ficospline.
-    loadedData <- db2darrays ("mortgage", dsn="RDev", resp=list("def"), 
+    loadedData <- db2dframes ("mortgage", dsn="RDev", resp=list("def"), 
     pred=list("mltvspline1", "mltvspline2", "agespline1", "agespline2",
     "hpichgspline", "ficospline"))
 
     # If user do not specify pred argument,
     # all columns of the table mortgage by default excluding
     # the response column name (resp argument)
-    loadedData <- db2darrays ("mortgage", dsn="RDev", resp=list("def")) 
+    loadedData <- db2dframes ("mortgage", dsn="RDev", resp=list("def")) 
  }
 }
 
