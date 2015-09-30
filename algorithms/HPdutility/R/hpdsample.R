@@ -49,8 +49,8 @@ hpdsample <- function(data1, data2, nSamplePartitions, samplingRatio, trace = FA
     stop("'nSamplePartitions' must be a positive integer")
 
   if (!is.numeric(samplingRatio) || length(samplingRatio) != 1 || 
-      samplingRatio <= 0 || samplingRatio > 1) 
-    stop("'samplingRatio' must be a number in the interval (0, 1]")
+      samplingRatio <= 0) 
+    stop("'samplingRatio' must be a positive number")
   
   if (!(is.darray(data1) || is.dframe(data1))) 
     stop("'data1' must be a darray or dframe")

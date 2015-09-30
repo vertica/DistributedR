@@ -24,7 +24,7 @@ hpdsample(data1, data2, nSamplePartitions, samplingRatio, trace = FALSE)
   }
   \item{samplingRatio}{
       the fraction of data from data1/data2 to be sampled
-      in each output partition. Must be in the interval (0, 1]. E.g. if 
+      in each output partition. Must be a positive number. E.g. if 
       nrow(data1) = 100, and samplingRatio is 0.1, each output partition 
       will contain approximately 100 * 0.1 = 10 rows.
   }
