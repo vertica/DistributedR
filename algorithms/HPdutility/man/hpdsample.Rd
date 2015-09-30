@@ -38,7 +38,7 @@ hpdsample(data1, data2, nSamplePartitions, samplingRatio, trace = FALSE)
 This function is used to sample (with replacement) one or two darrays/dframes into new darrays/dframes. The type of the output object is the same as that of the input object, and when possible, the class types of columns are maintained (one exception is ordered factors; these will be converted to ordinary factors in the output). It serves any combination of darray/dframe objects for data1 and data2 so long as they have the same number of rows and partitions (and the same number of rows in each
 partition). 
     
-The output array will have nSamplePartitions partitions, each of which will contain approximately samplingRatio * nrow(data1) rows. When both data1 and data2 are provided, they are sampled according to the same index; i.e. if row 5 from data1 is placed on the 10th row of the third output partition, row 5 from data2 will also be placed in the same position. Sampling is performed such that each output partition will obtain approximately an equal percentage (samplingRatio * 100
+The output array will have a number of partitions equal to nSamplePartitions, each of which will contain approximately samplingRatio * nrow(data1) rows. When both data1 and data2 are provided, they are sampled according to the same index; i.e. if row 5 from data1 is placed on the 10th row of the third output partition, row 5 from data2 will also be placed in the same position. Sampling is performed such that each output partition will obtain approximately an equal percentage (samplingRatio * 100
 percent) of the data from each input partition. So if samplingRatio is 0.1, then each output partition consists of about 10\% of each of the input data partitions.
 }
 

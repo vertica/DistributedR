@@ -69,7 +69,7 @@ hpdegbm <- function(
 # X_train: a dframe, darray, data frame, or data matrix containing the predictor variables
 # Y_train: a vector of outputs
 # distribution: support Gaussian, AdaBoost, bernoulli, multinomial in DR version 1.2
-# n.trees: the total numner of tress to fit 
+# n.trees: the total number of trees to fit 
 # interactive.depth: the maximum depth of variable interactions
 # n.minobsinnode: minimum number of obervations in the tress terminal nodes
 # shrinkage: learning rate. Typical vaule: [0.001, 1]
@@ -121,6 +121,21 @@ hpdegbm <- function(
       (.isdarrayorframe(Y_train) && !.isdarrayorframe(X_train)))
     stop("Either both 'X_train' and 'Y_train' must be dobjects, or neither can be dobjects")
 
+  if (.isdarrayorframe(X_train) && !.isRowPartitioned(X_train))
+    stop("'X_train' must be partitioned row-wise")
+
+  if (.isdarrayorframe(Y_train) && !.isRowPartitioned(Y_train))
+    stop("'Y_train' must be partitioned row-wise")
+
+  if (.isdarrayorframe(X_train) &&  .isdarrayorframe(Y_train)) {
+    partsize1 <- partitionsize(X_train)
+    partsize2 <- partitionsize(Y_train)
+
+    if (!all(dim(partsize1) == dim(partsize2)) || !all(partsize1[,1] ==
+                                                       partsize2[,1]))
+      stop("'X_train' and 'Y_train' must have the same number of partitions, and corresponding partitions must have the same size")
+  }
+
   if (missing(nExecutor)) {
     if (.isdarrayorframe(X_train))
       nExecutor <- npartitions(X_train) 
@@ -165,7 +180,7 @@ hpdegbm <- function(
     stop("'bag.fraction' must be a number in the interval (0,1]")
 
   if(trace) {
-    cat("Start model training\n")
+    message("Start model training\n")
     starttime <- Sys.time()
   }
 
@@ -284,7 +299,7 @@ hpdegbm <- function(
   
     if(trace) {
       timing_info <- Sys.time() - starttime
-      print(timing_info)
+      message(paste("Time for model training:", timing_info))
     }
 
     # output of hpdegbm: GBM model and best iteration estiamtion
@@ -387,4 +402,15 @@ print.hpdegbm <- function(x, ...) {
     list(withCallingHandlers(tryCatch(expr, error = function(e) e),
                                      warning = w.handler),
          warnings = list_of_Warnings)
+}
+
+.isRowPartitioned <- function(d) {
+  # Tells whether d is row-wise partitioned or not
+  #
+  # Args:
+  #   d: A darray/dframe
+  #
+  # Returns:
+  #   A boolean that is TRUE if d is row-wise partitioned and FALSE otherwise
+  return (all(partitionsize(d)[,2] == ncol(d)))
 }

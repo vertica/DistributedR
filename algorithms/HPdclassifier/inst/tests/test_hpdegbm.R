@@ -130,11 +130,9 @@ foreach(i, 1:nExecutor_test, function(X_test=splits(dfX_test,i),Y_test=splits(da
 
 
 #################################################################################################
-### test distributed sampling: hpdsampling
-sampledXY <- hpdsampling(dfX,daY, nClass=2, sampleThresh=200)
 
-dfRX <- sampledXY[[1]]
-daRY <- sampledXY[[2]]
+dfRX <- dfX
+daRY <- daY 
 
 
 #################################################################################################
@@ -683,11 +681,9 @@ nExecutor <- npartition
 
 # testGaussian1: gaussian distribution for regression, distributed training data, distributed testing data
 ########################################################################################################################
-### test distributed sampling: hpdsampling
-#sampledXY8 <- hpdsampling(dfX8,daY8, nClass=2, sampleThresh=200)
 
-dfRX8 <- dfX8 # sampledXY8[[1]]
-daRY8 <- daY8 #sampledXY8[[2]]
+dfRX8 <- dfX8 
+daRY8 <- daY8 
 
 
 
