@@ -214,7 +214,7 @@ hpdegbm <- function(
                         bag.fraction)
 
       }, progress = trace)
-    } else{  
+    } else {  
       # For big data: Sample the data into nExecutor partitions and build a
       # model on each
       
