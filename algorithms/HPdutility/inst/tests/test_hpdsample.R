@@ -58,10 +58,9 @@ test_that("nSamplePartitions must be a positive integer", {
 })
 
 test_that("samplingRatio must be a positive number", {
-  e <- "'samplingRatio' must be a number in the interval \\(0, 1\\]"
+  e <- "'samplingRatio' must be a positive number"
   expect_error(hpdsample(a, nSamplePartitions = 6, samplingRatio = -1), e)
   expect_error(hpdsample(a, nSamplePartitions = 6, samplingRatio = 0), e)
-  expect_error(hpdsample(a, nSamplePartitions = 6, samplingRatio = 2), e)
   expect_error(hpdsample(a, nSamplePartitions = 6, samplingRatio = NA), e)
   expect_error(hpdsample(a, nSamplePartitions = 6, samplingRatio = c(1, 2)), e)
   expect_error(hpdsample(a, nSamplePartitions = 6, samplingRatio = c('a')), e)
