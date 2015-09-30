@@ -24,15 +24,6 @@ hpdegbm <- function(
        bag.fraction = 0.632, #0.5-0.8,
        offset = NULL, 
        misc = NULL, 
-       w = NULL,
-       var.monotone = NULL,
-       nTrain = NULL,
-       train.fraction = NULL,
-       keep.data = FALSE,
-       verbose = FALSE, # If TRUE, gbm will prints out progress and performance indicators
-       var.names = NULL,
-       #response.name = "y",
-       group = NULL,
        trace = FALSE,  # If TRUE, hpdegbm prints out progress outside the gbm.fit R function
        completeModel = FALSE) # default system parameters are defined here
 }

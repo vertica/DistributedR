@@ -130,11 +130,9 @@ foreach(i, 1:nExecutor_test, function(X_test=splits(dfX_test,i),Y_test=splits(da
 
 
 #################################################################################################
-### test distributed sampling: hpdsampling
-sampledXY <- hpdsampling(dfX,daY, nClass=2, sampleThresh=200)
 
-dfRX <- sampledXY[[1]]
-daRY <- sampledXY[[2]]
+dfRX <- dfX
+daRY <- daY 
 
 
 #################################################################################################
@@ -158,17 +156,17 @@ test_that("Test classification accuracy: AdaBoost", {
        n.minobsinnode = 10,
        shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
-       offset = NULL, 
-       misc = NULL, 
-       w = NULL,
-       var.monotone = NULL,
-       nTrain = NULL,
-       train.fraction = NULL,
-       keep.data = FALSE,
-       verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
-       var.names = NULL,
-       #response.name = "y",
-       group = NULL,
+       #offset = NULL, 
+       #misc = NULL, 
+       #w = NULL,
+       #var.monotone = NULL,
+       #nTrain = NULL,
+       #train.fraction = NULL,
+       #keep.data = FALSE,
+       #verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
+       #var.names = NULL,
+       ##response.name = "y",
+       #group = NULL,
        trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
@@ -179,13 +177,13 @@ test_that("Test classification accuracy: AdaBoost", {
     Predictions1 <- predict.hpdegbm(finalModel1, newdata1, trace = FALSE)
     result1 <- confusion(Predictions1 > 0, y_test > 0)
 
-    PredictionsGBM1_1 <- predict.gbm(finalModel1[[1]][[1]], newdata1, n.trees=finalModel1[[2]][1], trace = FALSE)
+    PredictionsGBM1_1 <- predict.gbm(finalModel1$model[[1]], newdata1, n.trees=finalModel1$bestIterations[1], trace = FALSE)
     result1_1 <- confusion(PredictionsGBM1_1 > 0, y_test > 0)
-    PredictionsGBM1_2 <- predict.gbm(finalModel1[[1]][[2]], newdata1, n.trees=finalModel1[[2]][2], trace = FALSE)
+    PredictionsGBM1_2 <- predict.gbm(finalModel1$model[[2]], newdata1, n.trees=finalModel1$bestIterations[2], trace = FALSE)
     result1_2 <- confusion(PredictionsGBM1_2 > 0, y_test > 0)
-    PredictionsGBM1_3 <- predict.gbm(finalModel1[[1]][[3]], newdata1, n.trees=finalModel1[[2]][3], trace = FALSE)
+    PredictionsGBM1_3 <- predict.gbm(finalModel1$model[[3]], newdata1, n.trees=finalModel1$bestIterations[3], trace = FALSE)
     result1_3 <- confusion(PredictionsGBM1_3 > 0, y_test > 0)
-    PredictionsGBM1_4 <- predict.gbm(finalModel1[[1]][[4]], newdata1, n.trees=finalModel1[[2]][4], trace = FALSE)
+    PredictionsGBM1_4 <- predict.gbm(finalModel1$model[[4]], newdata1, n.trees=finalModel1$bestIterations[4], trace = FALSE)
     result1_4 <- confusion(PredictionsGBM1_4 > 0, y_test > 0)
 
     # availability of some outputs
@@ -227,17 +225,17 @@ test_that("Test classification accuracy: AdaBoost", {
        n.minobsinnode = 10,
        shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
-       offset = NULL, 
-       misc = NULL, 
-       w = NULL,
-       var.monotone = NULL,
-       nTrain = NULL,
-       train.fraction = NULL,
-       keep.data = FALSE,
-       verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
-       var.names = NULL,
-       #response.name = "y",
-       group = NULL,
+       #offset = NULL, 
+       #misc = NULL, 
+       #w = NULL,
+       #var.monotone = NULL,
+       #nTrain = NULL,
+       #train.fraction = NULL,
+       #keep.data = FALSE,
+       #verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
+       #var.names = NULL,
+       ##response.name = "y",
+       #group = NULL,
        trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
@@ -250,13 +248,13 @@ test_that("Test classification accuracy: AdaBoost", {
     result2 <- confusion(Predictions2 > 0, getpartition(daY_test) > 0)
 
     newdata21 <- getpartition(newdata2)
-    PredictionsGBM2_1 <- predict.gbm(finalModel2[[1]][[1]], newdata21, n.trees=finalModel2[[2]][1], trace = FALSE)
+    PredictionsGBM2_1 <- predict.gbm(finalModel2$model[[1]], newdata21, n.trees=finalModel2$bestIterations[1], trace = FALSE)
     result2_1 <- confusion(PredictionsGBM2_1 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM2_2 <- predict.gbm(finalModel2[[1]][[2]], newdata21, n.trees=finalModel2[[2]][2], trace = FALSE)
+    PredictionsGBM2_2 <- predict.gbm(finalModel2$model[[2]], newdata21, n.trees=finalModel2$bestIterations[2], trace = FALSE)
     result2_2 <- confusion(PredictionsGBM2_2 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM2_3 <- predict.gbm(finalModel2[[1]][[3]], newdata21, n.trees=finalModel2[[2]][3], trace = FALSE)
+    PredictionsGBM2_3 <- predict.gbm(finalModel2$model[[3]], newdata21, n.trees=finalModel2$bestIterations[3], trace = FALSE)
     result2_3 <- confusion(PredictionsGBM2_3 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM2_4 <- predict.gbm(finalModel2[[1]][[4]], newdata21, n.trees=finalModel2[[2]][4], trace = FALSE)
+    PredictionsGBM2_4 <- predict.gbm(finalModel2$model[[4]], newdata21, n.trees=finalModel2$bestIterations[4], trace = FALSE)
     result2_4 <- confusion(PredictionsGBM2_4 > 0, getpartition(daY_test) > 0)
 
     # availability of some outputs
@@ -296,17 +294,17 @@ test_that("Test classification accuracy: AdaBoost", {
        n.minobsinnode = 10,
        shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
-       offset = NULL, 
-       misc = NULL, 
-       w = NULL,
-       var.monotone = NULL,
-       nTrain = NULL,
-       train.fraction = NULL,
-       keep.data = FALSE,
-       verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
-       var.names = NULL,
-       #response.name = "y",
-       group = NULL,
+       #offset = NULL, 
+       #misc = NULL, 
+       #w = NULL,
+       #var.monotone = NULL,
+       #nTrain = NULL,
+       #train.fraction = NULL,
+       #keep.data = FALSE,
+       #verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
+       #var.names = NULL,
+       ##response.name = "y",
+       #group = NULL,
        trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
@@ -319,13 +317,13 @@ test_that("Test classification accuracy: AdaBoost", {
     result3 <- confusion(Predictions3 > 0, getpartition(daY_test) > 0)
 
     newdata31 <- getpartition(newdata3)
-    PredictionsGBM3_1 <- predict.gbm(finalModel3[[1]][[1]], newdata31, n.trees=finalModel3[[2]][1], trace = FALSE)
+    PredictionsGBM3_1 <- predict.gbm(finalModel3$model[[1]], newdata31, n.trees=finalModel3$bestIterations[1], trace = FALSE)
     result3_1 <- confusion(PredictionsGBM3_1 > 0, getpartition(daY_test)> 0)
-    PredictionsGBM3_2 <- predict.gbm(finalModel3[[1]][[2]], newdata31, n.trees=finalModel3[[2]][2], trace = FALSE)
+    PredictionsGBM3_2 <- predict.gbm(finalModel3$model[[2]], newdata31, n.trees=finalModel3$bestIterations[2], trace = FALSE)
     result3_2 <- confusion(PredictionsGBM3_2 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM3_3 <- predict.gbm(finalModel3[[1]][[3]], newdata31, n.trees=finalModel3[[2]][3], trace = FALSE)
+    PredictionsGBM3_3 <- predict.gbm(finalModel3$model[[3]], newdata31, n.trees=finalModel3$bestIterations[3], trace = FALSE)
     result3_3 <- confusion(PredictionsGBM3_3 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM3_4 <- predict.gbm(finalModel3[[1]][[4]], newdata31, n.trees=finalModel3[[2]][4], trace = FALSE)
+    PredictionsGBM3_4 <- predict.gbm(finalModel3$model[[4]], newdata31, n.trees=finalModel3$bestIterations[4], trace = FALSE)
     result3_4 <- confusion(PredictionsGBM3_4 > 0, getpartition(daY_test) > 0)
 
     # availability of some outputs
@@ -367,17 +365,17 @@ test_that("Test classification accuracy: bernoulli", {
        n.minobsinnode = 10,
        shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
-       offset = NULL, 
-       misc = NULL, 
-       w = NULL,
-       var.monotone = NULL,
-       nTrain = NULL,
-       train.fraction = NULL,
-       keep.data = FALSE,
-       verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
-       var.names = NULL,
+       #offset = NULL, 
+       #misc = NULL, 
+       #w = NULL,
+       #var.monotone = NULL,
+       #nTrain = NULL,
+       #train.fraction = NULL,
+       #keep.data = FALSE,
+       #verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
+       #var.names = NULL,
        #response.name = "y",
-       group = NULL,
+       #group = NULL,
        trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
@@ -389,13 +387,13 @@ test_that("Test classification accuracy: bernoulli", {
     print(confusion(Predictions4 > 0, y_test > 0))   # Y_test: centralized small data
     result4 <- confusion(Predictions4 > 0, y_test > 0)
 
-    PredictionsGBM4_1 <- predict.gbm(finalModel4[[1]][[1]], newdata4, n.trees=finalModel4[[2]][1], trace = FALSE)
+    PredictionsGBM4_1 <- predict.gbm(finalModel4$model[[1]], newdata4, n.trees=finalModel4$bestIterations[1], trace = FALSE)
     result4_1 <- confusion(PredictionsGBM4_1 > 0, y_test > 0)
-    PredictionsGBM4_2 <- predict.gbm(finalModel4[[1]][[2]], newdata4, n.trees=finalModel4[[2]][2], trace = FALSE)
+    PredictionsGBM4_2 <- predict.gbm(finalModel4$model[[2]], newdata4, n.trees=finalModel4$bestIterations[2], trace = FALSE)
     result4_2 <- confusion(PredictionsGBM4_2 > 0, y_test > 0)
-    PredictionsGBM4_3 <- predict.gbm(finalModel4[[1]][[3]], newdata4, n.trees=finalModel4[[2]][3], trace = FALSE)
+    PredictionsGBM4_3 <- predict.gbm(finalModel4$model[[3]], newdata4, n.trees=finalModel4$bestIterations[3], trace = FALSE)
     result4_3 <- confusion(PredictionsGBM4_3 > 0, y_test > 0)
-    PredictionsGBM4_4 <- predict.gbm(finalModel4[[1]][[4]], newdata4, n.trees=finalModel4[[2]][4], trace = FALSE)
+    PredictionsGBM4_4 <- predict.gbm(finalModel4$model[[4]], newdata4, n.trees=finalModel4$bestIterations[4], trace = FALSE)
     result4_4 <- confusion(PredictionsGBM4_4 > 0, y_test > 0)
 
     # availability of some outputs
@@ -436,17 +434,17 @@ test_that("Test classification accuracy: bernoulli", {
        n.minobsinnode = 10,
        shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
-       offset = NULL, 
-       misc = NULL, 
-       w = NULL,
-       var.monotone = NULL,
-       nTrain = NULL,
-       train.fraction = NULL,
-       keep.data = FALSE,
-       verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
-       var.names = NULL,
-       #response.name = "y",
-       group = NULL,
+       #offset = NULL, 
+       #misc = NULL, 
+       #w = NULL,
+       #var.monotone = NULL,
+       #nTrain = NULL,
+       #train.fraction = NULL,
+       #keep.data = FALSE,
+       #verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
+       #var.names = NULL,
+       ##response.name = "y",
+       #group = NULL,
        trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
@@ -459,13 +457,13 @@ test_that("Test classification accuracy: bernoulli", {
     result5 <- confusion(Predictions5 > 0, getpartition(daY_test) > 0)
 
     newdata51 = getpartition(newdata5)
-    PredictionsGBM5_1 <- predict.gbm(finalModel5[[1]][[1]], newdata51, n.trees=finalModel5[[2]][1], trace = FALSE)
+    PredictionsGBM5_1 <- predict.gbm(finalModel5$model[[1]], newdata51, n.trees=finalModel5$bestIterations[1], trace = FALSE)
     result5_1 <- confusion(PredictionsGBM5_1 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM5_2 <- predict.gbm(finalModel5[[1]][[2]], newdata51, n.trees=finalModel5[[2]][2], trace = FALSE)
+    PredictionsGBM5_2 <- predict.gbm(finalModel5$model[[2]], newdata51, n.trees=finalModel5$bestIterations[2], trace = FALSE)
     result5_2 <- confusion(PredictionsGBM5_2 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM5_3 <- predict.gbm(finalModel5[[1]][[3]], newdata51, n.trees=finalModel5[[2]][3], trace = FALSE)
+    PredictionsGBM5_3 <- predict.gbm(finalModel5$model[[3]], newdata51, n.trees=finalModel5$bestIterations[3], trace = FALSE)
     result5_3 <- confusion(PredictionsGBM5_3 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM5_4 <- predict.gbm(finalModel5[[1]][[4]], newdata51, n.trees=finalModel5[[2]][4], trace = FALSE)
+    PredictionsGBM5_4 <- predict.gbm(finalModel5$model[[4]], newdata51, n.trees=finalModel5$bestIterations[4], trace = FALSE)
     result5_4 <- confusion(PredictionsGBM5_4 > 0, getpartition(daY_test) > 0)
 
     # availability of some outputs
@@ -505,17 +503,17 @@ test_that("Test classification accuracy: bernoulli", {
        n.minobsinnode = 10,
        shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
-       offset = NULL, 
-       misc = NULL, 
-       w = NULL,
-       var.monotone = NULL,
-       nTrain = NULL,
-       train.fraction = NULL,
-       keep.data = FALSE,
-       verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
-       var.names = NULL,
-       #response.name = "y",
-       group = NULL,
+       #offset = NULL, 
+       #misc = NULL, 
+       #w = NULL,
+       #var.monotone = NULL,
+       #nTrain = NULL,
+       #train.fraction = NULL,
+       #keep.data = FALSE,
+       #verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
+       #var.names = NULL,
+       ##response.name = "y",
+       #group = NULL,
        trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
@@ -528,13 +526,13 @@ test_that("Test classification accuracy: bernoulli", {
     result6 <- confusion(Predictions6 > 0, getpartition(daY_test) > 0)
 
     newdata61 <- getpartition(newdata6)
-    PredictionsGBM6_1 <- predict.gbm(finalModel6[[1]][[1]], newdata61, n.trees=finalModel6[[2]][1], trace = FALSE)
+    PredictionsGBM6_1 <- predict.gbm(finalModel6$model[[1]], newdata61, n.trees=finalModel6$bestIterations[1], trace = FALSE)
     result6_1 <- confusion(PredictionsGBM6_1 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM6_2 <- predict.gbm(finalModel6[[1]][[2]], newdata61, n.trees=finalModel6[[2]][2], trace = FALSE)
+    PredictionsGBM6_2 <- predict.gbm(finalModel6$model[[2]], newdata61, n.trees=finalModel6$bestIterations[2], trace = FALSE)
     result6_2 <- confusion(PredictionsGBM6_2 > 0, getpartition(daY_test) > 0)
-    PredictionsGBM6_3 <- predict.gbm(finalModel6[[1]][[3]], newdata61, n.trees=finalModel6[[2]][3], trace = FALSE)
+    PredictionsGBM6_3 <- predict.gbm(finalModel6$model[[3]], newdata61, n.trees=finalModel6$bestIterations[3], trace = FALSE)
     result6_3 <- confusion(PredictionsGBM6_3 > 0, getpartition(daY_test)> 0)
-    PredictionsGBM6_4 <- predict.gbm(finalModel6[[1]][[4]], newdata61, n.trees=finalModel6[[2]][4], trace = FALSE)
+    PredictionsGBM6_4 <- predict.gbm(finalModel6$model[[4]], newdata61, n.trees=finalModel6$bestIterations[4], trace = FALSE)
     result6_4 <- confusion(PredictionsGBM6_4 > 0, getpartition(daY_test) > 0)
 
     # availability of some outputs
@@ -572,17 +570,17 @@ test_that("Test classification accuracy: multinomial", {
        n.minobsinnode = 10,
        shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
-       offset = NULL, 
-       misc = NULL, 
-       w = NULL,
-       var.monotone = NULL,
-       nTrain = NULL,
-       train.fraction = NULL,
-       keep.data = FALSE,
-       verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
-       var.names = NULL,
-       #response.name = "y",
-       group = NULL,
+       #offset = NULL, 
+       #misc = NULL, 
+       #w = NULL,
+       #var.monotone = NULL,
+       #nTrain = NULL,
+       #train.fraction = NULL,
+       #keep.data = FALSE,
+       #verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
+       #var.names = NULL,
+       ##response.name = "y",
+       #group = NULL,
        trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 3,
@@ -600,25 +598,25 @@ test_that("Test classification accuracy: multinomial", {
 
 
     # compute classification error rate
-    PredictionsGBM7_1 <- predict.gbm(finalModel7[[1]][[1]], newdata7, n.trees=finalModel7[[2]][1], trace = FALSE)
+    PredictionsGBM7_1 <- predict.gbm(finalModel7$model[[1]], newdata7, n.trees=finalModel7$bestIterations[1], trace = FALSE)
     aa7_1 <- apply(PredictionsGBM7_1, 1, which.max) - as.numeric(valid.iris$Species)
     correctCount7_1 <- sum(aa7_1 == 0)
     errorRate7_1 <- 1 - correctCount7_1/(nrow(newdata7))
     print(errorRate7_1)
 
-    PredictionsGBM7_2 <- predict.gbm(finalModel7[[1]][[2]], newdata7, n.trees=finalModel7[[2]][2], trace = FALSE)
+    PredictionsGBM7_2 <- predict.gbm(finalModel7$model[[2]], newdata7, n.trees=finalModel7$bestIterations[2], trace = FALSE)
     aa7_2 <- apply(PredictionsGBM7_2, 1, which.max) - as.numeric(valid.iris$Species)
     correctCount7_2 <- sum(aa7_2 == 0)
     errorRate7_2 <- 1 - correctCount7_2/(nrow(newdata7))
     print(errorRate7_2)
 
-   # PredictionsGBM7_3 <- predict.gbm(finalModel7[[1]][[3]], newdata7, n.trees=finalModel7[[2]][3], trace = FALSE)
+   # PredictionsGBM7_3 <- predict.gbm(finalModel7$model[[3]], newdata7, n.trees=finalModel7$bestIterations[3], trace = FALSE)
    # aa7_3 <- apply(PredictionsGBM7_3, 1, which.max) - as.numeric(valid.iris$Species)
    # correctCount7_3 <- sum(aa7_3 == 0)
    # errorRate7_3 <- 1 - correctCount7_3/(nrow(newdata7))
    # print(errorRate7_3)
 
-   # PredictionsGBM7_4 <- predict.gbm(finalModel7[[1]][[4]], newdata7, n.trees=finalModel7[[2]][4], trace = FALSE)
+   # PredictionsGBM7_4 <- predict.gbm(finalModel7$model[[4]], newdata7, n.trees=finalModel7$bestIterations[4], trace = FALSE)
    # aa7_4 <- apply(PredictionsGBM7_4, 1, which.max) - as.numeric(valid.iris$Species)
    # correctCount7_4 <- sum(aa7_4 == 0)
    # errorRate7_4 <- 1 - correctCount7_4/(nrow(newdata7))
@@ -683,11 +681,9 @@ nExecutor <- npartition
 
 # testGaussian1: gaussian distribution for regression, distributed training data, distributed testing data
 ########################################################################################################################
-### test distributed sampling: hpdsampling
-sampledXY8 <- hpdsampling(dfX8,daY8, nClass=2, sampleThresh=200)
 
-dfRX8 <- sampledXY8[[1]]
-daRY8 <- sampledXY8[[2]]
+dfRX8 <- dfX8 
+daRY8 <- daY8 
 
 
 
@@ -711,17 +707,17 @@ test_that("Test regression accuracy: gaussian", {
        n.minobsinnode = 10,
        shrinkage = 0.10,     #[0.001, 1]
        bag.fraction = 0.632, #0.5-0.8,
-       offset = NULL, 
-       misc = NULL, 
-       w = NULL,
-       var.monotone = NULL,
-       nTrain = NULL,
-       train.fraction = NULL,
-       keep.data = FALSE,
-       verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
-       var.names = NULL,
-       #response.name = "y",
-       group = NULL,
+       #offset = NULL, 
+       #misc = NULL, 
+       #w = NULL,
+       #var.monotone = NULL,
+       #nTrain = NULL,
+       #train.fraction = NULL,
+       #keep.data = FALSE,
+       #verbose = FALSE, # If TRUE, gbm will print out progress and performanc eindicators
+       #var.names = NULL,
+       ##response.name = "y",
+       #group = NULL,
        trace = TRUE, #FALSE,  # If TRUE, hpdegbm will print out progress outside gbm.fit R function
        samplingFlag = TRUE,
        nClass = 2,
@@ -748,13 +744,13 @@ test_that("Test regression accuracy: gaussian", {
     print (sum((data2$Y - Predictions8)^2))
     result8 <- sum((data2$Y - Predictions8)^2)
 
-    PredictionsGBM8_1 <- predict.gbm(finalModel8[[1]][[1]], newdata8, n.trees=finalModel8[[2]][1], trace = FALSE)
+    PredictionsGBM8_1 <- predict.gbm(finalModel8$model[[1]], newdata8, n.trees=finalModel8$bestIterations[1], trace = FALSE)
     result8_1 <-  sum((data2$Y - PredictionsGBM8_1)^2)
-    PredictionsGBM8_2 <- predict.gbm(finalModel8[[1]][[2]], newdata8, n.trees=finalModel8[[2]][2], trace = FALSE)
+    PredictionsGBM8_2 <- predict.gbm(finalModel8$model[[2]], newdata8, n.trees=finalModel8$bestIterations[2], trace = FALSE)
     result8_2 <- sum((data2$Y - PredictionsGBM8_2)^2)
-    PredictionsGBM8_3 <- predict.gbm(finalModel8[[1]][[3]], newdata8, n.trees=finalModel8[[2]][3], trace = FALSE)
+    PredictionsGBM8_3 <- predict.gbm(finalModel8$model[[3]], newdata8, n.trees=finalModel8$bestIterations[3], trace = FALSE)
     result8_3 <- sum((data2$Y - PredictionsGBM8_3)^2)
-    PredictionsGBM8_4 <- predict.gbm(finalModel8[[1]][[4]], newdata8, n.trees=finalModel8[[2]][4], trace = FALSE)
+    PredictionsGBM8_4 <- predict.gbm(finalModel8$model[[4]], newdata8, n.trees=finalModel8$bestIterations[4], trace = FALSE)
     result8_4 <- sum((data2$Y - PredictionsGBM8_4)^2)
 
 
@@ -824,7 +820,7 @@ test_that("The inputs are validated for AdaBoost", {
 
     expect_error(hpdegbm(X_train=X_train,  nExecutor=4, n.trees=1000, distribution = "adaboost", nClass=2), "'Y_train' is a required argument")  
     
-    expect_error(hpdegbm(X_train, Y_train, nExecutor=-4, Y_train, n.trees=1000,  distribution = "adaboost", nClass=2), " 'nExecutor' must be a positive integer number") 
+    expect_error(hpdegbm(X_train, Y_train, nExecutor=-4, Y_train, n.trees=1000,  distribution = "adaboost", nClass=2), " 'nExecutor' must be a positive integer") 
 })
 
 
