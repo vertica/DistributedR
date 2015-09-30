@@ -76,6 +76,19 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	if(nBins <= 0)
 		stop("'nBins' must be more than 0")
 
+	if(control$maxdepth > 30)
+		stop("'control$maxdepth' must be <= 30 for rpart models")
+	if(control$maxdepth <= 0)
+		stop("'control$maxdepth' must be a positive number")
+
+	if(control$cp > 1 || control$cp <= 0)
+		stop("'control$cp' must be in interval (0,1]")
+	if(control$minsplit <= 0)
+		stop("'control$minsplit' must be positive")
+	if(control$minbucket <= 0)
+		stop("'control$minbucket' must be positive")
+
+
 	tryCatch({
 	test_formula <- data.frame(matrix(0,0,ncol(data)))
 	colnames(test_formula) <- colnames(data)
