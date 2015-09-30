@@ -242,16 +242,27 @@ hpdegbm <- function(
         # 90% of the input data per output partition in order to maintain
         # variety among the samples on which models are trained
         sampleRatio <- min(0.9, (sampleThresh * nClass * nFeature) / nTrain)
+        if (trace) {
+          message(paste0("Beginning distributed sampling, with samplingRatio = ",
+                         sampleRatio))
+        }
 
         # Perform distributed sampling. The outputs contain as many models as
         # executors to be built
         sampledXY <- hpdsample(X_train, Y_train, nSamplePartitions = nExecutor,
                                samplingRatio = sampleRatio)
+        if (trace) {
+          message("Distributed sampling complete")
+        }
         sX_train <- sampledXY[[1]]
         sY_train <- sampledXY[[2]]
       } else { # Don't sample the data
         sX_train <- X_train
         sY_train <- Y_train
+      }
+
+      if (trace) {
+        message("Checking to ensure all partitions contain all classes")
       }
 
       # Check which classes are in each partition of Y_train. Each partition
@@ -278,7 +289,10 @@ hpdegbm <- function(
             stop("Some partitions do not contain all classes. Try using samplingFlag == TRUE")
         }
       }
-
+      if (trace) {
+        message("Building local models")
+      }
+ 
       # Build local model on each partition of sampled data
       foreach(i, 1:nExecutor, function(dGBM_modeli       = splits(dl_GBM_model,i), 
                                        best.iter         = splits(dbest.iter,i), 
@@ -299,7 +313,7 @@ hpdegbm <- function(
   
     if(trace) {
       timing_info <- Sys.time() - starttime
-      message(paste0("Time for model training: ", timing_info, 's'))
+      message(paste0("Execution time: ", timing_info, 's'))
     }
 
     # output of hpdegbm: GBM model and best iteration estiamtion
