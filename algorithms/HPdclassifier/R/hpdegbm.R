@@ -180,7 +180,7 @@ hpdegbm <- function(
     stop("'bag.fraction' must be a number in the interval (0,1]")
 
   if(trace) {
-    message("Start model training\n")
+    message("Start model training")
     starttime <- Sys.time()
   }
 
@@ -299,7 +299,7 @@ hpdegbm <- function(
   
     if(trace) {
       timing_info <- Sys.time() - starttime
-      message(paste("Time for model training:", timing_info))
+      message(paste0("Time for model training: ", timing_info, 's'))
     }
 
     # output of hpdegbm: GBM model and best iteration estiamtion
