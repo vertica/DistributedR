@@ -94,15 +94,10 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 	}
 	if(missing(distance_metric))
 	{
-		if(categorical && !is.dframe(xtest))
+		if(categorical)
 			distance_metric <- errorRate
-		if(!categorical && !is.dframe(xtest))
+		if(!categorical)
 			distance_metric <- meanSquared
-		if(categorical && is.dframe(xtest))
-			distance_metric <- .calculateErrorRate
-		if(!categorical && is.dframe(xtest))
-			distance_metric <- .calculateErrorRate
-
 	}
 
 	features = 1:ncol(xtest)
@@ -131,7 +126,12 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 		if(trace)
 		print("predicting shuffled data")
 		timing_info <- Sys.time()
-		shuffled_predictions <- predict(model, shuffled_data, ...)
+		tryCatch({
+			shuffled_predictions <- predict(model, shuffled_data, ...)
+		},error = function(e)
+		{
+			stop(paste("Could not run predictions using model. Possibly invalid model. Error from predict function: ",e,sep = "\n"))
+		})
 		if(trace)
 		print(Sys.time() - timing_info)
 
@@ -158,6 +158,14 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 
 
 	#compute the errors without any shuffling
+	tryCatch({
+		normal_predictions = predict(model, xtest,...)
+	},error = function(e)
+	{
+		stop(paste("Could not run predictions using model. Possibly invalid model. Error from predict function: ",e,sep = "\n"))
+	})
+
+
 	normal_predictions = predict(model, xtest,...)
 	tryCatch({
 	if(is.data.frame(ytest) & !is.data.frame(normal_predictions))
@@ -167,9 +175,9 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 
 	base_accuracy = distance_metric(ytest, normal_predictions)[1]
 
-	importance <- importance - base_accuracy
+	importance <- (importance - base_accuracy) / base_accuracy
 	importance <- as.data.frame(importance)
-	colnames(importance) <- "Mean Decrease in Accuracy"
+	colnames(importance) <- "Importance"
 	return(importance)
 }
 	
@@ -203,28 +211,4 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 		},progress = FALSE)
 	colnames(shuffled_data) <- colnames(data)
 	return(shuffled_data)
-}
-
-.calculateErrorRate <- function(dframe1, dframe2)
-{
-	diff <- darray(npartitions = npartitions(dframe1))
-	foreach(i,1:npartitions(diff), function(diff = splits(diff,i),
-			a = splits(dframe1,i), b = splits(dframe2,i))
-	{
-		diff = matrix(sum(a != b))
-		update(diff)
-	},progress = FALSE)
-	sum(diff)/nrow(dframe1)
-}
-.calculateMSE <- function(dframe1, dframe2)
-{
-	diff <- darray(npartitions = npartitions(dframe1))
-	foreach(i,1:npartitions(diff), function(diff = splits(diff,i),
-			a = splits(dframe1,i), b = splits(dframe2,i))
-	{
-		diff = a - b
-		diff = matrix(sum(diff*diff))
-		update(diff)
-	},progress = FALSE)
-	sum(diff)/nrow(dframe1)
 }
