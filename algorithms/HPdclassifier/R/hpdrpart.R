@@ -72,6 +72,8 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	}
 
 	keep.model = model
+	if(!is.numeric(nBins))
+		stop("nBins must be an integer")
 	nBins = as.integer(nBins)
 	if(nBins <= 0)
 		stop("'nBins' must be more than 0")
