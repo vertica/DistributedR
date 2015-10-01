@@ -1,5 +1,5 @@
 library(HPdclassifier)
-library(rpart)
+library(HPdutility)
 set.seed(2)
 
 context("Invalid Inputs to Variable Importance")

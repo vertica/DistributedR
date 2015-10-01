@@ -229,7 +229,7 @@ extern "C"
     @param R_max_depth - maximum depth to print to
     @param classes - classes of output variable 
    */
-  SEXP printForest(SEXP R_forest, SEXP R_max_depth, SEXP classes)
+  void printForest(SEXP R_forest, SEXP R_max_depth, SEXP classes)
   {
     hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
     int max_depth = 5;
@@ -373,13 +373,6 @@ extern "C"
   {
     hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
 
-    int* features_categorical = forest->features_cardinality;
-    int response_cardinality = forest->response_cardinality;
-    double* features_min = forest->features_min;
-    double* features_max = forest->features_max;
-    int* bin_num = forest->bin_num;
-    
-    hpdRFnode** leaf_nodes = forest->leaf_nodes;
     int count = 0;
     for(int i = 0; i < forest->nleaves; i++)
       {
@@ -505,7 +498,7 @@ extern "C"
     return R_forest;
   }
 
-  SEXP stitchForest(SEXP R_forest, SEXP R_temp_forests, 
+  void stitchForest(SEXP R_forest, SEXP R_temp_forests, 
 		    SEXP R_forest_nodes, SEXP R_temp_forest_nodes)
   {
      hpdRFforest * forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
@@ -542,14 +535,13 @@ extern "C"
 
        }
   }
-  SEXP removeNullLeaves(SEXP R_forest)
+  void removeNullLeaves(SEXP R_forest)
   {
      hpdRFforest * forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
      int valid = 0;
      for(int i = 0; i < forest->nleaves; i++)
        if(forest->leaf_nodes[i] != NULL)
 	 valid++;
-     SEXP R_leaf_table;
      hpdRFnode **leaf_nodes = (hpdRFnode**)malloc(sizeof(hpdRFnode*)*valid); 
      int j = 0;
      for(int i = 0; i < valid; i++)
@@ -820,7 +812,7 @@ extern "C"
 
   }
 
-  SEXP undoSplits(SEXP R_forest, SEXP R_node_ids)
+  void undoSplits(SEXP R_forest, SEXP R_node_ids)
   {
     hpdRFforest * forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
     int* node_ids = INTEGER(R_node_ids);

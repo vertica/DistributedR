@@ -104,7 +104,7 @@ double computeClassificationTreeStats(double* hist, int nbin,
 				      double* default_cost,
 				      double* node_count)
 {
-  double temp,max_count=0, prediction=0, sq = 0;
+  double max_count=0, prediction=0, sq = 0;
   for(int k = 0; k < classes; k++)
     {
       node_count[k] = 0;
@@ -355,7 +355,6 @@ int* computeSplit(SEXP histogram, int bin_num, int class_num,
 		  int *best_split_length, double cp, double min_count)
 {
   int* best_split=NULL;
-  SEXP split_criteria;
   if(!response_categorical && !feature_categorical)
     {
       NumericVariableRegressionTreeSplit(REAL(histogram), bin_num, 

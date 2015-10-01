@@ -103,8 +103,8 @@ void convertTreeToRandomForest(hpdRFnode* tree, SEXP forest, int* index,
 void simplifyTree(hpdRFnode *tree);
 extern "C"
 {
-SEXP undoSplits(SEXP R_forest, SEXP R_node_ids);
-SEXP printForest(SEXP R_forest, SEXP R_max_depth, SEXP classes);
+void undoSplits(SEXP R_forest, SEXP R_node_ids);
+void printForest(SEXP R_forest, SEXP R_max_depth, SEXP classes);
 }
 
 

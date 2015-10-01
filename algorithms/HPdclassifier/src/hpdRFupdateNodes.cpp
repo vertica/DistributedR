@@ -133,9 +133,6 @@ extern "C"
     hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
 
     int* features_categorical = forest-> features_cardinality;
-    int response_categorical = forest->response_cardinality;
-    double* features_min = forest->features_min;
-    double* features_max = forest->features_max;
     int* bin_num = forest->bin_num;
     int features_num = forest->features_num;
     int leaf_nodes = forest->nleaves -

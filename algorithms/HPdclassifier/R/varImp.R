@@ -58,16 +58,9 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 	{
 		shuffle_column <- .shuffle_column_dframe
 		#if the input was a dframe first randomize data then set shuffle function
-		permutation <- sample.int(nrow(xtest))
-		suppressWarnings({
-		if(trace)
-			print("shuffling data")
-		timing_info <- Sys.time()
-		xtest <- .shuffle_dframe(xtest,permutation, nrow = nrow)
-		ytest <- .shuffle_dframe(ytest,permutation, nrow = nrow)
-		if(trace)
-			print(Sys.time() - timing_info)
-		})
+		sampled_data<-hpdsample(xtest,ytest,distributedR_status()$Inst, nrow/nrow(xtest))
+		xtest <- sampled_data$sdata1
+		ytest <- sampled_data$sdata2
 	}
 	else if(is.data.frame(xtest))
 	{
@@ -101,10 +94,15 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 	}
 	if(missing(distance_metric))
 	{
-		if(categorical)
+		if(categorical && !is.dframe(xtest))
 			distance_metric <- errorRate
-		if(!categorical)
+		if(!categorical && !is.dframe(xtest))
 			distance_metric <- meanSquared
+		if(categorical && is.dframe(xtest))
+			distance_metric <- .calculateErrorRate
+		if(!categorical && is.dframe(xtest))
+			distance_metric <- .calculateErrorRate
+
 	}
 
 	features = 1:ncol(xtest)
@@ -207,64 +205,26 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 	return(shuffled_data)
 }
 
-##This function shuffles/randomizes the dframe and mantains the
-##size of each partition if desired for load balancing
-##The idea of this is to reduce correlation between samples within the same split
-##so that within each split we can shuffle locally  
-
-.shuffle_dframe <- function(data,permutation, nrow = 1000)
+.calculateErrorRate <- function(dframe1, dframe2)
 {
-	
-	rows_partition = partitionsize(data)[,1]
-	rows_partition = cumsum(rows_partition)
-	start_rows_partition = c(1,rows_partition[-length(rows_partition)]+1)
-	end_rows_partition = rows_partition
-	shuffle_column = permutation
-	dest_partition = sapply(shuffle_column, function(new) 
-			      min(which((start_rows_partition <= new) &
-			      	(new <= end_rows_partition))))
-
-
-
-	#use a single foreach to set many partitions that will be redistributed
-	
-	temp_data = dframe(npartitions = npartitions(data)*npartitions(data))
-	foreach(i,1:(npartitions(data)*npartitions(data)),
-	function(source = ceiling(i/npartitions(data)),
-		dest = (i %% npartitions(data))+1,
-		temp_data = splits(temp_data,i), 
-		data = splits(data,ceiling(i/npartitions(data))),
-		dest_partition = dest_partition[
-			start_rows_partition[ceiling(i/npartitions(data))]:
-			end_rows_partition[ceiling(i/npartitions(data))]])
+	diff <- darray(npartitions = npartitions(dframe1))
+	foreach(i,1:npartitions(diff), function(diff = splits(diff,i),
+			a = splits(dframe1,i), b = splits(dframe2,i))
 	{
-		relevent_rows = dest_partition == dest
-		temp_data = data.frame(data[relevent_rows,])
-		update(temp_data)
+		diff = matrix(sum(a != b))
+		update(diff)
 	},progress = FALSE)
-
-
-
-	#sending partitions to different workers and recombining 
-	
-	shuffled_data = dframe(npartitions = npartitions(data))
-	foreach(i,1:npartitions(data),
-	function(temp_data = splits(temp_data,
-			as.list(npartitions(data)*(i-1)+1:npartitions(data))),
-		shuffled_data = splits(shuffled_data,i),
-		data = splits(data,i),
-		nrow = nrow)
-	{
-		shuffled_data = do.call(rbind,temp_data)
-		copies = floor(nrow/nrow(shuffled_data))
-		remainder = nrow - copies * nrow(shuffled_data)
-		indices = rep(1:nrow(shuffled_data),copies)
-		indices = c(indices,1:remainder)
-		shuffled_data = data.frame(shuffled_data[indices,])
-		update(shuffled_data)
-	},progress = FALSE)
-
-	colnames(shuffled_data) <- colnames(data)
-	return(shuffled_data)
+	sum(diff)/nrow(dframe1)
 }
-
+.calculateMSE <- function(dframe1, dframe2)
+{
+	diff <- darray(npartitions = npartitions(dframe1))
+	foreach(i,1:npartitions(diff), function(diff = splits(diff,i),
+			a = splits(dframe1,i), b = splits(dframe2,i))
+	{
+		diff = a - b
+		diff = matrix(sum(diff*diff))
+		update(diff)
+	},progress = FALSE)
+	sum(diff)/nrow(dframe1)
+}

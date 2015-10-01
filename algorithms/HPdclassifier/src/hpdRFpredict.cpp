@@ -44,7 +44,6 @@ hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
     }
 
   int split_var = tree->split_variable-1;
-  double* split_criteria = tree->split_criteria;
   bool left = false;
   double obs_split_var;
   bool null_feature = false;
@@ -414,7 +413,7 @@ extern "C"
 	int prediction;
 	int* counts = (int*)malloc(sizeof(int)*classes_num);
 	double* ratios = REAL(R_cutoff);
-	int old_best, new_best;
+	int old_best, new_best=-1;
 	bool old_correct, new_correct;
 	for(int i = 0; i < nObs; i++)
 	  {
