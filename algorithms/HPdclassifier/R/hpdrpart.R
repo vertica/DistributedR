@@ -328,8 +328,7 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 	if(is.data.frame(newdata))
 	{	
 		args = list(...)
-		old_class <- class(model)
-		class(model) <- "rpart"
+		class(model) <- c("rpart",class(model))
 		args = c(list(object = model, newdata = newdata),args)
 		if(!is.element("type",names(args)))
 		{
@@ -339,7 +338,7 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 		}	
 		predictions = do.call(predict,args)
 		predictions = data.frame(predictions)
-		class(model) <- old_class
+		class(model) <- class(model)[-1]
 	}
 	return(predictions)
 }
