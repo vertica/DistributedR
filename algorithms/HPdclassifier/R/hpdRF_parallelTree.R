@@ -338,16 +338,16 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		if(do.trace)
 		print("distributeding forest")
 		timing_info <- Sys.time()
-		forest = .distributeForest(model$forest)
+		temp_forest = .distributeForest(model$forest)
 		if(do.trace)
 		print(Sys.time() - timing_info)
 		gc()
 		forest <- .combineDistributedForests(forest,temp_forest)
 		curr_ntree = as.integer(curr_ntree - min(ntree,max_trees_per_iteration))
-
+		suppressWarnings({
 		forest <- .redistributeForest(forest,
 	       	       split(1:(ntree-curr_ntree),1:sum(distributedR_status()$Inst)))
-
+		})
 		rm(model)
 		gc()
 	}
