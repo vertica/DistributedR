@@ -334,7 +334,7 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 		if(!is.element("type",names(args)))
 		{
 			args$type = "vector"
-			if(model$method == "gini")
+			if(model$method == "gini" || model$method == "class")
 				args$type = "class"
 		}	
 		predictions = do.call(predict,args)

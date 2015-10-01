@@ -83,6 +83,7 @@
 
 .redistributeForest<- function(dforest, tree_ids)
 {
+	tree_ids = tree_ids[sapply(tree_ids,length) > 0]
 	old = npartitions(dforest)
 	new = length(tree_ids)
 	new_dforest = dlist(npartitions = new)
@@ -103,7 +104,6 @@
 	end_ids = start_ids[-1]
 	start_ids = start_ids[-length(start_ids)]+1
 	
-
 	foreach(i,1:new, 
 		function(temp_dforest = splits(temp_dforest,
 			as.list((1:old-1)*new + i)),

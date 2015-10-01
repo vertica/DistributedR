@@ -346,7 +346,9 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		curr_ntree = as.integer(curr_ntree - min(ntree,max_trees_per_iteration))
 		suppressWarnings({
 		forest <- .redistributeForest(forest,
-	       	       split(1:(ntree-curr_ntree),1:sum(distributedR_status()$Inst)))
+	       	       split(1:(ntree-curr_ntree),
+				1:min(sum(distributedR_status()$Inst)),
+				ntree-curr_ntree))
 		})
 		rm(model)
 		gc()
