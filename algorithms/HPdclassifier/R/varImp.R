@@ -58,7 +58,8 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 	{
 		shuffle_column <- .shuffle_column_dframe
 		#if the input was a dframe first randomize data then set shuffle function
-		sampled_data<-hpdsample(xtest,ytest,distributedR_status()$Inst, nrow/nrow(xtest))
+		sampled_data<-hpdsample(xtest,ytest,
+			sum(distributedR_status()$Inst), nrow/nrow(xtest))
 		xtest <- sampled_data$sdata1
 		ytest <- sampled_data$sdata2
 	}
