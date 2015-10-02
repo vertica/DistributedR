@@ -245,6 +245,7 @@ hpdegbm <- function(
         if (trace) {
           message(paste0("Beginning distributed sampling, with samplingRatio = ",
                          sampleRatio))
+          samplingStart <- Sys.time()
         }
 
         # Perform distributed sampling. The outputs contain as many models as
@@ -252,7 +253,10 @@ hpdegbm <- function(
         sampledXY <- hpdsample(X_train, Y_train, nSamplePartitions = nExecutor,
                                samplingRatio = sampleRatio)
         if (trace) {
-          message("Distributed sampling complete")
+          samplingTime <- Sys.time() - samplingStart
+          message(paste0("Distributed sampling complete, took ", 
+                         samplingTime, "s"))
+
         }
         sX_train <- sampledXY[[1]]
         sY_train <- sampledXY[[2]]
@@ -310,15 +314,15 @@ hpdegbm <- function(
                         bag.fraction)
       }, progress = trace)
     }
-  
-    if(trace) {
-      timing_info <- Sys.time() - starttime
-      message(paste0("Execution time: ", timing_info, 's'))
-    }
 
     # output of hpdegbm: GBM model and best iteration estiamtion
     GBM_model1 <- getpartition(dl_GBM_model)
     best.iter1 <- getpartition(dbest.iter)
+
+    if(trace) {
+      timing_info <- Sys.time() - starttime
+      message(paste0("Total execution time: ", timing_info, 's'))
+    }
 
     finalModel <- list()
   
