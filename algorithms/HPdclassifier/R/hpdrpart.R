@@ -361,7 +361,8 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 		node_ratio = apply(node_counts,2,function(x) x/sum(x))
 		node_prob = rowSums(node_counts)/n
 		yval2 = cbind(matrix(model[[4]]),node_counts, node_ratio, node_prob)
-		colnames(yval2) <- c(paste("yval2.V",1:7,sep = ""),"yval2.nodeprob")
+		colnames(yval2) <- c(paste("yval2.V",1:(2*nClasses+1),sep = ""),
+				"yval2.nodeprob")
 	}
 	model = data.frame(var = model[[2]], n = model[[6]], wt = model[[7]], 
 	      dev = model[[3]], yval = matrix(model[[4]]), complexity = model[[5]])
