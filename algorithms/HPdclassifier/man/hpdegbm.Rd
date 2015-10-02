@@ -11,61 +11,53 @@ The hpdegbm function runs the \code{gbm.fit} function of the R gbm package in a 
 }
 
 \usage{
-hpdegbm <- function(
-       X_train,Y_train, 
-       dl_GBM_model,
-       dbest.iter, 
-       nExecutor,                                         
-       distribution = "bernoulli",
+hpdegbm(X_train, Y_train, 
+       nExecutor,                                     
+       distribution,
        n.trees = 1000, 
-       interaction.depth = 3, 
+       interaction.depth = 1, 
        n.minobsinnode = 10,
-       shrinkage = 0.50,     #[0.001, 1]
-       bag.fraction = 0.632, #0.5-0.8,
-       offset = NULL, 
-       misc = NULL, 
-       trace = FALSE,  # If TRUE, hpdegbm prints out progress outside the gbm.fit R function
-       completeModel = FALSE) # default system parameters are defined here
+       shrinkage = 0.050,    
+       bag.fraction = 0.50,
+       samplingFlag = TRUE,  
+       nClass = NULL,
+       sampleThresh=100,
+       trace = FALSE) 
 }
 
 \arguments{
-  \item{X_train}{a data frame, dframe, darray, or matrix which contains samples of predictor variables.}
-  \item{Y_train}{a data frame, dframe, darray, or matrix which contains a vector of output.} 
-  \item{dl_GBM_mode}{a dlist storing GBM models trained in a distributed manner and in parallel.}
-  \item{dbest.iter}{a darray storing the best iterations of the trained GBM models.} 
-  \item{trace}{if TRUE, print out the training time.}
-  \item{completeModel}{if TRUE, add training time in the model.}
-  \item{nExecutor}{the number of executors.}
-  \item{distribution}{supports: (1) Gaussian distribution for regression; (2) AdaBoost distribution for binary classification; (3) Bernoulli distribution for binary classification; (4) multinomial distribution for multi-class classification in Distributed R 1.2.}  
+  \item{X_train}{a data frame, dframe, darray, or matrix which contains samples of predictor variables}
+  \item{Y_train}{a data frame, dframe, darray, or matrix which contains a vector of output} 
+  \item{nExecutor}{the number of gbm models in the ensemble. These will be trained in parallel. In the case where X_train/Y_train are dobjects, this defaults to the number of partitions in X_train. When X_train/Y_train are not dobjects, nExecutor is equal to the total number of cores in the distributed R cluster by default.}
+  \item{distribution}{a string parameter that currently (as of Distributed R version 1.2.0) supports four values: (1) "gaussian": Gaussian distribution for regression; (2) "adaoost": AdaBoost distribution for binary classification; (3) "bernoulli": Bernoulli distribution for binary classification; (4) "multinomial" multinomial distribution for multi-class classification}  
   \item{n.trees}{the total number of trees to fit.}
   \item{interaction.depth}{the maximum depth of variable interactions.}
   \item{n.minobsinnode}{minimum number of observations in the trees' terminal nodes.}
   \item{shrinkage}{a shrinkage parameter applied to each tree in the expansion (learning rate).}
   \item{bag.fraction}{the fraction of the training set observations randomly selected for the next tree in the expansion.}
-  \item{offset}{a vector of values for the offset. Set to NULL in Distributed R 1.2}
-  \item{misc}{not used in Distributed R 1.2.}
-  \item{w}{a vector of weights. Not used in Distributed R 1.2.}
-  \item{var.monotone}{set to NULL in Distributed R 1.2.}
-  \item{nTrain}{an integer representing the number of cases on which to train. If neither nTrain nor train.fraction are specified, all of the data is used for training.}
-  \item{train.fraction}{the first train.fraction * nrows(X_train) observations are used to fit the gbm and the remainder are used for computing out-of-sample estimates of the loss function. In Distributed R 1.2, all of the data is used for training.}
-  \item{keep.data}{a logical variable indicating whether to keep the data and an index of the data stored in the object.}
-  \item{verbose}{if TRUE, gbm prints out progress and performance indicators.}
-  \item{var.names}{for gbm.fit: a vector of strings of length equal to the number of columns in X_train constraining the names of the predictor variables.}
-  \item{response.name}{for gbm.fit: a character string label for the response variable.}
-  \item{group}{group used when distribution = 'pairwise'.}
+  \item{samplingFlag}{a boolean that indicates whether or not to perform distributed sampling before training the models of the ensemble. When X_train/Y_train are not dobjects, this is ignored. Otherwise, if this is true, the input dobjects are sampled into a number of output partitions equal to nExecutor, and then gbm.fit is called on each output partition. This is important for ensuring that each model in the ensemble is trained on a representative portion of the overall dataset.
+  However, sampling does incur some performance overhead, so if it is known ahead of time that the input data is already well-shuffled, sampling may be disabled using samplingFlag = FALSE. 
+  \item{nClass} a positive integer used (when samplingFlag = T and input X_train and Y_train are dobjects) as part of a heuristic to determine the number of samples used to build each model. Should correspond to the number of classes of the response variable. The number of samples to use for each model is calculated as sampleThresh * nClass * <number of predictor variables>.  
+  \item{sampleThresh} a positive number used (when samplingFlag = T and input X_train and Y_train are dobjects) as part of a heuristic to determine the number of samples used to build each model. The number of samples to use for each model is calculated as sampleThresh * nClass * <number of predictor variables>. 
+  \item{trace}{if TRUE, print out the progress of the algorithm as it executes, including information on the execution times of various parts of the algorithm}
 }
 
 \value{
 An object of class hpdegbm, which is a list with the following components:
-  \item{call}{The original call to hpdegbm.}
-  \item{GBM_model}{A list that contains multiple GBM models.}
-  \item{best.iter}{A vector that contains the best iterations of GBM models.}
-  \item{ntree}{The number of trees grown.}
+  \item{call}{the original call to hpdegbm}
+  \item{model}{a list that contains multiple GBM models. The number of models is determined by the parameter nExecutor.}
+  \item{distribution} the distribution of the response variable as specified by the input parameter
+  \item{n.trees}{the number of trees grown}
+  \item{numGBMModel} the number of models in the ensemble
+  \item{bestIterations}{a vector that contains the best iterations of each of the trained GBM models. This is used to determine the number of trees used during prediction.}
+  \item{featureNames}{a vector containing the names of the predictor variables used during training}
 }
 
 \note{
 Two algorithms are implemented in hpdegbm. They are: 
-(1) When the training data set is small and stored as a matrix or data.frame, the whole data set is loaded into every core. Each executor trains one GBM model in parallel and in a distributed manner. Because bagging is applied in gbm.fit, multiple different GBM models are obtained, although the same training data is applied to every  executor; (2) When the training data set is large and is stored as a distributed data types, such as a  dframe or darray, each data partition is loaded into every executor and is used to train a GBM model. 
+(1) When the training data set is small and stored as a matrix or data.frame, the whole data set is copied to the number of executors specified by nExecutor. Each executor trains one GBM model in parallel and in a distributed manner. Because bagging is applied in gbm.fit, multiple different GBM models are obtained, although the same training data is used in every executor; (2) When the training data set is large and is stored as a distributed data types, such as a dframe or darray,
+X_train and Y_train must have the same number of partitions and the same number of rows in each corresponding partition.
+Distributed sampling is performed (when samplingFlag = TRUE) to obtain a number of partitions equal to nExecutor. Each data partition is loaded into an executor and is used to train a GBM model. When samplingFLag = F, the nExecutor parameter is set to be equal to the number of partitions of your input data. 
 
 The trained GBM models from executors are combined into an ensemble on the master side to formulate the distributed gbm object. 
 }
@@ -81,124 +73,39 @@ The trained GBM models from executors are combined into an ensemble on the maste
 \examples{
  \dontrun{
     
-library(gbm)
 library(distributedR)
-library(caTools)
-library(randomForest)
 library(HPdclassifier)
+distributedR_start()
 
+data(iris)
+irisX       <- iris[which(names(iris) != "Species")]
+irisY       <- as.character(iris$Species)
+trainPerc   <- 0.8
+trainIdx    <- sample(1:nrow(irisX), ceiling(trainPerc * nrow(irisX)))
+irisX_train <- irisX[trainIdx,]
+irisY_train <- irisY[trainIdx]
+irisX_test  <- irisX[-trainIdx,]
+irisY_test  <- irisY[-trainIdx]
 
-confusion <- function(a, b){
-  tbl <- table(a, b)  
-  mis <- 1 - sum(diag(tbl))/sum(tbl)
-  list(table = tbl, misclass.prob = mis)
-}
+# Create distributed versions of the training data
+dirisX_train <- as.dframe(irisX_train)
+dirisY_train <- as.dframe(as.data.frame(irisY_train))
+dirisX_test  <- as.dframe(irisX_test)
+dirisY_test  <- as.dframe(as.data.frame(irisY_test))
 
+# Using centralized data structures. Will build 6 different models in parallel
+# on the whole dataset
+mod <- hpdegbm(irisX_train, irisY_train, distribution = 'multinomial',
+               nExecutor = 6)
+# Make predictions using the ensemble
+pred <- predict(mod, irisX_test)
 
-##############################################################################################
-### Generate large, distributed, simulated training data
-npartition <- 6 
-
-### generate training data by Distributed R
-nTrain <- 20000 
-p <- 10
-
-dfX <- dframe(c(nTrain,p), blocks=c(ceiling(nTrain/npartition),p))  # horizontal partition
-daY <- darray(c(nTrain,1), blocks=c(ceiling(nTrain/npartition),1))
-dl_GBM_model <- dlist(npartition)
-nExecutor <- npartition
-
-dbest.iter <- darray(c(npartition,1), c(1,1)) 
-
-foreach(i, 1:nExecutor, function(X_train=splits(dfX,i),Y_train=splits(daY,i)) {
-     n <- nrow(X_train)
-     p <- ncol(X_train)
-     X_train <- as.data.frame(matrix(rnorm(n*p), nrow=n))
-     y <- rep(0, n)
-     y[ apply(X_train*X_train, 1, sum) > qchisq(0.5, p) ] <- 1
-     #colnames(X_train) <- paste("X", 1:p, sep="")
-
-     Y_train <- y  ### is.vector: truth, numeric
-
-     update(X_train)
-     update(Y_train)
-})
-
-
-#############################################################################################
-################ generate distributed testing data
-### generate training data with Distributed R
-nTest <- 20000 
-p <- 10
-
-npartition_test <- 6
-nExecutor_test <- npartition_test
-
-dfX_test <- dframe(c(nTest,p), blocks=c(ceiling(nTest/npartition_test),p))  # horizontal partition
-daY_test <- darray(c(nTest,1), blocks=c(ceiling(nTest/npartition_test),1))
-
-foreach(i, 1:nExecutor_test, function(X_test=splits(dfX_test,i),Y_test=splits(daY_test,i)) {
-     n <- nrow(X_test)
-     p <- ncol(X_test)
-     X_test <- as.data.frame(matrix(rnorm(n*p), nrow=n))
-     y <- rep(0, n)
-     y[ apply(X_test*X_test, 1, sum) > qchisq(0.5, p) ] <- 1
-     #colnames(X_train) <- paste("X", 1:p, sep="")
-
-     Y_test <- y  ### is.vector: truth, numeric
-
-     update(X_test)
-     update(Y_test)
-})
-
-########################################################################################################################
-#### test hpdegbm functions 
-### test distributed sampling: hpdsampling
-Ns <- 1*ceiling((nTrain/npartition)/npartition)
-npartition <- npartitions(dfX)
-
-sampledXY <- hpdsampling(dfX,daY, Ns, npartition)
-
-dfRX <- sampledXY[[1]]
-daRY <- sampledXY[[2]]
-
-#########################################################################################################################
-# test hpdegbm: model training
-dl_GBM_model <- dlist(npartition)
-nExecutor <- npartition
-dbest.iter <- darray(c(npartition,1), c(1,1))  # ## dNumericVector, dFactorVector
-
-finalModel <- hpdegbm(
-       dfRX,daRY,  # dfRX,daRY: distributed large training data
-       dl_GBM_model,
-       dbest.iter, 
-       nExecutor,                                         
-       #distribution = "bernoulli",
-       distribution = "adaboost",
-       #distribution = "gaussian",
-       #distribution = "multinomial",
-       n.trees = 1000, 
-       interaction.depth = 3, 
-       n.minobsinnode = 10,
-       shrinkage = 0.050,     #[0.001, 1]
-       bag.fraction = 0.632, #0.5-0.8,
-       offset = NULL, 
-       misc = NULL, 
-       w = NULL,
-       var.monotone = NULL,
-       nTrain = NULL,
-       train.fraction = NULL,
-       keep.data = TRUE,
-       verbose = FALSE, # if TRUE, gbm prints out progress and performance indicators
-       var.names = NULL,
-       #response.name = "y",
-       group = NULL,
-       trace = FALSE,  # if TRUE, hpdegbm prints out progress outside the gbm.fit R function
-       completeModel = FALSE) # default system parameters are defined here
-
-newdata <- dfX_test     # test distributed large data set
-Predictions <- predict.hpdegbm(finalModel[[1]], finalModel[[2]], newdata, appType="binary-classification", type="link", trace = FALSE)
-print(confusion(Predictions > 0, getpartition(daY_test) > 0)) 
+# Using dobjects. Will sample the training data into 6 partitions and then build 
+# a different model on each partition in parallel
+dmod <- hpdegbm(dirisX_train, dirisY_train, distribution = 'multinomial',
+                nClass = 3, nExecutor = 6)
+# Make predictions using the ensemble
+dpred <- predict(dmod, irisX_test)
 
 distributedR_shutdown()
  }

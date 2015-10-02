@@ -155,7 +155,7 @@ test_that("when data1 and data2 provided, samples correspond", {
   d1 <- as.darray(as.matrix(1:1001))
   d2 <- as.darray(as.matrix(1:1001) + 1)
   nSamplePartitions <- 1:6
-  samplingRatios <- seq(0.1, 1, 0.2)
+  samplingRatios <- seq(0.1, 2, 0.5)
   for (n in nSamplePartitions) {
     for (sr in samplingRatios) {
       sd <- hpdsample(d1, d2, nSamplePartitions = n, samplingRatio = sr)
