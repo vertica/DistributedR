@@ -251,6 +251,12 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	model$numresp = 0
 	model$numresp = length(classes)
 	attr(model,"ylevels") <- classes
+	attr(model,"xlevels") <- levels.dframe(data)
+	categorical_features <- attr(model,"xlevels")$columns
+	attr(model,"xlevels")$columns <- NULL
+	attr(model,"xlevels") <- attr(model,"xlevels")$Levels
+	names(attr(model,"xlevels")) <- 
+		sapply(categorical_features, function(i) colnames(data)[i])
 	model$nExecutor = nExecutor
 	class(model) <- c("hpdrpart","rpart")
 
@@ -262,6 +268,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	variable.importance <- aggregate(improve ~ var, variable.importance, sum)
 	rownames(variable.importance) <- variable.importance$var
 	variable.importance$var <- NULL
+	
 	if(completeModel)
 	{
 		if(do.trace)
