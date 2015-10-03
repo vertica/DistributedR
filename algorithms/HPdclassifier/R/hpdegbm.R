@@ -181,7 +181,7 @@ hpdegbm <- function(
 
   if(trace) {
     message("Start model training")
-    starttime <- Sys.time()
+    starttime <- proc.time()
   }
 
   if (!(samplingFlag == TRUE || samplingFlag == FALSE))
@@ -245,7 +245,7 @@ hpdegbm <- function(
         if (trace) {
           message(paste0("Beginning distributed sampling, with samplingRatio = ",
                          sampleRatio))
-          samplingStart <- Sys.time()
+          samplingStart <- proc.time()
         }
 
         # Perform distributed sampling. The outputs contain as many models as
@@ -253,7 +253,7 @@ hpdegbm <- function(
         sampledXY <- hpdsample(X_train, Y_train, nSamplePartitions = nExecutor,
                                samplingRatio = sampleRatio)
         if (trace) {
-          samplingTime <- Sys.time() - samplingStart
+          samplingTime <- (proc.time() - samplingStart)["elapsed"]
           message(paste0("Distributed sampling complete, took ", 
                          samplingTime, "s"))
 
@@ -320,7 +320,7 @@ hpdegbm <- function(
     best.iter1 <- getpartition(dbest.iter)
 
     if(trace) {
-      timing_info <- Sys.time() - starttime
+      timing_info <- (proc.time() - starttime)["elapsed"]
       message(paste0("Total execution time: ", timing_info, 's'))
     }
 
