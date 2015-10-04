@@ -101,7 +101,7 @@ pred <- predict(mod, irisX_test)
 # Using dobjects. Will sample the training data into 6 partitions and then build 
 # a different model on each partition in parallel
 dmod <- hpdegbm(dirisX_train, dirisY_train, distribution = 'multinomial',
-                nClass = 3, nExecutor = 6)
+                nExecutor = 6)
 # Make predictions using the ensemble
 dpred <- predict(dmod, irisX_test)
 
