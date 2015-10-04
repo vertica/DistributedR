@@ -660,7 +660,7 @@ int32_t PrestoMaster::ParseXMLConfig(const string& config,
 
   return workers->size();
 }
-ddc::WorkerSelector PrestoMaster::worker_selector() const
+ddc::WorkerSelector& PrestoMaster::worker_selector()
 {
     return worker_selector_;
 }
