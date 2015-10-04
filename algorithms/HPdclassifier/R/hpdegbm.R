@@ -63,7 +63,6 @@ hpdegbm <- function(
        shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.50, #0.5-0.8
        samplingFlag = TRUE,  
-       nClass = NULL,
        sampleThresh=100,
        trace = FALSE) 
 # X_train: a dframe, darray, data frame, or data matrix containing the predictor variables
@@ -77,7 +76,6 @@ hpdegbm <- function(
 # verbose: If TRUE, gbm prints out progress and performance indicators
 # trace: If TRUE, print out the training time
 # samplingFlag: If true, call distributed sampling
-# nClass: a parameter used to determine the sampling ratio. For classification, it is the class number 
 # sampleThresh: sample threshold
 
 ### start of hpdegbm function
@@ -126,6 +124,11 @@ hpdegbm <- function(
 
   if (.isdarrayorframe(Y_train) && !.isRowPartitioned(Y_train))
     stop("'Y_train' must be partitioned row-wise")
+
+  # If it's a vector, no need to check this
+  if ((.isdarrayorframe(Y_train) || is.matrix(Y_train) ||
+       is.data.frame(Y_train))  && ncol(Y_train) != 1)
+    stop("'Y_train' must only have one column")
 
   if (.isdarrayorframe(X_train) &&  .isdarrayorframe(Y_train)) {
     partsize1 <- partitionsize(X_train)
@@ -186,23 +189,38 @@ hpdegbm <- function(
 
   if (!(samplingFlag == TRUE || samplingFlag == FALSE))
     stop("'samplingFlag' must be TRUE or FALSE")
-
-  if (missing(nClass)) {
-    if (samplingFlag) {
-      if (distribution == "gaussian")
-        nClass <- 1
-      else if (is.dframe(X_train) || is.darray(X_train))
-        stop("'nClass' is a required argument for X_train as dframe or darray and non-gaussian distribution and samplingFlag==TRUE")
-    }
-  } else if (!.isPositiveInteger(nClass)) 
-    stop("'nClass' must be a positive integer")
-  
+ 
   if (!(is.numeric(sampleThresh) && length(sampleThresh) == 1 && sampleThresh > 0))
     stop("'sampleThresh' must be a positive number")
 
-  if (distribution == "gaussian")
-    nClass = 1
-
+  if (samplingFlag && .isdarrayorframe(Y_train)) {
+    # Used to compute the number of samples needed per partition
+    nClass <- if (distribution == "gaussian") {
+                1
+              } else if (distribution == "adaboost" || distribution == "bernoulli") {
+                2  
+              } else if (distribution == "multinomial") {
+                if (trace) {
+                  message("Counting number of classes in response...")
+                }
+                # Count the number of classes in Y_train
+                if (is.dframe(Y_train)) {
+                  length(levels.dframe(Y_train)$Levels[[1]])
+                } else if (is.darray(Y_train)) {
+                  classCounts <- dframe(npartition = npartitions(Y_train))
+                  foreach(i, 1:npartitions(Y_train), 
+                          function(ys = splits(Y_train, i), 
+                                   ccs = splits(classCounts, i)) {
+                    ccs <- as.data.frame(names(table(ys[,1])))
+                    update(ccs)
+                  })
+                  length(unique(getpartition(classCounts)[,1]))
+                } 
+              }
+    if (trace) {
+      message(paste0("Counted ", nClass,  " classes in Y_train"))
+    }
+  }
   ##########################################################################
   # Model training
   ##########################################################################
