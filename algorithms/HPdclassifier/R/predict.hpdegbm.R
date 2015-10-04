@@ -96,8 +96,7 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
                                            best.iter       = best.iter, 
                                            predi           = splits(daPredict,i),  
                                            data2           = splits(newdata,i),
-                                           distributionGBM = distributionGBM, 
-                                           type            = "link") { 
+                                           distributionGBM = distributionGBM) { 
         library(gbm)
 
         # Gaussian distribution for regression
