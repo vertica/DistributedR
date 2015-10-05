@@ -363,8 +363,6 @@
 {
 	workers = length(nodes)
 	data_local <- dlist(npartitions=workers*npartitions(observations))
-	if(trace)
-	print(distributedR_status())
 
 	if(trace)
 	.master_output("\t\tshuffling data: ", appendLF = FALSE)

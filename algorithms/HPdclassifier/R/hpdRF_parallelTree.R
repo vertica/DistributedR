@@ -273,8 +273,6 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	nodes_per_executor = as.integer(floor(nodes_per_executor))
 	max_trees_per_iteration =as.integer(floor(min(max_trees_per_iteration,ntree)))
 
-	max_trees_per_iteration = 100
-
 	if(do.trace)
 		.master_output("Starting to build forest")
 
@@ -308,25 +306,6 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	features_min = model$features_min
 	features_max = model$features_max
 	rm(model)
-	if(do.trace)
-	{
-	e <- environment()
-	objects <- ls(e)
-	objects_size <- sapply(objects,function(object) 
-	{
-		size <- 0
-		tryCatch({
-		size <- d.object.size(get(object))/1024/1024/1024},
-		error = function(e){
-		})
-		return(size)  
-	})
-	valid_dobject = which(objects_size > 0)
-	memory<- data.frame(size = c(objects_size[valid_dobject],sum(objects_size)))
-	rownames(memory) <- c(objects[valid_dobject],"total")
-	print(memory)
-	print(distributedR_status())
-	}
 	gc()
 
 	if(do.trace)
@@ -385,24 +364,6 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 				ntree-curr_ntree))
 		})
 		rm(model)
-	if(do.trace)
-	{
-	e <- environment()
-	objects <- ls(e)
-	objects_size <- sapply(objects,function(object) 
-	{
-		size <- 0
-		tryCatch({
-		size <- d.object.size(get(object))/1024/1024/1024},
-		error = function(e){})
-		return(size)  
-	})
-	valid_dobject = which(objects_size > 0)
-	memory<- data.frame(size = c(objects_size[valid_dobject],sum(objects_size)))
-	rownames(memory) <- c(objects[valid_dobject],"total")
-	print(memory)
-	print(distributedR_status())
-	}
 
 		gc()
 		if(do.trace)
