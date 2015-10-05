@@ -132,7 +132,7 @@ extern "C"
 
 	    int temp_feature;
 	    int nFeatures = length(observations);
-	      int* features_permutation=(int *)malloc(nFeatures*sizeof(int));
+	    int* features_permutation=(int *)malloc(nFeatures*sizeof(int));
 	    for(int j = 0; j < nFeatures; j++)
 	      features_permutation[j] = j+1;
 	    for(int j = nFeatures-1; j > 0; j--)
@@ -148,6 +148,7 @@ extern "C"
 	    
 	    SET_VECTOR_ELT(random_features,i,features);
 	    UNPROTECT(1);
+	    free(features_permutation);
 	  }
 
 

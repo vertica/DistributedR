@@ -203,8 +203,10 @@ extern "C"
 
 	if(R_tree_ids == R_NilValue)
 	  tree->treeID = i+1;
-	else
+	else if(length(R_tree_ids) == forest->ntree)
 	  tree->treeID = INTEGER(R_tree_ids)[i];
+	else
+	  tree->treeID = INTEGER(R_tree_ids)[0];
 	tree->additional_info->leafID = i+1;
 
       }

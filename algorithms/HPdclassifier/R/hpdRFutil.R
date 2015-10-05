@@ -126,3 +126,42 @@
 
 	return(new_dforest)
 } 
+
+d.object.size <- function(object)
+{
+	if(!inherits(object,"dlist") && 
+	   !inherits(object,"darray") && 
+	   !inherits(object, "dframe") && 
+	   !class(object) == "list")
+	   return(0)
+
+	if(class(object) == "list")
+	return(sum(rapply(object,d.object.size,
+		classes =  c("dlist","dframe","darray"),how = "unlist")))
+
+	nparts = npartitions(object)
+	size_darray <- darray(npartitions = nparts)
+	foreach(i,1:nparts, function(object = splits(object,i),
+			    size_array = splits(size_darray,i))
+			    {
+				size_array <- matrix(as.numeric(object.size(object)))
+				update(size_array)
+			    },progress = FALSE)
+	size_darray <- sum(getpartition(size_darray))
+	return(size_darray)
+}
+
+d.environment.size <- function(e = environment())
+{
+	objects <- ls(e)
+	objects_size <- sapply(objects,function(object) 
+		     d.object.size(get(object)))
+	return(data.frame(objects = objects, size = objects_size))
+}
+
+.master_output = function(..., appendLF = TRUE)
+{
+	cat(...)
+	if(appendLF)
+		cat("\n")
+}
