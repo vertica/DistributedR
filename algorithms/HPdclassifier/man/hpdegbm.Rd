@@ -20,7 +20,6 @@ hpdegbm(X_train, Y_train,
        shrinkage = 0.050,    
        bag.fraction = 0.50,
        samplingFlag = TRUE,  
-       nClass = NULL,
        sampleThresh=100,
        trace = FALSE) 
 }
@@ -36,9 +35,8 @@ hpdegbm(X_train, Y_train,
   \item{shrinkage}{a shrinkage parameter applied to each tree in the expansion (learning rate).}
   \item{bag.fraction}{the fraction of the training set observations randomly selected for the next tree in the expansion.}
   \item{samplingFlag}{a boolean that indicates whether or not to perform distributed sampling before training the models of the ensemble. When X_train/Y_train are not dobjects, this is ignored. Otherwise, if this is true, the input dobjects are sampled into a number of output partitions equal to nExecutor, and then gbm.fit is called on each output partition. This is important for ensuring that each model in the ensemble is trained on a representative portion of the overall dataset.
-  However, sampling does incur some performance overhead, so if it is known ahead of time that the input data is already well-shuffled, sampling may be disabled using samplingFlag = FALSE. 
-  \item{nClass} a positive integer used (when samplingFlag = T and input X_train and Y_train are dobjects) as part of a heuristic to determine the number of samples used to build each model. Should correspond to the number of classes of the response variable. The number of samples to use for each model is calculated as sampleThresh * nClass * <number of predictor variables>.  
-  \item{sampleThresh} a positive number used (when samplingFlag = T and input X_train and Y_train are dobjects) as part of a heuristic to determine the number of samples used to build each model. The number of samples to use for each model is calculated as sampleThresh * nClass * <number of predictor variables>. 
+  However, sampling does incur some performance overhead, so if it is known ahead of time that the input data is already well-shuffled, sampling may be disabled using samplingFlag = FALSE. }
+  \item{sampleThresh}{a positive number used (when samplingFlag = T and input X_train and Y_train are dobjects) as part of a heuristic to determine the number of samples used to build each model. The number of samples to use for each model is calculated as sampleThresh * nClass * <number of predictor variables>. 'nClass' is computed automatically for multinomial distributions, and is set to nClass = 1 when distribution = 'gaussian'}
   \item{trace}{if TRUE, print out the progress of the algorithm as it executes, including information on the execution times of various parts of the algorithm}
 }
 
@@ -46,9 +44,9 @@ hpdegbm(X_train, Y_train,
 An object of class hpdegbm, which is a list with the following components:
   \item{call}{the original call to hpdegbm}
   \item{model}{a list that contains multiple GBM models. The number of models is determined by the parameter nExecutor.}
-  \item{distribution} the distribution of the response variable as specified by the input parameter
+  \item{distribution}{the distribution of the response variable as specified by the input parameter}
   \item{n.trees}{the number of trees grown}
-  \item{numGBMModel} the number of models in the ensemble
+  \item{numGBMModel}{the number of models in the ensemble}
   \item{bestIterations}{a vector that contains the best iterations of each of the trained GBM models. This is used to determine the number of trees used during prediction.}
   \item{featureNames}{a vector containing the names of the predictor variables used during training}
 }
@@ -103,7 +101,7 @@ pred <- predict(mod, irisX_test)
 # Using dobjects. Will sample the training data into 6 partitions and then build 
 # a different model on each partition in parallel
 dmod <- hpdegbm(dirisX_train, dirisY_train, distribution = 'multinomial',
-                nClass = 3, nExecutor = 6)
+                nExecutor = 6)
 # Make predictions using the ensemble
 dpred <- predict(dmod, irisX_test)
 

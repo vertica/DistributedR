@@ -10,6 +10,7 @@ ChunkWorkerMap WorkerSelector::chunkWorkerMap() const
 void WorkerSelector::setChunkWorkerMap(const ChunkWorkerMap &chunkWorkerMap)
 {
     chunkWorkerMap_ = chunkWorkerMap;
+    chunkIndex_ = 0;
     configured_ = true;
 }
 

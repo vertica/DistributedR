@@ -181,12 +181,12 @@ Release WorkerInfo resources to enable garbage-collection
   void DdcSetChunkWorkerMap(const Rcpp::List& chunkWorkerMap) {
       ddc::ChunkWorkerMap chunkWorkerMapCpp;
       for (uint64_t i = 0; i < chunkWorkerMap.size(); ++i) {
-          chunkWorkerMapCpp[i] = chunkWorkerMap[i];
+          chunkWorkerMapCpp[i] = Rcpp::as<int32_t>(chunkWorkerMap[i]);
       }
       worker_selector_.setChunkWorkerMap(chunkWorkerMapCpp);
   }
 
-  ddc::WorkerSelector worker_selector() const;
+  ddc::WorkerSelector& worker_selector();
 
   Rcpp::List WorkerMap();
 

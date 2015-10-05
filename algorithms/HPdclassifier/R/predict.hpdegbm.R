@@ -56,14 +56,6 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
   # train data: npartition_train/nExecutor_train
   # test data : npartition_test/nExecutor_test. maybe different from train data
 
-  # extract GBM models and corresponding best iterations (n.trees)
-  model     <- object$model
-  best.iter <- object$bestIterations
-
-  # extract distribution from trained model
-  firstModelDistr <- object$distribution
-  distributionGBM <- firstModelDistr[[1]] 
-
   # check function arguments
   if(missing(object))
     stop("'object' is a required argument")
@@ -78,6 +70,14 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
   if(!is.dframe(newdata) && !is.darray(newdata) && !is.data.frame(newdata) && !is.matrix(newdata))
      stop("'newdata' must be a dframe or darray or data.frame or matrix")
  
+  # extract GBM models and corresponding best iterations (n.trees)
+  model     <- object$model
+  best.iter <- object$bestIterations
+
+  # extract distribution from trained model
+  firstModelDistr <- object$distribution
+  distributionGBM <- firstModelDistr[[1]] 
+
   # prediction for distributed big data 
   if((is.dframe(newdata)) || (is.darray(newdata))) {
      npartition_test <- npartitions(newdata)  
@@ -96,8 +96,7 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
                                            best.iter       = best.iter, 
                                            predi           = splits(daPredict,i),  
                                            data2           = splits(newdata,i),
-                                           distributionGBM = distributionGBM, 
-                                           type            = "link") { 
+                                           distributionGBM = distributionGBM) { 
         library(gbm)
 
         # Gaussian distribution for regression
@@ -124,7 +123,7 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
            # Prediction by the first sub-model: AdaBoost, Bernoulli distribution for binary classification
            GBM_modeli <- GBM_model[[1]]
            best.iteri <- best.iter[1,1]
-           predi < - sign(predict(GBM_modeli, data2, best.iteri, type)) # AdaBoost/Bernoulli 
+           predi < - sign(predict(GBM_modeli, data2, best.iteri, type = "link")) # AdaBoost/Bernoulli 
 
            # fusion with other sub-models
            npartition_train <- nrow(best.iter)
@@ -132,7 +131,8 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
              for (k in 2: npartition_train) {
                  GBM_modelk <- GBM_model[[k]]
                  best.iterk <- best.iter[k,1]
-                 predi <- predi + sign(predict(GBM_modelk, data2, best.iterk, type))
+                 predi <- predi + sign(predict(GBM_modelk, data2, best.iterk,
+                                               type = "link"))
              } 
            }
            predi <- sign(predi)
