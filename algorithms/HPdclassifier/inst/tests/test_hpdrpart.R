@@ -79,7 +79,7 @@ expect_error(hpdrpart(data = data),
 				   "'formula' is a required argument")
 expect_error(hpdrpart(1,data = data),
 				   "'formula' is not of class formula")
-expect_error(hpdrpart(X4 ~ .,data = data,do.trace = TRUE),
+expect_error(hpdrpart(X4 ~ .,data = data),
 				   "unable to apply formula to 'data'")
 expect_error(hpdrpart(X1 ~ X2 + X3 + X4,data = data),
 				   "unable to apply formula to 'data'")

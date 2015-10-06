@@ -40,13 +40,13 @@ typedef struct
 
 typedef struct 
 {
+  struct HPDRFNode* parent;
   int* indices;
   double* weights;
   int attempted, completed;
   int leafID;
   int num_obs;
   int depth;
-  struct HPDRFNode* parent;
 
 } hpdRFNodeInfo;
 

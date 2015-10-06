@@ -193,7 +193,7 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 .shuffle_column_data_frame <- function(data, column)
 {
 	shuffled_data <- data
-	shuffled_data[,column]<-data[sample.int(nrow(data), nrow),column]
+	shuffled_data[,column]<-data[sample.int(nrow(data)),column]
 	return(shuffled_data)
 }
 

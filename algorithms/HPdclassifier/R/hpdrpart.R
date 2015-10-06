@@ -24,7 +24,6 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 {
 	start_timing <- Sys.time()
 	ddyn.load("HPdclassifier")
-
 	if(do.trace)
 	.master_output("Preprocessing")
 

@@ -666,6 +666,9 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 		     	data = data, na.action = na.action)
 		attr(x,"terms") <- NULL
 		data_type = c(data_type,sapply(x,class))
+		data_type[which(data_type=="integer")] = "numeric"
+		data_type[which(data_type=="double")] = "numeric"
+
 		rm(data)
 		gc()
 		update(x)
