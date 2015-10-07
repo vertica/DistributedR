@@ -240,7 +240,7 @@ orc2dframe <- function(url, selectedStripes='',
     }
     else if(as.character(options['fileType']) == 'orc') {
         # ORC
-        c <- hdfsconnector::orccolnames(url, as.character(options['hdfsConfigurationFile']))
+        c <- hdfsconnector::orccolnames(plan$configs[[1]]$url, as.character(options['hdfsConfigurationFile']))
     }
     colnames(d) <- c;
     d # return dframe
