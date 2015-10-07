@@ -343,7 +343,7 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
                 starttime<-proc.time()
             }
             selectedBlocks <- sample.int(nparts, k, replace=TRUE)
-            seeds <- runif(nparts, min=1, max=npart+1) # making seeds for the executors
+            seeds <- runif(nparts, min=1, max=nparts + 1) # making seeds for the executors
 
             foreach(i, 1:nparts, progress=trace, centerDist <- function(idx=i, Xi=splits(X,i), selectedBlocks=selectedBlocks
                     , d.centersi=splits(d.centers,i), seeds=seeds){
@@ -743,19 +743,3 @@ deploy.hpdkmeans <- function(inputModel) {
     inputModel
 }
 
-## A function that calculates the clustering quality of a set of centers on a given newdata
-# newdata: it is the new dataset. It must be of type either darray or matrix.
-# centers: cluster centers that will be used for labeling
-# trace: when it is TRUE, displays the progress
-hpdclusterEval <- function(newdata, centers, trace=FALSE) {
-  darrayInput <- TRUE
-  if(!is.darray(newdata)) {
-    if(is.matrix(newdata) && is.numeric(newdata)) {
-      darrayInput <- FALSE
-    } else {
-      stop("newdata must be of type either darray or numeric matrix")
-    }
-  }
-
-  
-} # hpdclusterEval
