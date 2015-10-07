@@ -79,24 +79,21 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
   distributionGBM <- firstModelDistr[[1]] 
 
   # prediction for distributed big data 
-  if((is.dframe(newdata)) || (is.darray(newdata))) {
-     npartition_test <- npartitions(newdata)  
-     nExecutor_test  <- npartition_test
-
+  if(is.dframe(newdata) || is.darray(newdata)) {
      nTest <- nrow(newdata)
 
-     if (distributionGBM == "multinomial") {
-        daPredict <- dframe(dim=c(nTest,1), blocks=c(ceiling(nTest/npartition_test),1))
-     } else {
-        daPredict <- darray(dim=c(nTest,1), blocks=c(ceiling(nTest/npartition_test),1))
-     }
+     daPredict <- if (distributionGBM == "multinomial") {
+                    dframe(npartition = npartitions(newdata))
+                  } else {
+                    darray(npartition = npartitions(newdata))
+                  }
 
      # distributed prediction
-     foreach(i, 1:nExecutor_test, function(GBM_model       = model, 
-                                           best.iter       = best.iter, 
-                                           predi           = splits(daPredict,i),  
-                                           data2           = splits(newdata,i),
-                                           distributionGBM = distributionGBM) { 
+     foreach(i, 1:npartitions(daPredict), function(GBM_model       = model, 
+                                                  best.iter       = best.iter, 
+                                                  predi           = splits(daPredict,i),  
+                                                  data2           = splits(newdata,i),
+                                                  distributionGBM = distributionGBM) { 
         library(gbm)
 
         # Gaussian distribution for regression
@@ -108,13 +105,13 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
 
            # fusion with other sub-models
            npartition_train <- nrow(best.iter)
-        if (npartition_train > 1) {
-           for (k in 2: npartition_train) {
-               GBM_modelk <- GBM_model[[k]]
-               best.iterk <- best.iter[k,1]
-               predi <- predi + predict(GBM_modelk, data2, best.iterk, type="link")
-           }
-        } 
+           if (npartition_train > 1) {
+              for (k in 2: npartition_train) {
+                  GBM_modelk <- GBM_model[[k]]
+                  best.iterk <- best.iter[k,1]
+                  predi <- predi + predict(GBM_modelk, data2, best.iterk, type="link")
+              }
+           } 
            predi <- predi/npartition_train # average of regressions from sub-models
         }
 
@@ -123,11 +120,11 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
            # Prediction by the first sub-model: AdaBoost, Bernoulli distribution for binary classification
            GBM_modeli <- GBM_model[[1]]
            best.iteri <- best.iter[1,1]
-           predi < - sign(predict(GBM_modeli, data2, best.iteri, type = "link")) # AdaBoost/Bernoulli 
+           predi <- sign(predict(GBM_modeli, data2, best.iteri, type = "link")) # AdaBoost/Bernoulli 
 
            # fusion with other sub-models
            npartition_train <- nrow(best.iter)
-        if (npartition_train > 1) {
+           if (npartition_train > 1) {
              for (k in 2: npartition_train) {
                  GBM_modelk <- GBM_model[[k]]
                  best.iterk <- best.iter[k,1]
@@ -149,22 +146,24 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
 
            # fusion with other sub-models
            npartition_train <- nrow(best.iter)
-          if (npartition_train > 1) {
+           if (npartition_train > 1) {
              for (k in 2: npartition_train) {
-                 GBM_modelk <- GBM_model[[k]]
-                 best.iterk <- best.iter[k,1]
-                 pred0 <- pred0 + (predict(GBM_modelk, data2, best.iterk, type="response")) # fusion of sub-models
+               GBM_modelk <- GBM_model[[k]]
+               best.iterk <- best.iter[k,1]
+               pred0 <- pred0 + (predict(GBM_modelk, data2, best.iterk, type="response")) # fusion of sub-models
              }
-          } 
-          predi <- apply(pred0,1,which.max)
-          # predi <- as.matrix(predi) # multi-lass classification: output {1,2, classID}
-          predi <- as.data.frame(sapply(predi, function(x) colnames(pred0)[x])) # multi-class classification: output is a factor vector
+           } 
+           predi <- apply(pred0,1,which.max)
+           predi <- as.data.frame(sapply(predi, function(x) colnames(pred0)[x])) # multi-class classification: output is a factor vector
          }
 
           update(predi)
      }) 
-
-    # Predictions <- getpartition(daPredict)
+     if (distributionGBM == "multinomial") {
+       # Adjust local factors to be same as global factors
+       factor.dframe(daPredict)
+     }
+      
      Predictions <- daPredict
    } else{
      # centralized prediction for small data (newdata). newdata is data.frame or matrix

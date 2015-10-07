@@ -57,13 +57,13 @@ hpdegbm <- function(
        Y_train, 
        nExecutor,                                     
        distribution,
-       n.trees = 1000, 
+       n.trees = 500, 
        interaction.depth = 1, 
        n.minobsinnode = 10,
        shrinkage = 0.050,     #[0.001, 1]
        bag.fraction = 0.50, #0.5-0.8
        samplingFlag = TRUE,  
-       sampleThresh=100,
+       sampleThresh = 100,
        trace = FALSE) 
 # X_train: a dframe, darray, data frame, or data matrix containing the predictor variables
 # Y_train: a vector of outputs
@@ -193,6 +193,9 @@ hpdegbm <- function(
   if (!(is.numeric(sampleThresh) && length(sampleThresh) == 1 && sampleThresh > 0))
     stop("'sampleThresh' must be a positive number")
 
+  if (distribution == 'multinomial' && is.darray(Y_train)) 
+    stop("When distribution = 'multinomial', 'Y_train' cannot be a darray")
+
   if (samplingFlag && .isdarrayorframe(Y_train)) {
     # Used to compute the number of samples needed per partition
     nClass <- if (distribution == "gaussian") {
@@ -204,18 +207,7 @@ hpdegbm <- function(
                   message("Counting number of classes in response...")
                 }
                 # Count the number of classes in Y_train
-                if (is.dframe(Y_train)) {
-                  length(levels.dframe(Y_train)$Levels[[1]])
-                } else if (is.darray(Y_train)) {
-                  classCounts <- dframe(npartition = npartitions(Y_train))
-                  foreach(i, 1:npartitions(Y_train), 
-                          function(ys = splits(Y_train, i), 
-                                   ccs = splits(classCounts, i)) {
-                    ccs <- as.data.frame(names(table(ys[,1])))
-                    update(ccs)
-                  })
-                  length(unique(getpartition(classCounts)[,1]))
-                } 
+                length(levels.dframe(Y_train)$Levels[[1]])
               }
     if (trace) {
       message(paste0("Counted ", nClass,  " classes in Y_train"))
