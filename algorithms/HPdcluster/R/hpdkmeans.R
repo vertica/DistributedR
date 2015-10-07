@@ -338,15 +338,18 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
         ## k and p are not expected to be huge
         d.centers <- darray(dim=c(k*nparts,p), blocks=c(k,p), data=NA)
         if ( blockSizes[1] > sampling_threshold || nSample > 1e9) {
-            selectedBlocks <- sample.int(nparts, k, replace=TRUE)
             if(trace) {
                 cat("Picking randomly selected centers (distributed sampling)\n")
                 starttime<-proc.time()
             }
+            selectedBlocks <- sample.int(nparts, k, replace=TRUE)
+            seeds <- runif(nparts, min=1, max=npart+1) # making seeds for the executors
+
             foreach(i, 1:nparts, progress=trace, centerDist <- function(idx=i, Xi=splits(X,i), selectedBlocks=selectedBlocks
-                    , d.centersi=splits(d.centers,i)){
+                    , d.centersi=splits(d.centers,i), seeds=seeds){
                 nselect <- sum(selectedBlocks == idx)
                 if(nselect > 0) {
+                  set.seed(seeds[idx])
                   index <- sample.int(nrow(Xi), nselect)
                   if(class(Xi) == "matrix")
                       d.centersi[1:nselect,] <- Xi[index,]
@@ -585,6 +588,11 @@ hpdapply <- function(newdata, centers, trace=FALSE) {
   if(ncol(newdata) != ncol(centers))
     stop("newdata and centers should have the same number of features")
 
+  # loading the so library on all available executors
+  ddyn.load("HPdcluster")
+  # unloading the so library from all available executors at the exit time
+  on.exit(ddyn.unload("HPdcluster"))
+
   nSample <- nrow(newdata)    # number of samples
   p <- as.integer(ncol(newdata))    # number of features
 
@@ -735,3 +743,19 @@ deploy.hpdkmeans <- function(inputModel) {
     inputModel
 }
 
+## A function that calculates the clustering quality of a set of centers on a given newdata
+# newdata: it is the new dataset. It must be of type either darray or matrix.
+# centers: cluster centers that will be used for labeling
+# trace: when it is TRUE, displays the progress
+hpdclusterEval <- function(newdata, centers, trace=FALSE) {
+  darrayInput <- TRUE
+  if(!is.darray(newdata)) {
+    if(is.matrix(newdata) && is.numeric(newdata)) {
+      darrayInput <- FALSE
+    } else {
+      stop("newdata must be of type either darray or numeric matrix")
+    }
+  }
+
+  
+} # hpdclusterEval
