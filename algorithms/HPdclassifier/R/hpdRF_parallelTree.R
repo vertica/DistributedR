@@ -26,6 +26,12 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 {
 	start_timing <- Sys.time()
 	ddyn.load("HPdclassifier")
+	if(do.trace)
+	.master_output("Input validation and preprocessing")
+	timing_info <- Sys.time()
+	if(do.trace)
+	.master_output("\tinput validation: ", appendLF = FALSE)
+		
 	if(!identical(na.action, na.exclude) &
 		!identical(na.action, na.omit) &
 		!identical(na.action, na.fail))
@@ -118,6 +124,11 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		warning("'maxnodes' is greater than number of observations")
 		maxnodes = as.integer((maxnodes-1)/2)
 
+	if(do.trace)
+	.master_output(format(round(Sys.time() - timing_info, 2), 
+		nsmall = 2))
+
+
 	tryCatch({
 	variables <- .parse_formula(formula, data, 
 		  na.action = na.action, trace = do.trace)
@@ -133,6 +144,9 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	classes = variables$y_classes
 	true_responses = variables$true_responses
 	xlevels = variables$x_classes
+	model_terms=variables$terms
+	model_data_type=variables$data_type
+	rm(variables)
 
 	if(missing(mtry) & !is.na(response_cardinality))
 		mtry = max(1,floor(sqrt(ncol(observations))))
@@ -257,26 +271,13 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	threshold = as.integer(floor(threshold))
 	max_nodes_per_iteration = as.integer(floor(max_nodes_per_iteration))
 	nodes_per_executor = as.integer(floor(nodes_per_executor))
-	max_trees_per_iteration = as.integer(floor(min(max_trees_per_iteration,ntree)))
+	max_trees_per_iteration =as.integer(floor(min(max_trees_per_iteration,ntree)))
 
 	if(do.trace)
-		print(paste("threshold",
-			toString(threshold),sep=" = "))
+		.master_output("Starting to build forest")
 
 	if(do.trace)
-		print(paste("nodes_per_executor",
-			toString(nodes_per_executor),sep=" = "))
-
-	if(do.trace)
-		print(paste("max_nodes_per_iteration",
-			toString(max_nodes_per_iteration),sep=" = "))
-	
-	if(do.trace)
-		print(paste("max_trees_per_iteration",
-			toString(max_trees_per_iteration),sep = " = "))
-
-	if(do.trace)
-		print(paste("trees left: ", ntree, " out of a total of ", ntree))
+		.master_output(paste("\ttrees left: ", ntree, " out of a total of ", ntree))
 
 
 	suppressWarnings(model <-
@@ -294,22 +295,28 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		scale = as.integer(1)))
 
 	if(do.trace)
-	print("distributeding forest")
+	.master_output("\tdistributing forest: ", appendLF = FALSE)
 	timing_info <- Sys.time()
 	forest = .distributeForest(model$forest)
 	if(do.trace)
-	print(Sys.time() - timing_info)
-	gc()
+	.master_output(format(round(Sys.time() - timing_info, 2), 
+		nsmall = 2))
 	oob_indices = model$oob_indices
 	curr_ntree = as.integer(ntree - max_trees_per_iteration)
 	features_min = model$features_min
 	features_max = model$features_max
 	rm(model)
+	gc()
+
+	if(do.trace)
+	.master_output("\tcurrent distributed forest size: ",
+		format(round(d.object.size(forest)/1024/1024,2),nsmall = 2), 
+		" MB")
 
 	while(curr_ntree > 0)
 	{
 		if(do.trace)
-		print(paste("trees left: ",curr_ntree, " out of a total of ", ntree))
+		.master_output("\ttrees left: ",curr_ntree, " out of a total of ", ntree)
 
 		suppressWarnings(model <-
 			.hpdRF_distributed(observations, responses, 
@@ -335,12 +342,18 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			update(new)
 		},progress = FALSE)
 		oob_indices = new_oob_indices
+		rm(new_oob_indices)
+		model$oob_indices <- NULL
+
 		if(do.trace)
-		print("distributeding forest")
+		.master_output("\tdistributing forest: ",appendLF = FALSE)
 		timing_info <- Sys.time()
 		temp_forest = .distributeForest(model$forest)
 		if(do.trace)
-		print(Sys.time() - timing_info)
+		.master_output(format(round(Sys.time() - timing_info, 2), 
+			nsmall = 2))
+
+		model$forest <- NULL
 		gc()
 		forest <- .combineDistributedForests(forest,temp_forest)
 		curr_ntree = as.integer(curr_ntree - min(ntree,max_trees_per_iteration))
@@ -351,16 +364,20 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 				ntree-curr_ntree))
 		})
 		rm(model)
+
 		gc()
+		if(do.trace)
+		.master_output("\tcurrent distributed forest size: ",
+			format(round(d.object.size(forest)/1024/1024,2),nsmall = 2), 
+			" MB")
 	}
 	oob_predictions = NULL
-	if(do.trace)
-	print(distributedR_status())
 	if(completeModel)
 	{
 		tryCatch({
 		if(do.trace)
-			print("computing oob statistics")
+			.master_output("\tComputing oob statistics")
+			timing_info <- Sys.time()
 		oob_predictions = .predictOOB(forest, observations, 
 			responses, oob_indices, cutoff, classes, 
 			reduceModel = reduceModel,do.trace)
@@ -369,10 +386,17 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			{
 				warning(paste("aborting oob computations. received error:", e))
 			})
+		if(do.trace)
+		.master_output("\tcurrent distributed forest size: ",
+			format(round(d.object.size(forest)/1024/1024,2),nsmall = 2), 
+			" MB")
+
+			
+
 	}
 
 	if(do.trace & completeModel)
-	print("computing additional statistics")
+	.master_output("\tcomputing additional statistics: ", appendLF = FALSE)
 	timing_info <- Sys.time()
 
 	rm(observations)
@@ -396,8 +420,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	attr(model$forest$trees,"ntree") <- NULL
 	model$mtry = mtry
 	model$test = list()
-	model$terms = variables$terms
-	rm(variables)
+	model$terms = model_terms
 
 	if(is.na(response_cardinality))
 	{
@@ -490,28 +513,41 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 
 		}
 	}
-	timing_info <- Sys.time() - timing_info
+
 	if(do.trace & completeModel)
-	print(timing_info)
+	.master_output(format(round(Sys.time() - timing_info, 2), 
+		nsmall = 2))
+
 
 	if(do.trace & completeModel & varImp)
-	print("computing variable importance")
+	.master_output("\tcomputing variable importance: ",appendLF = FALSE)
 	timing_info <- Sys.time()
 	if(varImp & completeModel)
-		model$importance <- varImportance(model,data,responses)
+		model$importance <- varImportance(model,data)
 	timing_info <- Sys.time() - timing_info
 	if(do.trace & completeModel & varImp)
-	print(timing_info)
+	.master_output(format(round(timing_info, 2), 
+		nsmall = 2))
+
+
 	rm(responses)
 	gc()
 	if(do.trace)
-	print(paste("random Forest took", Sys.time() - start_timing))
+	.master_output("hpdRF_parallelTree time: ", 
+		format(round(Sys.time() - start_timing, 2),nsmall = 2))
 	return(model)
 }
 
 predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 			   do.trace = FALSE, na.action = na.pass)
 {
+	start_timing <- Sys.time()
+	if(do.trace)
+	.master_output("predicting data using hpdRF_parallelTree model")
+	if(do.trace)
+	.master_output("\tinput validation: ", appendLF = FALSE)
+	timing_info <- Sys.time()
+
 	if(!identical(na.action, na.pass) & 
 		!identical(na.action, na.exclude) &
 		!identical(na.action, na.omit) &
@@ -541,6 +577,10 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 		cutoff = model$forest$cutoff
 	else 
 		cutoff = rep(1/length(model$classes),length(model$classes))
+	timing_info <- Sys.time() - timing_info
+	if(do.trace)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
+
 
 	
 	tryCatch({
@@ -566,6 +606,9 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 	if(was.data.frame)
 		predictions <- getpartition(predictions)
 
+	timing_info <- Sys.time() - start_timing
+	if(do.trace)
+	.master_output("predictions took: ",format(round(timing_info, 2), nsmall = 2))
 	return(predictions)
 }
 
@@ -578,7 +621,7 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 	x <- dframe(npartitions = npartitions(data))
 	
 	if(trace)
-	print("processing formula")
+	.master_output("\tprocessing formula: ", appendLF = FALSE)
 	
 	if(is.null(weights))
 		weights = clone(data,ncol = 1, data = 1)
@@ -586,7 +629,6 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 
 	terms = dlist(npartitions = npartitions(x))
 	x_colnames = dlist(npartitions = npartitions(x))
-
 
 	foreach(i,1:npartitions(data), function(
 				       data = splits(data,i),
@@ -608,6 +650,7 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 			model_terms = terms(model_formula, data = data)
 		else
 			model_terms = model_formula
+		data_type = NULL
 		if(attr(model_terms,"response") == 1)
  		{
 			response_name = all.vars(model_terms)[1]
@@ -615,20 +658,26 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 			{
 			y <- data.frame(data[,response_name])
 			update(y)
+			data_type = sapply(y,class)
+			names(data_type) = response_name
 			}
 		}
 		x <- model.frame(delete.response(model_terms), 
 		     	data = data, na.action = na.action)
 		attr(x,"terms") <- NULL
+		data_type = c(data_type,sapply(x,class))
+		data_type[which(data_type=="integer")] = "numeric"
+		data_type[which(data_type=="double")] = "numeric"
 
 		rm(data)
 		gc()
 		update(x)
 		x_colnames <- list(colnames(x))
 		update(x_colnames)
+		attr(model_terms,"dataClasses") <- data_type
 		model_terms = list(model_terms)
 		update(model_terms)
-	},progress = trace)
+	},progress = FALSE)
 	x_colnames = getpartition(x_colnames,1)[[1]]
 
 
@@ -667,12 +716,12 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 			update(x)
 			update(y)
 			update(true_responses)
-		},progress = trace)
+		},progress = FALSE)
 	terms = getpartition(terms,1)[[1]]
 	
-	timing_info <- Sys.time() - timing_info
 	if(trace)
-	print(timing_info)
+	.master_output(format(round(Sys.time() - timing_info, 2), 
+		nsmall = 2))
 
 
     return(list(x=x,y=y, weights = weights, terms = terms,

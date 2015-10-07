@@ -602,7 +602,7 @@ extern "C"
 	       node_curr->summary_info->complexity)/
 	      node_curr->summary_info->deviance;
 	    else
-	      node_curr->summary_info->complexity = 1;
+	      node_curr->summary_info->complexity = 0;
 	    node_curr->summary_info->n = 
 	      INTEGER(VECTOR_ELT(VECTOR_ELT(R_splits_info,i),7))[0];
 	    node_curr->summary_info->wt = 

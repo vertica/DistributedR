@@ -38,7 +38,7 @@
 			features_max = matrix(features_max,ncol = 1)
 			update(features_min)
 			update(features_max)
-		},progress = trace,scheduler = 1)
+		},progress = FALSE,scheduler = 1)
 
 	features_min = getpartition(features_min)
 	features_max = getpartition(features_max)
@@ -47,7 +47,7 @@
 
 	timing_info <- Sys.time() - timing_info
 	if(trace)
-	print(timing_info)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
 	return(list(features_min,features_max))
 }
 
@@ -159,13 +159,13 @@
 			update(oob_indices)
 			update(forest)
 			update(observations)
-		}, progress = trace,scheduler = 1)
+		}, progress = FALSE,scheduler = 1)
 	attr(forest,"dforest") <- dforest
 	
 
 	timing_info <- Sys.time() - timing_info
 	if(trace)
-	print(timing_info)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
 
 	return(list(forest=forest, oob_indices = oob_indices))
 }
@@ -182,7 +182,7 @@
 	workers = npartitions(active_nodes)
 
 	if(trace)
-	print("computing hists")
+	.master_output("\t\t\tcomputing hists: ", appendLF = FALSE)
 
 	timing_info <- Sys.time()
 	foreach(i,1:npartitions(observations),
@@ -213,11 +213,12 @@
 
 			.Call("garbageCollectForest", forest)		       
 			update(hist)
-		}, progress = trace, scheduler = 1)
+		}, progress = FALSE, scheduler = 1)
 
 	timing_info <- Sys.time() - timing_info
 	if(trace)
-	print(timing_info)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
+
 
 	total_completed = darray(npartitions = workers)
 	splits_info = dlist(npartitions = workers)
@@ -227,7 +228,7 @@
 
 
 	if(trace)
-	print("computing splits")
+	.master_output("\t\t\tcomputing splits: ", appendLF = FALSE)
 	timing_info <- Sys.time()	
 
 
@@ -273,7 +274,7 @@
 
 			update(splits_info)
 			update(total_completed)
-		}, progress = trace,scheduler = 1)
+		}, progress = FALSE,scheduler = 1)
 
 
 	splits_info = getpartition(splits_info)
@@ -285,7 +286,7 @@
 
 	timing_info <- Sys.time() - timing_info
 	if(trace)
-	print(timing_info)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
 
 
 	return(list(splits_info,active_nodes))
@@ -323,12 +324,13 @@
 			.Call("garbageCollectForest",dforest)
 			update(forest)
 			update(leaf_counts)
-		}, progress = trace,scheduler = 1)
+		}, progress = FALSE,scheduler = 1)
 	leaf_counts = getpartition(leaf_counts)
 	leaf_counts = apply(leaf_counts,2,sum)
 	timing_info <- Sys.time() - timing_info
 	if(trace)
-	print(timing_info)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
+
 
 	bad_splits = as.integer(which(leaf_counts < min_split))
 	if(length(bad_splits) > 0)
@@ -344,7 +346,7 @@
 				forest = list(.Call("serializeForest",dforest))
 				.Call("garbageCollectForest",dforest)
 				update(forest)
-			},progress = trace,scheduler=1)
+			},progress = FALSE,scheduler=1)
 	leaf_counts = leaf_counts[-bad_splits]
 	}
 	return(leaf_counts)
@@ -360,18 +362,10 @@
 	      summary_info = FALSE)
 {
 	workers = length(nodes)
-
-	if(trace)
-	print("allocating temporary dobjects")
-	timing_info <- Sys.time()
 	data_local <- dlist(npartitions=workers*npartitions(observations))
-	timing_info <- timing_info - Sys.time()
-	if(trace)
-	print(timing_info)
-
 
 	if(trace)
-	print("shuffling data")
+	.master_output("\t\tshuffling data: ", appendLF = FALSE)
 	timing_info <- Sys.time()
 	foreach(i, 1:npartitions(observations), 
 		   function(		   
@@ -427,16 +421,18 @@
 				      starting_depth)
 			update(data_local)
 			.Call("garbageCollectForest",forest)
+			rm(list=ls())
 			gc()			
-		   }, progress = trace, scheduler = 1)
+		   }, progress = FALSE, scheduler = 1)
 
 		 
 	timing_info <- Sys.time() - timing_info
 	if(trace)
-	print(timing_info)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
+
 
 	if(trace)
-	print("building subtrees")
+	.master_output("\t\tbuilding subtrees: ", appendLF = FALSE)
 	timing_info <- Sys.time()
 
 	forestparam = .Call("getForestParameters",forest)
@@ -523,17 +519,19 @@
 		dforest = list(.Call("serializeForest",forest))
 		.Call("garbageCollectForest",forest)
 		update(dforest)
+		rm(list=ls())
 		gc()
-     	},progress = trace, scheduler = 1)
+     	},progress = FALSE, scheduler = 1)
 
 
 	timing_info <- Sys.time() - timing_info
 	if(trace)
-	print(timing_info)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
+
 
 
 	if(trace)
-	print("gathering forest on master")
+	.master_output("\t\tgathering forest on master: ", appendLF = FALSE)
 	timing_info <- Sys.time()
 	
 
@@ -546,16 +544,19 @@
 
 	timing_info <- Sys.time() - timing_info
 	if(trace)
-	print(timing_info)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
+
 	return(forest)
 }
 
 
 .predictOOB <- function(forest, observations, responses, oob_indices, 
-	    cutoff, classes, reduceModel = FALSE, trace)
+	    cutoff, classes, reduceModel = FALSE, trace = FALSE)
 {
 
 	timing_info <- Sys.time()
+	if(trace)
+	.master_output("\t\tcomputing oob predictions: ",appendLF = FALSE)
 	oob_predictions = dframe(npartitions = npartitions(observations))
 	sse = darray(npartitions = npartitions(observations))
 	err.count = darray(npartitions = npartitions(observations))
@@ -635,11 +636,15 @@
 		}
 		.Call("garbageCollectForest",forest)
 		update(predictions)
-	},progress = trace)
+	},progress = FALSE)
+
+	timing_info <- Sys.time() - timing_info
+	if(trace)
+	.master_output(format(round(timing_info, 2),nsmall = 2))
 
 
 	if(trace)
-	print("reducing model")
+	.master_output("\treducing model: ", appendLF = FALSE)
 	timing_info <- Sys.time() 
 	suppressWarnings({
 	reducedModel <- 
@@ -655,7 +660,7 @@
 	gc()
 	timing_info <- Sys.time() - timing_info
 	if(trace)
-	print(timing_info)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
 
 	
 
@@ -704,7 +709,7 @@
 			update(L0)
 			update(L1)
 			update(L2)
-		},progress = trace)
+		},progress = FALSE)
 
 
 	colnames(oob_predictions) <- "oob_predictions"
@@ -856,13 +861,15 @@
       cp = 0, min_split = 1, max_depth = 10000, starting_depth = rep(1L,ntree),
       summary_info = FALSE)
 {
-	gc()
 	workers = sum(distributedR_status()$Inst)
 	threshold = max(threshold, node_size)
 	if(trace)
-	print("computing feature min/max")
+	.master_output("\tdistributed tree building started")
 	if(is.null(features_min) | is.null(features_min))
 	{
+		if(trace)
+		.master_output("\t\tcomputing feature min/max: ", appendLF = FALSE)
+
 		features_attributes = .computeFeatureAttributes(observations,trace)
 		if(is.null(features_min))
 			features_min = features_attributes[[1]]
@@ -871,14 +878,13 @@
 		if(any(is.infinite(features_min)) | any(is.infinite(features_max)))
 			stop("Infinite Values and/or NaN are not supported")
 	}
-	gc()
 	if(nrow(observations) > threshold)
 		active_nodes = as.integer(1:ntree)
 	else
 		active_nodes = integer(0)
 
 	if(trace)
-	print("initializing")
+	.master_output("\t\tinitializing: ", appendLF = FALSE)
 	initparam = .initializeDForest(observations, responses, ntree, bin_max, 
 		features_min, features_max, features_cardinality,
 		response_cardinality, features_num, weights, 
@@ -892,7 +898,6 @@
 	leaf_nodes = rep(threshold+1,ntree)	
 	max_nodes = .Call("getMaxNodes", forest)
 	hist = dlist(npartitions = npartitions(observations)*workers)
-	gc()
 	while(length(active_nodes) > 0 & any(max_nodes > 0))
 	{	
 		if(length(active_nodes) > max_nodes_per_iteration)
@@ -902,7 +907,7 @@
 			active_nodes = active_nodes[order(active_nodes)]
 		}
 		if(trace)
-		print("computing splits from hists")
+		.master_output("\t\tcomputing splits from hists:")
 		result = .computeHistogramsAndSplits(observations, 
 			   responses, forest, active_nodes,workers, max_nodes,
 			   cp, min_split, max_depth = max_depth, trace, hist,
@@ -912,7 +917,7 @@
 		splits_info = result[[1]]
 		
 		if(trace)
-		print("updating nodes with splits") 
+		.master_output("\t\tupdating nodes with splits: ",appendLF = FALSE) 
 		leaf_nodes = .updateDistributedForest(observations, responses,
 			   forest, active_nodes, splits_info, 
 			   min_split, max_depth,trace)
@@ -925,7 +930,7 @@
 	}
 
 	if(trace)
-	print("local tree building")
+	.master_output("\tlocal tree building started")
 
 	num_leaf = .Call("numLeafNodes",forest,package="HPdclassifier")
 	if(num_leaf > 0)
@@ -945,7 +950,7 @@
 		while(length(nodes) > 0)
 		{
 			if(trace)
-			print(paste("nodes remaining:", length(nodes)))
+			.master_output(paste("\t\tnodes remaining:", length(nodes)))
 
 			active_nodes = as.list(nodes[1:min(workers,length(nodes))])
 			nodes = nodes[-1:-min(workers,length(nodes))]
@@ -971,9 +976,6 @@
 				}
 			}
 			
-			if(trace)
-			print(paste("Building nodes: ",toString(active_nodes)))
-
 			active_tree_ids = lapply(active_nodes, function(nodes) tree_ids[nodes])
 
 			forest = .localizeData(observations, 
@@ -1001,8 +1003,8 @@
 .hpdRF_local <- function(observations, responses, ntree, bin_max, 
       features_cardinality, response_cardinality, features_num,
       node_size=1, weights=NULL, observation_indices=NULL, 
-      features_min = NULL, features_max = NULL, max_nodes = Inf,
-      tree_ids = NULL, max_nodes_per_iteration = .Machine$integer.max, 
+      features_min = NULL, features_max = NULL, max_nodes = .Machine$integer.max,
+      tree_ids = 0L, max_nodes_per_iteration = .Machine$integer.max, 
       max_time = -1, cp = 0, max_depth = 10000, min_split = 1, 
       starting_depth = rep(1L, ntree), trace = TRUE, random_seed = NULL,
       summary_info = FALSE)
@@ -1012,10 +1014,10 @@
 	nrow = nrow(observations)
 	ncol = ncol(observations)
 	if(is.null(weights))
-		weights = data.frame(matrix(1, 
+		weights <- data.frame(matrix(1, 
 			  	nrow = nrow, ncol = ntree))
 	if(is.null(observation_indices))
-		observation_indices = data.frame(matrix(1:nrow, 
+		observation_indices <- data.frame(matrix(1:nrow, 
 				    nrow = nrow, ncol = ntree))
 
 	scale = as.integer(0)
@@ -1053,6 +1055,11 @@
 			summary_info,
 			PACKAGE="HPdclassifier")
 
+	rm(observations)
+	rm(responses)
+	rm(weights)
+	rm(observation_indices)
+	gc()
 	return(forest)
 }
 
@@ -1063,7 +1070,8 @@
 {
 	predictions = dframe(npartitions = npartitions(new_observations))
 	if(trace)
-	print("predicting observations")
+	.master_output("\tdistributed predictions: ", appendLF = FALSE)
+	timing_info <- Sys.time()
 
 	dforest = forest$trees
 	suppressWarnings({
@@ -1095,7 +1103,7 @@
 			predictions = matrix(predictions,ncol=nrow(new_observations))
 			update(predictions)
 			.Call("garbageCollectForest",forest)
-		},progress = trace)
+		},progress = FALSE)
 
 	response_cardinality = length(classes)
 	if(length(classes) == 0)
@@ -1126,8 +1134,14 @@
 					levels = classes))
 			}
 			update(predictions)
-		},progress = trace)
+		},progress = FALSE)
+
+
+	timing_info <- Sys.time() - timing_info
+	if(trace)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
 
 	return(list(predictions=predictions,dforest = dforest))
 }
 
+hpdRF_local <- .hpdRF_local

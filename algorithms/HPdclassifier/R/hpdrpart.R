@@ -22,8 +22,14 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	 control = NULL, cost = NULL, 
 	 completeModel = FALSE, nBins = 256L, nExecutor = 1, do.trace = FALSE)
 {
-
+	start_timing <- Sys.time()
 	ddyn.load("HPdclassifier")
+	if(do.trace)
+	.master_output("Preprocessing")
+
+	if(do.trace)
+	.master_output("\tinput validation: ", appendLF = FALSE)
+	timing_info <- Sys.time()
 	if(missing(weights))
 		weights = NULL
 
@@ -100,7 +106,11 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	   stop(paste("unable to apply formula to 'data'.",e))
 	})
 
-	
+	timing_info <- Sys.time() - timing_info
+	if(do.trace)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
+
+
 	tryCatch({
 	variables <- .parse_formula(formula, data, weights = weights, 
 		  na.action = na.action, trace = do.trace)
@@ -118,6 +128,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	xlevels = variables$x_classes
 	x_colnames = variables$x_colnames
 	weights = variables$weights
+
 
 	if(nrow(observations) <= 0)
 		stop("all observations eliminated after parsing formula and applying na.action")
@@ -199,16 +210,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	nodes_per_executor = as.integer(floor(nodes_per_executor))
 
 	if(do.trace)
-		print(paste("threshold",
-			toString(threshold),sep=" = "))
-
-	if(do.trace)
-		print(paste("nodes_per_executor",
-			toString(nodes_per_executor),sep=" = "))
-
-	if(do.trace)
-		print(paste("max_nodes_per_iteration",
-			toString(max_nodes_per_iteration),sep=" = "))
+		.master_output("Starting to build Tree")
 
 	suppressWarnings({
 	tree <- .hpdRF_distributed(observations, responses, ntree = 1L, 
@@ -226,17 +228,28 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	     min_split = control$minbucket, max_depth = control$maxdepth, 
 	     cp = control$cp, summary_info = TRUE)
 	})
+	
+	if(do.trace)
+	.master_output("Post Processing")
+
+	if(do.trace)
+	.master_output("\tsimplifying tree: ",appendLF = FALSE)
+	timing_info <- Sys.time()
 	.Call("simplifyForest",tree$forest)
+	timing_info <- Sys.time() - timing_info
+	if(do.trace)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
+
 	if(keep.model)
 	{	     
 		if(do.trace)
-		print("converting to rpart model")
+		.master_output("\tconverting to rpart model: ",appendLF = FALSE)
 		timing_info <- Sys.time()
 		model = .convertToRpartModel(tree$forest, x_colnames, 
 		      length(classes), nrow(observations))
 		timing_info <- Sys.time() - timing_info
 		if(do.trace )
-		print(timing_info)
+		.master_output(format(round(timing_info, 2), nsmall = 2))
 	}
 
 	model$call = match.call()
@@ -252,9 +265,11 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	model$numresp = length(classes)
 	attr(model,"ylevels") <- classes
 	attr(model,"xlevels") <- levels.dframe(data)
+	response_name = all.vars(model$terms)[1]
 	categorical_features <- attr(model,"xlevels")$columns
+	categorical_features <- which(colnames(data)[categorical_features] != response_name)
 	attr(model,"xlevels")$columns <- NULL
-	attr(model,"xlevels") <- attr(model,"xlevels")$Levels
+	attr(model,"xlevels") <- attr(model,"xlevels")$Levels[categorical_features]
 	names(attr(model,"xlevels")) <- 
 		sapply(categorical_features, function(i) colnames(data)[i])
 	model$nExecutor = nExecutor
@@ -272,7 +287,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	if(completeModel)
 	{
 		if(do.trace)
-		print("calculating variable importance")
+		.master_output("\tcalculating variable importance")
 		timing_info <- Sys.time()
 		if(is.na(response_cardinality))
 		model$variable.importance <- 
@@ -285,14 +300,27 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 				trace = do.trace,type = "vector")
 
 		timing_info <- Sys.time() - timing_info
-		if(do.trace )
-		print(timing_info)
+		if(do.trace)
+		.master_output("\tvariable importance took: ",
+			format(round(timing_info, 2), nsmall = 2))
 	}
+	timing_info <- Sys.time() - start_timing
+	if(do.trace)
+	.master_output("hpdrpart took: ",
+		format(round(timing_info, 2), nsmall = 2))
+
 	return(model)
 }
 
 predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 {
+
+	start_timing <- Sys.time()
+	timing_info <-Sys.time()
+	if(do.trace)
+	.master_output("predicting data using hpdrpart model")
+	if(do.trace)
+	.master_output("\tinput validation: ",appendLF = FALSE)
 	if(!inherits(model,"hpdrpart"))
 		stop("method is only for hpdrpart objects")
 	if(!inherits(model,"rpart"))
@@ -309,9 +337,18 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 		stop("'newdata' must have a positive number of columns")
 
 	if(is.dframe(newdata))
-	{
 		if(attr(newdata,"npartitions")[2] > 1)
 			stop("'newdata' must be partitioned rowise")
+
+	timing_info <- Sys.time() - timing_info
+	if(do.trace)
+	.master_output(format(round(timing_info, 2), nsmall = 2))
+
+	if(is.dframe(newdata))
+	{
+		timing_info <- Sys.time()
+		if(do.trace)
+		.master_output("\tdistributed predictions: ",appendLF = FALSE)	
 
 		predictions = dframe(npartitions = npartitions(newdata))
 		foreach(i,1:npartitions(newdata),
@@ -332,10 +369,17 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 				predictions = do.call(predict,args)
 				predictions = data.frame(predictions)
 				update(predictions)
-			},progress = do.trace)
+			},progress = FALSE)
+		timing_info <- Sys.time() - timing_info
+		if(do.trace)
+		.master_output(format(round(timing_info, 2), nsmall = 2))
 	}
 	if(is.data.frame(newdata))
 	{	
+		timing_info <- Sys.time()
+		if(do.trace)
+		.master_output("\tcentralized predictions: ",appendLF = FALSE)
+
 		args = list(...)
 		class(model) <- c("rpart",class(model))
 		args = c(list(object = model, newdata = newdata),args)
@@ -348,7 +392,14 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 		predictions = do.call(predict,args)
 		predictions = data.frame(predictions)
 		class(model) <- class(model)[-1]
+
+		timing_info <- Sys.time() - timing_info
+		if(do.trace)
+		.master_output(format(round(timing_info, 2), nsmall = 2))
 	}
+	timing_info <- Sys.time() - start_timing
+	if(do.trace)
+	.master_output("predictions took: ",format(round(timing_info, 2), nsmall = 2))
 	return(predictions)
 }
 

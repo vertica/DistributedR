@@ -222,7 +222,7 @@ orc2dframe <- function(url, selectedStripes='',
                     update(dhs)
                 }
                 else if (config$file_type == "orc") {
-                    dhs <- orc2dataframe(url,
+                    dhs <- orc2dataframe(config$url,
                                          selectedStripes=config$selected_stripes,
                                          hdfsConfigurationStr=config$hdfsConfigurationStr)
                     update(dhs)
