@@ -59,6 +59,9 @@
 #define MAX_LOGNAME_LENGTH 200  // executor log file name length
 #define DUMMY_FILE_SIZE (128LL<<20)  // 128MB
 
+bool shutdown_signal = false;
+void executor_sigint_handler(int sig);
+
 using namespace std;
 using namespace presto;
 
@@ -770,7 +773,7 @@ void Executor::ClearTaskData() {
     RR[".tmp.keep"] = v;
     RR.parseEvalQ("rm(list=setdiff(ls(all.names=TRUE), .tmp.keep));");
   } else {
-    RR.parseEvalQ("rm(list=ls(all.names=TRUE));gc()");
+    RR.parseEvalQ("rm(list=ls(all.names=TRUE));");
   }
     
   // clear splits information in this task                                 
@@ -876,7 +879,8 @@ int main(int argc, char *argv[]) {
   ZTracer::ZTraceEndpointRef executor_ztrace_inst = ZTracer::create_ZTraceEndpoint("127.0.0.1",3,string(hostname) + "_" + std::to_string(exec_id));
 #endif
 
-  while (true) {
+  signal(SIGUSR2, executor_sigint_handler);
+  while (!shutdown_signal) {
     Timer total_timer;
     total_timer.start();
     ExecutorEvent next;
@@ -944,4 +948,12 @@ int main(int argc, char *argv[]) {
     }
   } // end while(true)
   return 0;
+}
+
+void executor_sigint_handler(int sig)
+{
+  shutdown_signal = TRUE;
+  signal(SIGUSR2, SIG_IGN);
+  printf("sigint function\n");
+
 }

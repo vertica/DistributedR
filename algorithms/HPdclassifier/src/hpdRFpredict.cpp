@@ -136,6 +136,8 @@ hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
       {
 	memcpy(leaves,left_leaves,sizeof(hpdRFnode*)*(left_count));
 	memcpy(*weight,left_weight,sizeof(double)*(left_count));
+	free(left_leaves);
+	free(left_weight);
       }
     if(right_leaves != NULL)
       {
@@ -143,11 +145,10 @@ hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
 	       sizeof(hpdRFnode*)*(right_count));
 	memcpy((*weight) + left_count,right_weight,
 	       sizeof(double)*(right_count));
+	free(right_leaves);
+	free(right_weight);
       }
-    free(left_leaves);
-    free(right_leaves);
-    free(left_weight);
-    free(right_weight);
+
     *leaf_count = left_count+right_count;
     return leaves;
 }
@@ -169,7 +170,10 @@ double treePredictObservation(hpdRFnode * tree, SEXP observations,
 					      obs_index,
 					      false, 
 					      &leaf_count, &weight);
-  return leaves[0]->prediction;
+  double prediction = leaves[0]->prediction;
+  free(leaves);
+  free(weight);
+  return prediction;
 
 }
 
