@@ -42,6 +42,7 @@
 #include <cstdio>
 #include <utility>
 #include <math.h>
+#include <setjmp.h>
 
 #include <RInside.h>
 #include <Rinterface.h>
@@ -59,7 +60,6 @@
 #define MAX_LOGNAME_LENGTH 200  // executor log file name length
 #define DUMMY_FILE_SIZE (128LL<<20)  // 128MB
 
-bool shutdown_signal = false;
 void executor_sigint_handler(int sig);
 
 using namespace std;
@@ -83,8 +83,9 @@ static SEXP RSymbol_x = NULL;
 
 // Global variables 
 // contains a list of variables to update (called inside a foreach)
-set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>> *updatesptr;
-Executor* ex;
+  set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>> *updatesptr;
+  Executor* ex;
+  sigjmp_buf env;
 
 /**************** Class Function definitions ****************************/
 
@@ -470,7 +471,7 @@ int Executor::ReadCompositeArgs() {
 int Executor::Execute(set<tuple<string, bool, vector<pair<int64_t,int64_t>>>> const & updates) {
 
   string scoping_prefix = ".DistributedR_exec_func <- function() {";
-  string scoping_postfix = "} ; .DistributedR_exec_func()";
+  string scoping_postfix = "rm(list = ls()); gc()} ; .DistributedR_exec_func()";
 
   // In order to automatically add tryCatch block to prevent the executor
   // being killed while evaluating R-command.
@@ -773,7 +774,7 @@ void Executor::ClearTaskData() {
     RR[".tmp.keep"] = v;
     RR.parseEvalQ("rm(list=setdiff(ls(all.names=TRUE), .tmp.keep));");
   } else {
-    RR.parseEvalQ("rm(list=ls(all.names=TRUE));");
+    RR.parseEvalQ("rm(list=ls(all.names=TRUE));gc()");
   }
     
   // clear splits information in this task                                 
@@ -880,7 +881,14 @@ int main(int argc, char *argv[]) {
 #endif
 
   signal(SIGUSR2, executor_sigint_handler);
-  while (!shutdown_signal) {
+  if(sigsetjmp(env,0))
+    {
+      LOG_DEBUG("Deleting Executor memory");
+      delete ex;
+      return(0);
+    }
+
+  while (true) {
     Timer total_timer;
     total_timer.start();
     ExecutorEvent next;
@@ -952,8 +960,10 @@ int main(int argc, char *argv[]) {
 
 void executor_sigint_handler(int sig)
 {
-  shutdown_signal = TRUE;
-  signal(SIGUSR2, SIG_IGN);
-  printf("sigint function\n");
+  sigset_t mask;
+  sigfillset(&mask);
+  sigprocmask(SIG_SETMASK, &mask, NULL);
 
+  LOG_DEBUG("Executor shutting down");
+  siglongjmp(env,1);
 }

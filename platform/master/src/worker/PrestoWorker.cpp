@@ -2049,7 +2049,7 @@ int main(int argc, char **argv) {
         }
         break;
       case 'l':
-        log_level = atoi(optarg) > 3 ? log_level : atoi(optarg);
+        log_level = atoi(optarg) > 4 ? log_level : atoi(optarg);
         break;
       case 'a':
         master_addr = std::string(optarg);
@@ -2096,7 +2096,10 @@ int main(int argc, char **argv) {
 
   sprintf(workerLogname, "/tmp/R_worker_%s_%s.%d.log", getenv("USER"), master_addr.c_str(), master_port);
   InitializeFileLogger(workerLogname);
-  LoggerFilter(log_level);
+  if(log_level <= 3)
+    LoggerFilter(log_level);
+  else
+    LoggerFilter(2);
   if (master_addr.size() <= 0 || master_port <= 0) {
     LOG_ERROR("Invalid master address and port number - %s:%d", master_addr.c_str(), master_port);
     return 0;
