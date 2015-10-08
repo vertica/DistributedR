@@ -651,6 +651,7 @@ mu <- c(-1,0,1,2)[as.numeric(X3)]
 SNR <- 10 # signal-to-noise ratio
 Y <- X1**1.5 + 2 * (X2**.5) + mu
 sigma <- sqrt(var(Y)/SNR) 
+print(paste("sigma:",sigma))
 Y <- Y + rnorm(N,0,sigma)
 
 data <- data.frame(Y=Y,X1=X1,X2=X2,X3=X3,X4=X4,X5=X5,X6=X6)
@@ -731,7 +732,7 @@ test_that("Test regression accuracy: gaussian", {
     Y <- X1**1.5 + 2 * (X2**.5) + mu + rnorm(N,0,sigma)
     data2 <- data.frame(Y,X1=X1,X2=X2,X3=X3,X4=X4,X5=X5,X6=X6)
  
-    newdata8 <- data2
+    newdata8 <- data2[,-1]
     Predictions8 <- predict.hpdegbm(finalModel8, newdata8, trace = FALSE)
     print (sum((data2$Y - Predictions8)^2))
     result8 <- sum((data2$Y - Predictions8)^2)
@@ -754,13 +755,7 @@ test_that("Test regression accuracy: gaussian", {
     expect_false(is.null(PredictionsGBM8_4))
 
     # prediction accuracy
-    expect_true(result8 < 5000)
-    expect_true(result8_1 < 5000)
-    expect_true(result8_2 < 5000)
-    expect_true(result8_3 < 5000)
-    expect_true(result8_4 < 5000)
-
-    expect_true(abs(result8 - result8_1) < 5000)
+    expect_true(all(result8 < 1.1* c(result8_1, result8_2, result8_3, result8_4)))
 })
 
 

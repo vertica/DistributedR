@@ -57,18 +57,22 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
   # test data : npartition_test/nExecutor_test. maybe different from train data
 
   # check function arguments
-  if(missing(object))
+  if (missing(object))
     stop("'object' is a required argument")
  
   if (is.null(object$n.trees) || is.null(object$distribution) || 
       is.null(object$bestIterations))
     stop("The input hpdegbm model is invalid")
   
-  if(missing(newdata))
+  if (missing(newdata))
     stop("'newdata' is a required argument")
 
-  if(!is.dframe(newdata) && !is.darray(newdata) && !is.data.frame(newdata) && !is.matrix(newdata))
+  if (!is.dframe(newdata) && !is.darray(newdata) && !is.data.frame(newdata) && !is.matrix(newdata))
      stop("'newdata' must be a dframe or darray or data.frame or matrix")
+
+  if (!is.null(object$featureNames) && 
+      !all(colnames(newdata) == object$featureNames))
+    stop("'newdata' column names must be the same as those used to train the model")
  
   # extract GBM models and corresponding best iterations (n.trees)
   model     <- object$model
