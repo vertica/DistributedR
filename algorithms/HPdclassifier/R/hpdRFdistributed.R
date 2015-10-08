@@ -38,6 +38,7 @@
 			features_max = matrix(features_max,ncol = 1)
 			update(features_min)
 			update(features_max)
+			rm(list = ls())
 		},progress = FALSE,scheduler = 1)
 
 	features_min = getpartition(features_min)
@@ -159,6 +160,7 @@
 			update(oob_indices)
 			update(forest)
 			update(observations)
+			rm(list = ls())
 		}, progress = FALSE,scheduler = 1)
 	attr(forest,"dforest") <- dforest
 	
@@ -207,12 +209,14 @@
 				return(hist)
 			}
 
-			hist = lapply(active_nodes, packageData, observations = observations, 
+			hist = lapply(active_nodes, packageData, 
+			       			    observations = observations, 
 			       			    responses = responses, 
 						    forest = forest)
 
-			.Call("garbageCollectForest", forest)		       
+			.Call("garbageCollectForest", forest)	
 			update(hist)
+			rm(list = ls())
 		}, progress = FALSE, scheduler = 1)
 
 	timing_info <- Sys.time() - timing_info
@@ -274,6 +278,7 @@
 
 			update(splits_info)
 			update(total_completed)
+			rm(list = ls())
 		}, progress = FALSE,scheduler = 1)
 
 
@@ -324,6 +329,7 @@
 			.Call("garbageCollectForest",dforest)
 			update(forest)
 			update(leaf_counts)
+			rm(list = ls())
 		}, progress = FALSE,scheduler = 1)
 	leaf_counts = getpartition(leaf_counts)
 	leaf_counts = apply(leaf_counts,2,sum)
@@ -346,6 +352,7 @@
 				forest = list(.Call("serializeForest",dforest))
 				.Call("garbageCollectForest",dforest)
 				update(forest)
+				rm(list = ls())
 			},progress = FALSE,scheduler=1)
 	leaf_counts = leaf_counts[-bad_splits]
 	}
@@ -363,6 +370,9 @@
 {
 	workers = length(nodes)
 	data_local <- dlist(npartitions=workers*npartitions(observations))
+
+	if(trace)
+	print(distributedR_status())
 
 	if(trace)
 	.master_output("\t\tshuffling data: ", appendLF = FALSE)
@@ -422,7 +432,6 @@
 			update(data_local)
 			.Call("garbageCollectForest",forest)
 			rm(list=ls())
-			gc()			
 		   }, progress = FALSE, scheduler = 1)
 
 		 
@@ -430,6 +439,9 @@
 	if(trace)
 	.master_output(format(round(timing_info, 2), nsmall = 2))
 
+
+	if(trace)
+	print(distributedR_status())
 
 	if(trace)
 	.master_output("\t\tbuilding subtrees: ", appendLF = FALSE)
@@ -520,7 +532,6 @@
 		.Call("garbageCollectForest",forest)
 		update(dforest)
 		rm(list=ls())
-		gc()
      	},progress = FALSE, scheduler = 1)
 
 
@@ -528,6 +539,8 @@
 	if(trace)
 	.master_output(format(round(timing_info, 2), nsmall = 2))
 
+	if(trace)
+	print(distributedR_status())
 
 
 	if(trace)
@@ -788,6 +801,7 @@
 		total_errors = matrix(total_errors)
 		update(combined_votes)
 		update(total_errors)
+		rm(list = ls())
 	},progress = FALSE)
 	full_model_errors <- sum(getpartition(total_errors))
 
@@ -813,6 +827,7 @@
 		total_errors = matrix(total_errors)
 		update(errors)
 		update(total_errors)
+		rm(list = ls())
 	},progress = FALSE)
 
 	errors = getpartition(errors)
@@ -846,6 +861,7 @@
 		   {
 			new_votes = votes[current_trees,]
 			update(new_votes)
+			rm(list = ls())
 		   },progress=FALSE)
 	rm(votes)
 	return(list(subsetForest = current_trees, new_votes = new_votes))
@@ -926,7 +942,6 @@
 		active_nodes = which(leaf_nodes > threshold & leaf_attempted == 0 &
 			     depths <= max_depth+1)
 		max_nodes = .Call("getMaxNodes", forest)
-		gc()
 	}
 
 	if(trace)
@@ -1103,6 +1118,7 @@
 			predictions = matrix(predictions,ncol=nrow(new_observations))
 			update(predictions)
 			.Call("garbageCollectForest",forest)
+			rm(list = ls())
 		},progress = FALSE)
 
 	response_cardinality = length(classes)
@@ -1134,6 +1150,7 @@
 					levels = classes))
 			}
 			update(predictions)
+			rm(list = ls())
 		},progress = FALSE)
 
 

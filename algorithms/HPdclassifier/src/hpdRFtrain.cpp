@@ -145,7 +145,6 @@ extern "C"
 	    
 	    for(int j = 0; j < forest->features_num; j++)
 	      INTEGER(features)[j] = features_permutation[j];
-	    
 	    SET_VECTOR_ELT(random_features,i,features);
 	    UNPROTECT(1);
 	    free(features_permutation);

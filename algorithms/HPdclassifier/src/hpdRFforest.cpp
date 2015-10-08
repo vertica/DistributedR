@@ -64,7 +64,6 @@ void destroyForest(SEXP R_forest)
       free(forest->max_nodes);
       forest->max_nodes = NULL;
     }
-  free(forest);
   forest = NULL;
   R_forest = R_NilValue;
 }
