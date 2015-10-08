@@ -70,8 +70,9 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
   if (!is.dframe(newdata) && !is.darray(newdata) && !is.data.frame(newdata) && !is.matrix(newdata))
      stop("'newdata' must be a dframe or darray or data.frame or matrix")
 
-  if (!is.null(object$featureNames) && 
-      !all(colnames(newdata) == object$featureNames))
+  if (!is.null(object$featureNames) && !is.null(colnames(newdata)) &&
+      (length(colnames(newdata)) != length(object$featureNames) ||
+       !all(colnames(newdata) == object$featureNames)))
     stop("'newdata' column names must be the same as those used to train the model")
  
   # extract GBM models and corresponding best iterations (n.trees)
