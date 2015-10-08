@@ -305,6 +305,7 @@ tail.dframe <- function(x, n=6L,...) {
 setMethod("nrow", signature("dframe"), function(x)
     {
         rowPartitions <- seq(1,npartitions(x),by=x@npartitions[[2]])
+        if(x@subtype != "STD") x@subtype <- "FLEX_DECLARED"
         sum(partitionsize(x)[rowPartitions,1])
     })
 
@@ -316,6 +317,7 @@ setMethod("NROW", signature("dframe"), function(x)
 setMethod("ncol", signature("dframe"), function(x)
     {
         colPartitions <- seq(1,x@npartitions[[2]])
+        if(x@subtype != "STD") x@subtype <- "FLEX_DECLARED"
         sum(partitionsize(x)[colPartitions,2])
     })
 
