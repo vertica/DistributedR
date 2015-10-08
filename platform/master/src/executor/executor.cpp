@@ -42,6 +42,7 @@
 #include <cstdio>
 #include <utility>
 #include <math.h>
+#include <setjmp.h>
 
 #include <RInside.h>
 #include <Rinterface.h>
@@ -58,6 +59,8 @@
 #define CMD_BUF_SIZE 512  // R command buffer size
 #define MAX_LOGNAME_LENGTH 200  // executor log file name length
 #define DUMMY_FILE_SIZE (128LL<<20)  // 128MB
+
+void executor_sigint_handler(int sig);
 
 using namespace std;
 using namespace presto;
@@ -80,8 +83,9 @@ static SEXP RSymbol_x = NULL;
 
 // Global variables 
 // contains a list of variables to update (called inside a foreach)
-set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>> *updatesptr;
-Executor* ex;
+  set<tuple<string, bool, std::vector<std::pair<int64_t,int64_t>>>> *updatesptr;
+  Executor* ex;
+  sigjmp_buf env;
 
 /**************** Class Function definitions ****************************/
 
@@ -467,7 +471,7 @@ int Executor::ReadCompositeArgs() {
 int Executor::Execute(set<tuple<string, bool, vector<pair<int64_t,int64_t>>>> const & updates) {
 
   string scoping_prefix = ".DistributedR_exec_func <- function() {";
-  string scoping_postfix = "} ; .DistributedR_exec_func()";
+  string scoping_postfix = "rm(list = ls()); gc()} ; .DistributedR_exec_func()";
 
   // In order to automatically add tryCatch block to prevent the executor
   // being killed while evaluating R-command.
@@ -876,6 +880,14 @@ int main(int argc, char *argv[]) {
   ZTracer::ZTraceEndpointRef executor_ztrace_inst = ZTracer::create_ZTraceEndpoint("127.0.0.1",3,string(hostname) + "_" + std::to_string(exec_id));
 #endif
 
+  signal(SIGUSR2, executor_sigint_handler);
+  if(sigsetjmp(env,0))
+    {
+      LOG_DEBUG("Deleting Executor memory");
+      delete ex;
+      return(0);
+    }
+
   while (true) {
     Timer total_timer;
     total_timer.start();
@@ -944,4 +956,14 @@ int main(int argc, char *argv[]) {
     }
   } // end while(true)
   return 0;
+}
+
+void executor_sigint_handler(int sig)
+{
+  sigset_t mask;
+  sigfillset(&mask);
+  sigprocmask(SIG_SETMASK, &mask, NULL);
+
+  LOG_DEBUG("Executor shutting down");
+  siglongjmp(env,1);
 }

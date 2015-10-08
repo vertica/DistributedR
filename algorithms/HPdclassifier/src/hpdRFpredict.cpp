@@ -135,6 +135,7 @@ hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
 	free(right_leaves);
 	free(right_weight);
       }
+
     *leaf_count = left_count+right_count;
     return leaves;
 }

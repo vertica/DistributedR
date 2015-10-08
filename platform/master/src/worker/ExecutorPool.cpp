@@ -123,14 +123,30 @@ ExecutorPool::ExecutorPool(PrestoWorker* worker_, int n_, ServerInfo *my_locatio
       if (!file) {
         fname = "./bin/R-executor-bin";
       }
-
       char log_level_[10];
       sprintf(log_level_, "%d", log_level);
-      execl(fname.c_str(), fname.c_str(),
-            int_to_string(recvpipe[1]).c_str(),
-            spill_dir_.c_str(), logname,
-            log_level_, int_to_string(presto::DATASTORE).c_str(),
-            reinterpret_cast<char*>(NULL));
+
+      if(log_level == 4)
+	{
+	  log_level = 3;
+	  sprintf(log_level_, "%d", log_level);
+	  
+	  execl("/usr/bin/valgrind", "/usr/bin/valgrind",
+		"--leak-check=full","--show-reachable=yes",
+		fname.c_str(),
+		int_to_string(recvpipe[1]).c_str(),
+		spill_dir_.c_str(), logname,
+		log_level_, int_to_string(presto::DATASTORE).c_str(),
+		reinterpret_cast<char*>(NULL));
+	}
+      else
+	{
+	  execl(fname.c_str(), fname.c_str(),
+		int_to_string(recvpipe[1]).c_str(),
+		spill_dir_.c_str(), logname,
+		log_level_, int_to_string(presto::DATASTORE).c_str(),
+		reinterpret_cast<char*>(NULL));
+	}
     } else {
       // keep child process id to kill child process upon exit
       child_proc_ids_[i] = pid;
@@ -161,10 +177,12 @@ ExecutorPool::ExecutorPool(PrestoWorker* worker_, int n_, ServerInfo *my_locatio
  *
  */
 ExecutorPool::~ExecutorPool() {
-  for (int i = 0; i < child_proc_ids_.size(); ++i) {
-    kill(child_proc_ids_[i], SIGKILL);  // upon exit, kill all child processes
-  }
+  LOG_DEBUG("ExecutorPool desctructor: Destroying executors");
 
+  for (int i = 0; i < child_proc_ids_.size(); ++i) {
+    kill(child_proc_ids_[i], SIGUSR2);  // upon exit, kill all child processes
+  }
+  
   int child_status = 1, loop_count = 5;
   LOG_DEBUG("Executorpool destructor: Waiting for child processes to join");
   do {
