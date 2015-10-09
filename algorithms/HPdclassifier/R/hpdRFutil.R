@@ -2,7 +2,7 @@
 {
 	temp_forest = .Call("serializeForest",forest,PACKAGE="HPdclassifier")
 	.Call("garbageCollectForest",forest)
-
+	gc()
 	ntree = length(temp_forest) - 1
 	dforest = dlist(npartition = min(ntree,sum(distributedR_status()$Inst)))
 	trees_per_partition <- floor(ntree/npartitions(dforest))

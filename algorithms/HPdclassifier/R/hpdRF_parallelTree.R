@@ -26,6 +26,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 {
 	start_timing <- Sys.time()
 	ddyn.load("HPdclassifier")
+
 	if(do.trace)
 	.master_output("Input validation and preprocessing")
 	timing_info <- Sys.time()
@@ -718,7 +719,13 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 			update(true_responses)
 		},progress = FALSE)
 	terms = getpartition(terms,1)[[1]]
-	
+
+	y_classes = lapply(1:ncol(y), function(a) NULL)
+	y_classes[y_levels$columns] = y_levels$Levels
+	x_classes = lapply(1:ncol(x), function(a) NULL)
+	names(x_classes) <- x_colnames
+	x_classes[x_colnames[x_levels$columns]] = x_levels$Levels
+
 	if(trace)
 	.master_output(format(round(Sys.time() - timing_info, 2), 
 		nsmall = 2))
@@ -727,8 +734,8 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
     return(list(x=x,y=y, weights = weights, terms = terms,
     		  x_cardinality = x_cardinality, 
 		  y_cardinality = y_cardinality,
-		  y_classes = y_levels$Levels,
-		  x_classes = x_levels$Levels,
+		  y_classes = y_classes,
+		  x_classes = x_classes,
 		  true_responses = true_responses,
 		  x_colnames = x_colnames))
 }
@@ -789,8 +796,8 @@ deploy.hpdRF_parallelTree <- function(model)
 	class(model) <- c("hpdrandomForest", 
 		     "randomForest", "randomForest.formula")
 	model$forest$trees <- NULL
-    # clearing environment
-    environment(model$terms) <- globalenv()
+    	# clearing environment
+	environment(model$terms) <- globalenv()
 
 	return(model)
 }

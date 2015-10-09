@@ -49,42 +49,28 @@ hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
   bool null_feature = false;
   bool right;
 
-    if(TYPEOF(VECTOR_ELT(observations,split_var)) == INTSXP)
-      {
-	if(INTEGER(VECTOR_ELT(observations,split_var))[obs_index] == NA_INTEGER)
-	  {
-	    if(!na_pass)
-	      {
-		*leaf_count=1;
-		*weight = (double* ) malloc(sizeof(double));
-		**weight = 1;
-		hpdRFnode** leaf = (hpdRFnode**) malloc(sizeof(hpdRFnode*));
-		*leaf = tree;
-		return leaf;
-	      }
-	  null_feature = true;
-	  }
-	obs_split_var = 
-	  (double) INTEGER(VECTOR_ELT(observations,split_var))[obs_index];
-      }
-    else
-      {
-	if(ISNA(REAL(VECTOR_ELT(observations,split_var))[obs_index]))
-	  {
-	    if(!na_pass)
-	      {
-		*leaf_count=1;
-		*weight = (double* ) malloc(sizeof(double));
-		**weight = 1;
-		hpdRFnode** leaf = (hpdRFnode**) malloc(sizeof(hpdRFnode*));
-		*leaf = tree;
-		return leaf;
-	      }
-	    null_feature = true;
-	  }
-	obs_split_var =  REAL(VECTOR_ELT(observations,split_var))[obs_index];
-      }
-    if(!null_feature && feature_cardinality[split_var] == NA_INTEGER)
+  SEXP split_col = VECTOR_ELT(observations,split_var);
+  bool col_int = TYPEOF(VECTOR_ELT(observations,split_var)) == INTSXP;
+  
+  if(col_int)
+    null_feature = INTEGER(split_col)[obs_index] == NA_INTEGER;
+  else
+    null_feature = ISNA(REAL(split_col)[obs_index]);
+
+  if(!na_pass && null_feature)
+    {
+      *leaf_count=1;
+      *weight = (double* ) malloc(sizeof(double));
+      **weight = 1;
+      hpdRFnode** leaf = (hpdRFnode**) malloc(sizeof(hpdRFnode*));
+      *leaf = tree;
+      return leaf;
+    }
+  
+  obs_split_var = col_int ? 
+    (double) INTEGER(split_col)[obs_index]:REAL(split_col)[obs_index];
+  
+  if(!null_feature && feature_cardinality[split_var] == NA_INTEGER)
       {
 	left = obs_split_var < tree->split_criteria[0];
 	right = !left;
@@ -101,6 +87,7 @@ hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
 	left = true;
 	right = true;
       }
+
     int left_count=0, right_count=0;
     hpdRFnode** left_leaves=NULL, **right_leaves=NULL;
     double* left_weight, *right_weight;
@@ -110,9 +97,9 @@ hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
 					   feature_cardinality, obs_index, 
 					   na_pass,&left_count,&left_weight);
     if(right)
-      right_leaves = treeTraverseObservation(tree->right, observations, 
-					     feature_cardinality, obs_index, 
-					     na_pass,&right_count,&right_weight);
+      right_leaves= treeTraverseObservation(tree->right, observations, 
+					    feature_cardinality, obs_index, 
+					    na_pass,&right_count,&right_weight);
     if(!null_feature)
       {
 	if(left)
@@ -136,6 +123,8 @@ hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
       {
 	memcpy(leaves,left_leaves,sizeof(hpdRFnode*)*(left_count));
 	memcpy(*weight,left_weight,sizeof(double)*(left_count));
+	free(left_leaves);
+	free(left_weight);
       }
     if(right_leaves != NULL)
       {
@@ -143,11 +132,10 @@ hpdRFnode** treeTraverseObservation(hpdRFnode* tree, SEXP observations,
 	       sizeof(hpdRFnode*)*(right_count));
 	memcpy((*weight) + left_count,right_weight,
 	       sizeof(double)*(right_count));
+	free(right_leaves);
+	free(right_weight);
       }
-    free(left_leaves);
-    free(right_leaves);
-    free(left_weight);
-    free(right_weight);
+
     *leaf_count = left_count+right_count;
     return leaves;
 }
@@ -169,7 +157,10 @@ double treePredictObservation(hpdRFnode * tree, SEXP observations,
 					      obs_index,
 					      false, 
 					      &leaf_count, &weight);
-  return leaves[0]->prediction;
+  double prediction = leaves[0]->prediction;
+  free(leaves);
+  free(weight);
+  return prediction;
 
 }
 
