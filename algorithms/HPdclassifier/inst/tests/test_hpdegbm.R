@@ -13,6 +13,8 @@ library(HPdclassifier)
 
 
 confusion <- function(a, b){
+  a <- a > 0.5
+  b <- b > 0.5
   tbl <- table(a, b)	
   mis <- 1 - sum(diag(tbl))/sum(tbl)
   list(table = tbl, misclass.prob = mis)
@@ -174,7 +176,7 @@ test_that("Test classification accuracy: AdaBoost", {
 
     newdata1 <- X_test        # test centralized small simulated data
     Predictions1 <- predict.hpdegbm(finalModel1, newdata1, trace = FALSE)
-    result1 <- confusion(Predictions1 > 0, y_test > 0)
+    result1 <- confusion(Predictions1, y_test > 0)
 
     PredictionsGBM1_1 <- predict.gbm(finalModel1$model[[1]], newdata1, n.trees=finalModel1$bestIterations[1], trace = FALSE)
     result1_1 <- confusion(PredictionsGBM1_1 > 0, y_test > 0)
@@ -242,8 +244,8 @@ test_that("Test classification accuracy: AdaBoost", {
 
     newdata2 <- dfX_test     # test distributed big data
     Predictions2 <- getpartition(predict.hpdegbm(finalModel2, newdata2,  trace = FALSE))
-    print(confusion(Predictions2 > 0, getpartition(daY_test) > 0)) 
-    result2 <- confusion(Predictions2 > 0, getpartition(daY_test) > 0)
+    print(confusion(Predictions2, getpartition(daY_test) > 0)) 
+    result2 <- confusion(Predictions2, getpartition(daY_test) > 0)
 
     newdata21 <- getpartition(newdata2)
     PredictionsGBM2_1 <- predict.gbm(finalModel2$model[[1]], newdata21, n.trees=finalModel2$bestIterations[1], trace = FALSE)
@@ -310,8 +312,8 @@ test_that("Test classification accuracy: AdaBoost", {
 
     newdata3 <- dfX_test     # test distributed big data
     Predictions3 <- getpartition(predict.hpdegbm(finalModel3, newdata3, trace = FALSE))
-    print(confusion(Predictions3 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
-    result3 <- confusion(Predictions3 > 0, getpartition(daY_test) > 0)
+    print(confusion(Predictions3, getpartition(daY_test) > 0)) #daY: distributed big data
+    result3 <- confusion(Predictions3, getpartition(daY_test) > 0)
 
     newdata31 <- getpartition(newdata3)
     PredictionsGBM3_1 <- predict.gbm(finalModel3$model[[1]], newdata31, n.trees=finalModel3$bestIterations[1], trace = FALSE)
@@ -380,8 +382,8 @@ test_that("Test classification accuracy: bernoulli", {
 
     newdata4 <- X_test        # test centralized small simulated data
     Predictions4 <- predict.hpdegbm(finalModel4, newdata4,  trace = FALSE)
-    print(confusion(Predictions4 > 0, y_test > 0))   # Y_test: centralized small data
-    result4 <- confusion(Predictions4 > 0, y_test > 0)
+    print(confusion(Predictions4, y_test > 0))   # Y_test: centralized small data
+    result4 <- confusion(Predictions4, y_test > 0)
 
     PredictionsGBM4_1 <- predict.gbm(finalModel4$model[[1]], newdata4, n.trees=finalModel4$bestIterations[1], trace = FALSE)
     result4_1 <- confusion(PredictionsGBM4_1 > 0, y_test > 0)
@@ -448,8 +450,8 @@ test_that("Test classification accuracy: bernoulli", {
 
     newdata5 <- dfX_test     # test distributed big data
     Predictions5 <- getpartition(predict.hpdegbm(finalModel5, newdata5, trace = FALSE))
-    print(confusion(Predictions5 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
-    result5 <- confusion(Predictions5 > 0, getpartition(daY_test) > 0)
+    print(confusion(Predictions5, getpartition(daY_test) > 0)) #daY: distributed big data
+    result5 <- confusion(Predictions5, getpartition(daY_test) > 0)
 
     newdata51 = getpartition(newdata5)
     PredictionsGBM5_1 <- predict.gbm(finalModel5$model[[1]], newdata51, n.trees=finalModel5$bestIterations[1], trace = FALSE)
@@ -516,8 +518,8 @@ test_that("Test classification accuracy: bernoulli", {
 
     newdata6 <- dfX_test     # test distributed big data
     Predictions6 <- getpartition(predict.hpdegbm(finalModel6, newdata6, trace = FALSE))
-    print(confusion(Predictions6 > 0, getpartition(daY_test) > 0)) #daY: distributed big data
-    result6 <- confusion(Predictions6 > 0, getpartition(daY_test) > 0)
+    print(confusion(Predictions6, getpartition(daY_test) > 0)) #daY: distributed big data
+    result6 <- confusion(Predictions6, getpartition(daY_test) > 0)
 
     newdata61 <- getpartition(newdata6)
     PredictionsGBM6_1 <- predict.gbm(finalModel6$model[[1]], newdata61, n.trees=finalModel6$bestIterations[1], trace = FALSE)
