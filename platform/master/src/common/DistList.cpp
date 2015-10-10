@@ -120,9 +120,8 @@ void DistList::LoadInR(RInside &R, const std::string &varname){
     munmap(array_region.first, array_region.second);
   }
   Rcpp::Language unserialize_call("unserialize", arr);
-  SEXP dlist;
-  PROTECT(dlist = Rf_eval(unserialize_call, R_GlobalEnv));
-  R[varname] = dlist;  // assign the varname with corresponding value in R-session
+  R[varname]  = Rf_eval(unserialize_call, R_GlobalEnv);
+  // assign the varname with corresponding value in R-session
   UNPROTECT(2);
 }
 
