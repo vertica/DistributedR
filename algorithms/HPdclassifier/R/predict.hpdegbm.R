@@ -91,7 +91,7 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
                                                   nds = splits(newdata, i),
                                                   object = object,
                                                   ensemblePredict =
-                                                    .ensemblePredict){
+                                                    .ensemblePredict) {
         library(gbm)
         out <- ensemblePredict(object, nds)
         # Adjust the type of the predictions according to the type of preds
@@ -127,7 +127,7 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
     Reduce('+', modelPreds)/length(modelPreds)
   } else if (distribution == "multinomial") {
     summedPreds <- Reduce('+', modelPreds)
-    colPreds <- apply(summedPreds,1,which.max)
+    colPreds <- apply(summedPreds, 1, which.max)
     sapply(colPreds, function(x) colnames(modelPreds[[1]])[x])
   } else if (distribution == "gaussian") {
     Reduce('+', modelPreds)/length(modelPreds)
