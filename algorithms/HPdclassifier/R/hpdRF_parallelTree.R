@@ -272,14 +272,14 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	threshold = as.integer(floor(threshold))
 	max_nodes_per_iteration = as.integer(floor(max_nodes_per_iteration))
 	nodes_per_executor = as.integer(floor(nodes_per_executor))
-	max_trees_per_iteration =as.integer(floor(min(max_trees_per_iteration,ntree)))
+	max_trees_per_iteration=as.integer(floor(min(max_trees_per_iteration,ntree)))
 
 	if(do.trace)
 		.master_output("Starting to build forest")
 
 	if(do.trace)
 		.master_output(paste("\ttrees left: ", ntree, " out of a total of ", ntree))
-
+	max_trees_per_iteration=100L
 
 	suppressWarnings(model <-
 		.hpdRF_distributed(observations, responses, 
@@ -349,23 +349,16 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		if(do.trace)
 		.master_output("\tdistributing forest: ",appendLF = FALSE)
 		timing_info <- Sys.time()
-		temp_forest = .distributeForest(model$forest)
+		forest = .distributeForest(model$forest,forest )
 		if(do.trace)
 		.master_output(format(round(Sys.time() - timing_info, 2), 
 			nsmall = 2))
 
 		model$forest <- NULL
 		gc()
-		forest <- .combineDistributedForests(forest,temp_forest)
-		curr_ntree = as.integer(curr_ntree - min(ntree,max_trees_per_iteration))
-		suppressWarnings({
-		forest <- .redistributeForest(forest,
-	       	       split(1:(ntree-curr_ntree),
-				1:min(sum(distributedR_status()$Inst)),
-				ntree-curr_ntree))
-		})
+		curr_ntree=as.integer(curr_ntree-min(ntree,max_trees_per_iteration))
 		rm(model)
-
+		#print(getpartition(forest))
 		gc()
 		if(do.trace)
 		.master_output("\tcurrent distributed forest size: ",

@@ -371,8 +371,6 @@
 	workers = length(nodes)
 	data_local <- dlist(npartitions=workers*npartitions(observations))
 
-	if(trace)
-	print(distributedR_status())
 
 	if(trace)
 	.master_output("\t\tshuffling data: ", appendLF = FALSE)
@@ -439,9 +437,6 @@
 	if(trace)
 	.master_output(format(round(timing_info, 2), nsmall = 2))
 
-
-	if(trace)
-	print(distributedR_status())
 
 	if(trace)
 	.master_output("\t\tbuilding subtrees: ", appendLF = FALSE)
@@ -538,9 +533,6 @@
 	timing_info <- Sys.time() - timing_info
 	if(trace)
 	.master_output(format(round(timing_info, 2), nsmall = 2))
-
-	if(trace)
-	print(distributedR_status())
 
 
 	if(trace)
