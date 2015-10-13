@@ -473,5 +473,9 @@ deploy.hpdrpart <- function(model)
 
 	if(!is.element("csplit", names(model)))
 		warning("'model' does not have an element called 'csplit'")
+
+    environment(model$terms)  <- globalenv()
+    environment(model$na.action)  <- globalenv()
+
 	return(model)
 }

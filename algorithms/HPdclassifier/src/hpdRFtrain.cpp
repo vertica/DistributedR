@@ -116,6 +116,7 @@ extern "C"
     time_t starttime;
     time(&starttime);
     time_t currtime;
+    int* features_permutation=(int *)malloc(length(observations)*sizeof(int));
 
     while(!max_nodes_reached && length(active_nodes))
       {
@@ -124,6 +125,7 @@ extern "C"
 	  SETLENGTH(active_nodes,*INTEGER(max_nodes_per_iteration));
 
 	SEXP random_features;
+
 	PROTECT(random_features = allocVector(VECSXP,length(active_nodes)));
 	for(int i = 0; i < length(active_nodes); i++)
 	  {
@@ -132,7 +134,6 @@ extern "C"
 
 	    int temp_feature;
 	    int nFeatures = length(observations);
-	    int* features_permutation=(int *)malloc(nFeatures*sizeof(int));
 	    for(int j = 0; j < nFeatures; j++)
 	      features_permutation[j] = j+1;
 	    for(int j = nFeatures-1; j > 0; j--)
@@ -147,7 +148,6 @@ extern "C"
 	      INTEGER(features)[j] = features_permutation[j];
 	    SET_VECTOR_ELT(random_features,i,features);
 	    UNPROTECT(1);
-	    free(features_permutation);
 	  }
 
 
@@ -226,8 +226,8 @@ extern "C"
 	      UNPROTECT_PTR(splits_info);
 	    UNPROTECT_PTR(active_nodes);
 	    UNPROTECT_PTR(R_forest);
+	    free(features_permutation);
 	    return R_forest;
-
 	  }
       }
     
@@ -239,6 +239,7 @@ extern "C"
       UNPROTECT_PTR(splits_info);
     UNPROTECT_PTR(active_nodes);
     UNPROTECT_PTR(R_forest);
+    free(features_permutation);
     return R_forest;
   }
 
