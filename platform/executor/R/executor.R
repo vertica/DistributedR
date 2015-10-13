@@ -16,7 +16,116 @@
 #Suite 330, Boston, MA 02111-1307 USA
 #####################################################################
 
-update <- function(x,empty=FALSE) {
+update.Matrix <- function(x,empty=FALSE) {
+  name <- deparse(substitute(x))
+  assign(name, x, globalenv())
+
+  # Check to see if updating a list-of-splits variable -- needed to disambiguate
+  # between list of splits of dframe or single split of dlist with data frames.
+  flag <- paste0(".",name,".isListType","==TRUE")
+  flag <- tryCatch(
+            eval(parse(text=flag),envir=globalenv()),
+          error = function(e) {
+	    FALSE
+          }) 
+
+  if(!flag)
+    objdim <- getdimensions(x)
+  else {
+    if(length(x) == 0) objdim <- c(0,0)
+    else {
+      objdim <- lapply(x,getdimensions)
+      objdim <- unlist(objdim)
+    }
+  }
+
+  #Find dimension of object  
+  .Call("NewUpdate", get("updates.ptr..."), name, empty, objdim, DUP=FALSE)
+}
+
+update.numeric <- function(x,empty=FALSE) {
+  name <- deparse(substitute(x))
+  assign(name, x, globalenv())
+
+  # Check to see if updating a list-of-splits variable -- needed to disambiguate
+  # between list of splits of dframe or single split of dlist with data frames.
+  flag <- paste0(".",name,".isListType","==TRUE")
+  flag <- tryCatch(
+            eval(parse(text=flag),envir=globalenv()),
+          error = function(e) {
+	    FALSE
+          }) 
+
+  if(!flag)
+    objdim <- getdimensions(x)
+  else {
+    if(length(x) == 0) objdim <- c(0,0)
+    else {
+      objdim <- lapply(x,getdimensions)
+      objdim <- unlist(objdim)
+    }
+  }
+
+  #Find dimension of object  
+  .Call("NewUpdate", get("updates.ptr..."), name, empty, objdim, DUP=FALSE)
+}
+
+
+update.data.frame <- function(x,empty=FALSE) {
+  name <- deparse(substitute(x))
+  assign(name, x, globalenv())
+
+  # Check to see if updating a list-of-splits variable -- needed to disambiguate
+  # between list of splits of dframe or single split of dlist with data frames.
+  flag <- paste0(".",name,".isListType","==TRUE")
+  flag <- tryCatch(
+            eval(parse(text=flag),envir=globalenv()),
+          error = function(e) {
+	    FALSE
+          }) 
+
+  if(!flag)
+    objdim <- getdimensions(x)
+  else {
+    if(length(x) == 0) objdim <- c(0,0)
+    else {
+      objdim <- lapply(x,getdimensions)
+      objdim <- unlist(objdim)
+    }
+  }
+
+  #Find dimension of object  
+  .Call("NewUpdate", get("updates.ptr..."), name, empty, objdim, DUP=FALSE)
+}
+
+update.matrix <- function(x,empty=FALSE) {
+  name <- deparse(substitute(x))
+  assign(name, x, globalenv())
+
+  # Check to see if updating a list-of-splits variable -- needed to disambiguate
+  # between list of splits of dframe or single split of dlist with data frames.
+  flag <- paste0(".",name,".isListType","==TRUE")
+  flag <- tryCatch(
+            eval(parse(text=flag),envir=globalenv()),
+          error = function(e) {
+	    FALSE
+          }) 
+
+  if(!flag)
+    objdim <- getdimensions(x)
+  else {
+    if(length(x) == 0) objdim <- c(0,0)
+    else {
+      objdim <- lapply(x,getdimensions)
+      objdim <- unlist(objdim)
+    }
+  }
+
+  #Find dimension of object  
+  .Call("NewUpdate", get("updates.ptr..."), name, empty, objdim, DUP=FALSE)
+}
+
+update.list <- function(x,empty=FALSE) {
   name <- deparse(substitute(x))
   assign(name, x, globalenv())
 
