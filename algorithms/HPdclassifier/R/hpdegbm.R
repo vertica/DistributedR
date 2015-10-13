@@ -196,23 +196,6 @@ hpdegbm <- function(
   if (distribution == 'multinomial' && is.darray(Y_train)) 
     stop("When distribution = 'multinomial', 'Y_train' cannot be a darray")
 
-  if (samplingFlag && .isdarrayorframe(Y_train)) {
-    # Used to compute the number of samples needed per partition
-    nClass <- if (distribution == "gaussian") {
-                1
-              } else if (distribution == "adaboost" || distribution == "bernoulli") {
-                2  
-              } else if (distribution == "multinomial") {
-                if (trace) {
-                  message("Counting number of classes in response...")
-                }
-                # Count the number of classes in Y_train
-                length(levels.dframe(Y_train)$Levels[[1]])
-              }
-    if (trace) {
-      message(paste0("Counted ", nClass,  " classes in Y_train"))
-    }
-  }
   ##########################################################################
   # Model training
   ##########################################################################
@@ -242,9 +225,25 @@ hpdegbm <- function(
     } else {  
       # For big data: Sample the data into nExecutor partitions and build a
       # model on each
-      
+
+      # Used to compute the number of samples needed per partition
+      nClass <- if (distribution == "gaussian") {
+                  1
+                } else if (distribution == "adaboost" || distribution == "bernoulli") {
+                  2  
+                } else if (distribution == "multinomial") {
+                  if (trace) {
+                    message("Counting number of classes in response...")
+                  }
+                  # Count the number of classes in Y_train
+                  length(levels.dframe(Y_train)$Levels[[1]])
+                }
+      if (trace) {
+        message(paste0("Counted ", nClass,  " classes in Y_train"))
+      }
+     
       # Distributed sampling
-      if (samplingFlag == TRUE) {
+      if (samplingFlag) {
         nTrain   <- nrow(X_train)
         nFeature <- ncol(X_train)
          
@@ -261,7 +260,7 @@ hpdegbm <- function(
         # Perform distributed sampling. The outputs contain as many models as
         # executors to be built
         sampledXY <- hpdsample(X_train, Y_train, nSamplePartitions = nExecutor,
-                               samplingRatio = sampleRatio)
+                               samplingRatio = sampleRatio, trace = trace)
         if (trace) {
           samplingTime <- (proc.time() - samplingStart)["elapsed"]
           message(paste0("Distributed sampling complete, took ", 
@@ -296,7 +295,7 @@ hpdegbm <- function(
 
         pclasses <- getpartition(dpartClasses)
 
-        if (!all(sapply(pclasses, function(cs) all(cs == pclasses[[1]])))) {
+        if (!all(sapply(pclasses, function(cs) all(length(cs) == nClass)))) {
           if (samplingFlag) 
             stop("Bad sampling: Some partitions do not contain all classes. Please try again")
           else 

@@ -124,11 +124,18 @@ predict.hpdegbm <- function(object, newdata, trace = FALSE) {
   #   The aggregate prediction to be output by the ensemble
   distribution <- ensemble$distribution 
   if (distribution == "bernoulli" || distribution == "adaboost") {
-    Reduce('+', modelPreds)/length(modelPreds)
+    # For each prediction, choose the median of the probabilities output by each model
+    apply(do.call(cbind, modelPreds), 1, median)
   } else if (distribution == "multinomial") {
-    summedPreds <- Reduce('+', modelPreds)
-    colPreds <- apply(summedPreds, 1, which.max)
-    sapply(colPreds, function(x) colnames(modelPreds[[1]])[x])
+    # Convert predictions from gbm.fit, which are probabilities for each class,
+    # into hard predictions (class names)
+    hardModelPreds <- lapply(modelPreds, function(mPred) apply(mPred, 1, function(row) {
+      i <- which.max(row)
+      colnames(mPred)[i]
+    }))
+    # Find the most commonly predicted class (voting)
+    apply(do.call(cbind, hardModelPreds), 1, function(row)
+          names(which.max(table(row))))
   } else if (distribution == "gaussian") {
     Reduce('+', modelPreds)/length(modelPreds)
   } else {
