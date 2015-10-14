@@ -490,4 +490,30 @@ extern "C"
     return R_new_errors;
   }
 
+
+  void forestPredictOOB(SEXP R_forest, SEXP R_predictions, SEXP R_observations,
+	       SEXP R_indices, SEXP R_tree_ids)
+  {
+    hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
+    double *predictions = REAL(R_predictions);
+    for(int tree_index = 0; tree_index < length(R_tree_ids); tree_index++)
+      {
+	int tree_id = INTEGER(R_tree_ids)[tree_index]-1;
+	SEXP indices;
+	if(length(R_indices) > 1)
+	  indices = VECTOR_ELT(R_indices,tree_id);
+	else
+	  indices = R_indices;
+	for(int i = 0; i < length(indices); i++)
+	  {
+	    int obs_index = INTEGER(indices)[i]-1;
+	    predictions[obs_index*length(R_tree_ids)+tree_index] =
+	      treePredictObservation(forest->trees[tree_id], 
+				     R_observations, 
+				     forest->features_cardinality, 
+				     obs_index);
+	  }
+      }
+  }
+
 }
