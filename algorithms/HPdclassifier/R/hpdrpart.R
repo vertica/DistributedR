@@ -267,11 +267,12 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	attr(model,"xlevels") <- levels.dframe(data)
 	response_name = all.vars(model$terms)[1]
 	categorical_features <- attr(model,"xlevels")$columns
-	categorical_features <- which(colnames(data)[categorical_features] != response_name)
 	attr(model,"xlevels")$columns <- NULL
-	attr(model,"xlevels") <- attr(model,"xlevels")$Levels[categorical_features]
-	names(attr(model,"xlevels")) <- 
-		sapply(categorical_features, function(i) colnames(data)[i])
+	attr(model,"xlevels") <- attr(model,"xlevels")$Levels
+	names(attr(model,"xlevels")) <- colnames(data)[categorical_features]
+	response_col = colnames(data)[categorical_features] == response_name
+	response_col = which(response_col)
+	attr(model,"xlevels") <- attr(model,"xlevels")[-response_col]
 	model$nExecutor = nExecutor
 	class(model) <- c("hpdrpart","rpart")
 
@@ -474,8 +475,12 @@ deploy.hpdrpart <- function(model)
 	if(!is.element("csplit", names(model)))
 		warning("'model' does not have an element called 'csplit'")
 
-    environment(model$terms)  <- globalenv()
-    environment(model$na.action)  <- globalenv()
+	if(is.element("terms", names(model)))
+		environment(model$terms)  <- globalenv()
+	else
+		stop("'model' does not have an element called 'terms'") 
+	if(is.element("na.action", names(model)))
+		environment(model$na.action)  <- globalenv()
 
 	return(model)
 }
