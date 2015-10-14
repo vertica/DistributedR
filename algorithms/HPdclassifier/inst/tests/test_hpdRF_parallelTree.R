@@ -282,6 +282,7 @@ predictions = getpartition(predictions)$predictions
 responses = getpartition(data)$X1
 expect_equal(predictions,responses)
 
+
 expect_no_error({model3 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
       completeModel = TRUE,reduceModel = TRUE)})
 data = generateData(100,2,TRUE,FALSE)
@@ -299,7 +300,9 @@ data = generateData(100,2,TRUE,TRUE)
 predictions = predict(model1, data)
 predictions = getpartition(predictions)$predictions
 responses = getpartition(data)$X1
-expect_equal(predictions,responses)
+responses <- factor(responses,levels = attr(predictions,"levels"))
+expect_equal(as.character(predictions),as.character(responses))
+
 
 expect_no_error({model2 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
       completeModel = TRUE,reduceModel = TRUE,ntree = 10)})
@@ -307,6 +310,7 @@ data = generateData(100,2,TRUE,TRUE)
 predictions = predict(model2, data)
 predictions = getpartition(predictions)$predictions
 responses = getpartition(data)$X1
+responses = factor(responses,levels = attr(predictions,"levels"))
 expect_equal(predictions,responses)
 
 expect_no_error({model3 <- hpdRF_parallelTree(X1 ~ .,data = data, mtry = 2, 
@@ -315,6 +319,7 @@ data = generateData(100,2,TRUE,TRUE)
 predictions = predict(model3, data)
 predictions = getpartition(predictions)$predictions
 responses = getpartition(data)$X1
+responses = factor(responses,levels = attr(predictions,"levels"))
 expect_equal(predictions,responses)
 
 })
@@ -329,5 +334,7 @@ expect_no_error({old_rf_model <- deploy.hpdRF_parallelTree(model)})
 data = generateData(100,2,TRUE,TRUE)
 predictions = predict(old_rf_model, getpartition(data))
 responses = getpartition(data)$X1
-expect_equal(as.character(predictions),as.character(responses))
+responses = factor(responses,levels = attr(predictions,"levels"))
+expect_equal(predictions,responses)
 })
+

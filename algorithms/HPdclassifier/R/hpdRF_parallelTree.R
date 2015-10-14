@@ -58,7 +58,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	model.frame(terms(formula, data = test_formula),
 		data = test_formula)
 	}, error = function(e){
-	   stop(paste("unable to apply formula to 'data'.",e))
+	   paste("unable to apply formula to 'data'.",e)
 	})
 
 
@@ -79,7 +79,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	model.frame(delete.response(terms(formula, data = test_formula)),
 		data = test_formula)
 	}, error = function(e){
-	   stop(paste("unable to apply formula to 'xtest'.",e))
+	   paste("unable to apply formula to 'xtest'.",e)
 	})}
 
 	if(!missing(ytest))
@@ -135,7 +135,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		  na.action = na.action, trace = do.trace)
 	},
 	error = function(cond){
-	      stop(paste("could not apply formula to 'data'.", cond))
+	      paste("could not apply formula to 'data'.", cond)
 	})
 
 	observations = variables$x
@@ -378,7 +378,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			forest = oob_predictions$dforest
 			},error = function(e)
 			{
-				warning(paste("aborting oob computations. received error:", e))
+				paste("aborting oob computations. received error:", e)
 			})
 		if(do.trace)
 		.master_output("\tcurrent distributed forest size: ",
@@ -582,7 +582,7 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 		  data = newdata, trace = do.trace, na.action = na.action)
 	},
 	error = function(cond){
-	      stop(paste("'newdata' incompatible with model. possibly missing columns.",cond))
+	      paste("'newdata' incompatible with model. possibly missing columns.",cond)
 	})
 
 

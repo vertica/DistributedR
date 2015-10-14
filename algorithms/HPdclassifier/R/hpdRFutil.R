@@ -14,7 +14,6 @@
 	prev_ntree = sum(trees_per_partition)
 	temp_forest = .Call("serializeForest",new_forest,PACKAGE="HPdclassifier")
 	.Call("garbageCollectForest",new_forest)
-	gc()
 	ntree = length(temp_forest)
 	assignment = lapply(1:npartitions(prev_dforest),function(x) integer(0))
 	while(ntree > 1)
@@ -22,13 +21,14 @@
 		smallest_partition = which.min(trees_per_partition)
 		assignment[[smallest_partition]] = 
 			c(assignment[[smallest_partition]],ntree)
-		trees_per_partition[[smallest_partition]]=trees_per_partition[[smallest_partition]]+1
+		trees_per_partition[[smallest_partition]]=
+			trees_per_partition[[smallest_partition]]+1
 		ntree <- ntree - 1
 	}
 	trees = lapply(assignment, function(ids) temp_forest[ids])
 	ntree = length(temp_forest)+prev_ntree
 	assignment = lapply(assignment, function(x) x+prev_ntree)
-	temp_forest[[1]] <- as.integer(temp_forest[[1]] + prev_ntree)
+
 	foreach(i,1:npartitions(prev_dforest), 
 		function(dforest = splits(prev_dforest,i),
 			  forest_header = temp_forest[[1]],
@@ -38,12 +38,14 @@
 	{
 		new_dforest =  vector(mode = "list", length = ntree)
 		new_dforest[[1]] <- forest_header
+		new_dforest[[1]][[1]] <- as.integer(ntree-1)
 		if(length(dforest) > 1)
 			new_dforest[2:length(dforest)] = dforest[2:length(dforest)]
 		dforest <- new_dforest		
 		if(length(tree_ids)>0)
 			dforest[tree_ids] <- trees
 		update(dforest)
+
 	},progress = FALSE)
 	rm(temp_forest)
 	rm(trees)
