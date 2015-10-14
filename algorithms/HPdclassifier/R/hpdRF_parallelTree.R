@@ -58,7 +58,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	model.frame(terms(formula, data = test_formula),
 		data = test_formula)
 	}, error = function(e){
-	   paste("unable to apply formula to 'data'.",e)
+	   stop(paste("unable to apply formula to 'data'.",e))
 	})
 
 
@@ -79,7 +79,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	model.frame(delete.response(terms(formula, data = test_formula)),
 		data = test_formula)
 	}, error = function(e){
-	   paste("unable to apply formula to 'xtest'.",e)
+	   stop(paste("unable to apply formula to 'xtest'.",e))
 	})}
 
 	if(!missing(ytest))
@@ -135,7 +135,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		  na.action = na.action, trace = do.trace)
 	},
 	error = function(cond){
-	      paste("could not apply formula to 'data'.", cond)
+	      stop(paste("could not apply formula to 'data'.", cond))
 	})
 
 	observations = variables$x
@@ -355,10 +355,8 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			nsmall = 2))
 
 		model$forest <- NULL
-		gc()
 		curr_ntree=as.integer(curr_ntree-min(ntree,max_trees_per_iteration))
 		rm(model)
-		#print(getpartition(forest))
 		gc()
 		if(do.trace)
 		.master_output("\tcurrent distributed forest size: ",
@@ -378,7 +376,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			forest = oob_predictions$dforest
 			},error = function(e)
 			{
-				paste("aborting oob computations. received error:", e)
+				stop(paste("aborting oob computations. received error:", e))
 			})
 		if(do.trace)
 		.master_output("\tcurrent distributed forest size: ",
@@ -444,7 +442,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			}
 			},
 			error = function(e){
-			      paste("could not compute additional statistics due to error:", e)
+			      stop(paste("could not compute additional statistics due to error:", e))
 			})			
 		}
 	}
@@ -502,7 +500,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			}
 			},
 			error = function(e){
-			      paste("could not compute additional statistics due to error:", e)
+			      stop(paste("could not compute additional statistics due to error:", e))
 			})			
 
 		}
