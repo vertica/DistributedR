@@ -628,7 +628,6 @@
 		update(predictions)
 	},progress = FALSE)
 
-
 	timing_info <- Sys.time() - timing_info
 	if(trace)
 	.master_output(format(round(timing_info, 2),nsmall = 2))
@@ -644,6 +643,7 @@
 	new_treeIDs <- reducedModel$subsetForest
 	votes <- reducedModel$new_votes
 	new_treeIDs <- split(new_treeIDs,1:min(length(new_treeIDs),npartitions(dforest)))
+
 	if(reduceModel)
 		dforest <- .redistributeForest(dforest,new_treeIDs)
 	attr(dforest,"ntree") <- length(unlist(new_treeIDs))
@@ -739,6 +739,7 @@
 .reduceModel <- function(separated_votes, responses, cutoff, classes, 
 	     accuracy_convergence = 0.001, reduceModel)
 {
+
 	old_trees = NULL
 	ntree = nrow(separated_votes)
 	if(reduceModel == FALSE)
@@ -837,7 +838,8 @@
 		   current_trees = current_trees,
 		   new_votes = splits(new_votes,i))
 		   {
-			new_votes = votes[current_trees,]
+			new_votes = matrix(votes[current_trees,], 
+				  nrow = length(current_trees))
 			update(new_votes)
 			rm(list = ls())
 		   },progress=FALSE)

@@ -365,6 +365,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	oob_predictions = NULL
 	if(completeModel)
 	{
+		tryCatch({
 		if(do.trace)
 			.master_output("\tComputing oob statistics")
 			timing_info <- Sys.time()
@@ -372,6 +373,11 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			responses, oob_indices, cutoff, classes, 
 			ntree = ntree, reduceModel = reduceModel, do.trace)
 			forest = oob_predictions$dforest
+			},error = function(e)
+			{
+				stop(paste("aborting oob computations. received error:", e))
+			})
+
 		if(do.trace)
 		.master_output("\tcurrent distributed forest size: ",
 			format(round(d.object.size(forest)/1024/1024,2),nsmall = 2), 
@@ -413,6 +419,8 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		model$type = "regression"
 		if(completeModel)
 		{
+			tryCatch(
+			{
 			model$mse = oob_predictions$mse
 			model$rsq = oob_predictions$rsq
 
@@ -432,6 +440,11 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 					       model$test$predicted,
 					       na.rm = TRUE)
 			}
+			},
+			error = function(e){
+			      stop(paste("could not compute additional statistics due to error:", e))
+			})			
+
 		}
 	}
 	else
@@ -440,6 +453,8 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 
 		if(completeModel)
 		{
+			tryCatch(
+			{
 			confusion = HPdutility::confusionMatrix(true_responses, 
 				    	model$predicted)
 			model$err.rate = oob_predictions$err.rate
@@ -484,6 +499,11 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
             			model$test$confusion  <-cbind(confusionTest, 
 						      classErrTest)
 			}
+			},
+			error = function(e){
+			      stop(paste("could not compute additional statistics due to error:", e))
+			})			
+
 		}
 	}
 
