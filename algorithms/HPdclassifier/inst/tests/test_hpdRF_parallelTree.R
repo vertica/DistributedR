@@ -334,7 +334,8 @@ expect_no_error({old_rf_model <- deploy.hpdRF_parallelTree(model)})
 data = generateData(100,2,TRUE,TRUE)
 predictions = predict(old_rf_model, getpartition(data))
 responses = getpartition(data)$X1
-responses = factor(responses,levels = attr(predictions,"levels"))
+responses <- factor(responses,levels = attr(predictions,"levels"))
+names(responses) <- 1:length(responses)
 expect_equal(predictions,responses)
 })
 
