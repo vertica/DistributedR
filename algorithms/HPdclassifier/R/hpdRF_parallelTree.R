@@ -279,7 +279,6 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 
 	if(do.trace)
 		.master_output(paste("\ttrees left: ", ntree, " out of a total of ", ntree))
-	max_trees_per_iteration=100L
 
 	suppressWarnings(model <-
 		.hpdRF_distributed(observations, responses, 
