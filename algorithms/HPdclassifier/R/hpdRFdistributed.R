@@ -587,7 +587,6 @@
 		tree_ids = tree_ids[-1]
 		forest = .Call("unserializeForest",forest, 
 		       	    PACKAGE = "HPdclassifier")  
-
 		forestparam = .Call("getForestParameters", forest,  
 			    PACKAGE = "HPdclassifier")
 
@@ -609,35 +608,16 @@
 				lapply(categorical_variables,
 				function(var)
 				observations[,var]+1)
-			
-		predictions = matrix(as.numeric(NA), 
+		
+		predictions = matrix(as.double(NA), 
 			      	ncol = nrow(observations),
 				length(tree_ids))
+				
 		tree_ids = tree_ids - 1
-		temp_predictions = lapply(1:length(tree_ids),
-		function(tree_id_index)
-		{
-			tree_id = tree_ids[tree_id_index]
-			tree_oob_indices = oob_indices[[tree_id]]
-			tree_predictions = sapply(tree_oob_indices,
-				function(obs)
-				.Call("specificTreePredictObservation", 
-				forest, as.integer(tree_id),
-				observations, 
-				as.integer(obs),
-				PACKAGE = "HPdclassifier"))
-			return(cbind(rep(tree_id_index,
-				length(tree_oob_indices)),
-				tree_oob_indices,as.numeric(tree_predictions)))
-		})
-		if(length(temp_predictions)>0)
-		{
-		for(i in 1:length(temp_predictions))
-		{
-		      predictions[temp_predictions[[i]][,c(1,2)]] = 
-		      		temp_predictions[[i]][,3]
-		}
-		}
+		oob_indices = lapply(oob_indices, as.integer)
+		.Call("forestPredictOOB", forest, predictions, observations,
+					  oob_indices, as.integer(tree_ids))
+
 		.Call("garbageCollectForest",forest)
 		update(predictions)
 	},progress = FALSE)
@@ -1097,16 +1077,12 @@
 		       	    PACKAGE = "HPdclassifier") 
 
 			forestparam=.Call("getForestParameters", forest)
-			response_cardinality = forestparam[[2]]
-			ntree = forestparam[[7]]
-			predictions = sapply(1:nrow(new_observations), function(index)
-			       sapply(tree_ids, function(tree_id)
-			            as.numeric(.Call("specificTreePredictObservation",
-					forest, as.integer(tree_id), 
-			      	      	new_observations, 
-			      		as.integer(index),
-		     			PACKAGE = "HPdclassifier"))))
-			predictions = matrix(predictions,ncol=nrow(new_observations))
+			predictions = matrix(as.double(NA), 
+			      	ncol = nrow(new_observations),
+				length(tree_ids))
+			.Call("forestPredictObservations", forest, predictions, 
+					new_observations, as.integer(tree_ids))
+
 			update(predictions)
 			.Call("garbageCollectForest",forest)
 			rm(list = ls())
