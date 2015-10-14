@@ -419,8 +419,6 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 		model$type = "regression"
 		if(completeModel)
 		{
-			tryCatch(
-			{
 			model$mse = oob_predictions$mse
 			model$rsq = oob_predictions$rsq
 
@@ -440,10 +438,6 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 					       model$test$predicted,
 					       na.rm = TRUE)
 			}
-			},
-			error = function(e){
-			      stop(paste("could not compute additional statistics due to error:", e))
-			})			
 		}
 	}
 	else
@@ -452,9 +446,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 
 		if(completeModel)
 		{
-			tryCatch(
-			{
-			confusion = confusionMatrix(true_responses, 
+			confusion = HPdutility::confusionMatrix(true_responses, 
 				    	model$predicted)
 			model$err.rate = oob_predictions$err.rate
 			classErr <- model$err.rate[nrow(model$err.rate),-1]
@@ -487,7 +479,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 				{
 					stop("Categories of 'ytest' are not the same as categories of response variable trained in model")
 				}
-				confusionTest = confusionMatrix(ytest,
+				confusionTest = HPdutility::confusionMatrix(ytest,
 			       		model$test$predicted)
 				model$test$err.rate = errorRate(ytest,
 					model$test$predicted)
@@ -498,11 +490,6 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
             			model$test$confusion  <-cbind(confusionTest, 
 						      classErrTest)
 			}
-			},
-			error = function(e){
-			      stop(paste("could not compute additional statistics due to error:", e))
-			})			
-
 		}
 	}
 
