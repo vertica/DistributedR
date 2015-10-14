@@ -621,10 +621,6 @@
 		predictions = matrix(as.double(NA), 
 			      	ncol = nrow(observations),
 				length(tree_ids))
-		predictions1 = matrix(as.double(NA), 
-			      	ncol = nrow(observations),
-				length(tree_ids))
-
 				
 		tree_ids = tree_ids - 1
 		oob_indices = lapply(oob_indices, as.integer)
@@ -1090,16 +1086,12 @@
 		       	    PACKAGE = "HPdclassifier") 
 
 			forestparam=.Call("getForestParameters", forest)
-			response_cardinality = forestparam[[2]]
-			ntree = forestparam[[7]]
-			predictions = sapply(1:nrow(new_observations), function(index)
-			       sapply(tree_ids, function(tree_id)
-			            as.numeric(.Call("specificTreePredictObservation",
-					forest, as.integer(tree_id), 
-			      	      	new_observations, 
-			      		as.integer(index),
-		     			PACKAGE = "HPdclassifier"))))
-			predictions = matrix(predictions,ncol=nrow(new_observations))
+			predictions = matrix(as.double(NA), 
+			      	ncol = nrow(new_observations),
+				length(tree_ids))
+			.Call("forestPredictObservations", forest, predictions, 
+					new_observations, as.integer(tree_ids))
+
 			update(predictions)
 			.Call("garbageCollectForest",forest)
 			rm(list = ls())

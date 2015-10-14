@@ -515,5 +515,24 @@ extern "C"
 	  }
       }
   }
+  void forestPredictObservations(SEXP R_forest, SEXP R_predictions, 
+				 SEXP R_observations, SEXP R_tree_ids)
+  {
+    hpdRFforest *forest = (hpdRFforest *) R_ExternalPtrAddr(R_forest);
+    double *predictions = REAL(R_predictions);
+    int num_predictions = length(VECTOR_ELT(R_observations,0));
+    for(int tree_index = 0; tree_index < length(R_tree_ids); tree_index++)
+      {
+	int tree_id = INTEGER(R_tree_ids)[tree_index]-1;
+	for(int obs_index = 0; obs_index < num_predictions; obs_index++)
+	  {
+	    predictions[obs_index*length(R_tree_ids)+tree_index] =
+	      treePredictObservation(forest->trees[tree_id], 
+				     R_observations, 
+				     forest->features_cardinality, 
+				     obs_index);
+	  }
+      }
+  }
 
 }
