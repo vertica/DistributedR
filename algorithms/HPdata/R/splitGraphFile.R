@@ -53,7 +53,7 @@ splitGraphFile <- function(inputFile, npartitions, outputPath, isNFS = FALSE, ro
     system(paste("rm -r ", tempPath), ignore.stderr = TRUE) # to make sure that the temp subdirectory does not exist
     success <- system(paste("mkdir ", tempPath))
     if(success != 0)
-        stop("Cannot write the temporary files in ", inputPath)
+        stop("Cannot write the temporary files in ", outputPath)
     tempFile <- paste(tempPath,"/",fileName, sep="")
 
     # calling split function
