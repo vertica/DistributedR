@@ -555,7 +555,7 @@
 
 
 .predictOOB <- function(forest, observations, responses, oob_indices, 
-	    cutoff, classes, reduceModel = FALSE, trace = FALSE)
+	    cutoff, classes, ntree, reduceModel = FALSE, trace = FALSE)
 {
 
 	timing_info <- Sys.time()
@@ -571,8 +571,12 @@
 
 
 	dforest = forest
+	if(ntree < npartitions(forest))
+	dforest = .redistributeForest(forest,as.list(1:ntree))
+	rm(forest)
 	suppressWarnings({
-	votes = darray(npartitions =c(npartitions(dforest),npartitions(observations)))
+	votes = darray(npartitions =c(npartitions(dforest),
+	      	npartitions(observations)))
 	})
 	foreach(i,0:(npartitions(votes)-1), 
 		function(predictions=splits(votes,i+1),
@@ -585,6 +589,7 @@
 	{
 		tree_ids = which(!sapply(forest,is.null))
 		tree_ids = tree_ids[-1]
+
 		forest = .Call("unserializeForest",forest, 
 		       	    PACKAGE = "HPdclassifier")  
 		forestparam = .Call("getForestParameters", forest,  
@@ -612,15 +617,17 @@
 		predictions = matrix(as.double(NA), 
 			      	ncol = nrow(observations),
 				length(tree_ids))
-				
+			
 		tree_ids = tree_ids - 1
 		oob_indices = lapply(oob_indices, as.integer)
+
 		.Call("forestPredictOOB", forest, predictions, observations,
 					  oob_indices, as.integer(tree_ids))
 
 		.Call("garbageCollectForest",forest)
 		update(predictions)
 	},progress = FALSE)
+
 
 	timing_info <- Sys.time() - timing_info
 	if(trace)

@@ -365,18 +365,13 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 	oob_predictions = NULL
 	if(completeModel)
 	{
-		tryCatch({
 		if(do.trace)
 			.master_output("\tComputing oob statistics")
 			timing_info <- Sys.time()
 		oob_predictions = .predictOOB(forest, observations, 
 			responses, oob_indices, cutoff, classes, 
-			reduceModel = reduceModel,do.trace)
+			ntree = ntree, reduceModel = reduceModel, do.trace)
 			forest = oob_predictions$dforest
-			},error = function(e)
-			{
-				stop(paste("aborting oob computations. received error:", e))
-			})
 		if(do.trace)
 		.master_output("\tcurrent distributed forest size: ",
 			format(round(d.object.size(forest)/1024/1024,2),nsmall = 2), 

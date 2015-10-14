@@ -499,11 +499,7 @@ extern "C"
     for(int tree_index = 0; tree_index < length(R_tree_ids); tree_index++)
       {
 	int tree_id = INTEGER(R_tree_ids)[tree_index]-1;
-	SEXP indices;
-	if(length(R_indices) > 1)
-	  indices = VECTOR_ELT(R_indices,tree_id);
-	else
-	  indices = R_indices;
+	SEXP indices = VECTOR_ELT(R_indices,tree_id);
 	for(int i = 0; i < length(indices); i++)
 	  {
 	    int obs_index = INTEGER(indices)[i]-1;
