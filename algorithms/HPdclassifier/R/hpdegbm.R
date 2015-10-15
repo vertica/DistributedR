@@ -204,8 +204,14 @@ hpdegbm <- function(
    dl_GBM_model <- dlist(nExecutor)
    dbest.iter <- darray(c(nExecutor,1), c(1,1))  
   
+   # Allow for determinism when the user sets the seed outside the function
+   seeds <- sample.int(nExecutor*1000, nExecutor)
+
    # For small data, build nExecutor models on the whole dataset
    if (!is.dframe(X_train) && !is.darray(X_train)) {       
+     if (trace) {
+       message("Centralized data: Building models on entire dataset")
+     }
      foreach(i, 1:nExecutor, function(dGBM_modeli       = splits(dl_GBM_model,i), 
                                       best.iter         = splits(dbest.iter,i),
                                       x                 = X_train,
@@ -216,13 +222,19 @@ hpdegbm <- function(
                                       n.minobsinnode    = n.minobsinnode,
                                       shrinkage         = shrinkage,
                                       bag.fraction      = bag.fraction,
+                                      seeds             = seeds,
+                                      i                 = i,
                                       buildLocalModel   = .buildLocalGbmModel) {
         buildLocalModel(dGBM_modeli, best.iter, x, y, n.trees, distribution,
                         interaction.depth, n.minobsinnode, shrinkage,
-                        bag.fraction)
+                        bag.fraction, seeds[i])
 
       }, progress = trace)
     } else {  
+      if (trace) {
+        message("Distributed data: Building models on samples of dataset")
+      }
+ 
       # For big data: Sample the data into nExecutor partitions and build a
       # model on each
 
@@ -302,10 +314,10 @@ hpdegbm <- function(
             stop("Some partitions do not contain all classes. Try using samplingFlag == TRUE")
         }
       }
+
       if (trace) {
         message("Building local models")
       }
- 
       # Build local model on each partition of sampled data
       foreach(i, 1:nExecutor, function(dGBM_modeli       = splits(dl_GBM_model,i), 
                                        best.iter         = splits(dbest.iter,i), 
@@ -317,10 +329,12 @@ hpdegbm <- function(
                                        n.minobsinnode    = n.minobsinnode,
                                        shrinkage         = shrinkage,
                                        bag.fraction      = bag.fraction,
-                                       buildLocalModel   = .buildLocalGbmModel) {
+                                       seeds             = seeds,
+                                       buildLocalModel   = .buildLocalGbmModel,
+                                       i = i) {
         buildLocalModel(dGBM_modeli, best.iter, x, y, n.trees, distribution,
                         interaction.depth, n.minobsinnode, shrinkage,
-                        bag.fraction)
+                        bag.fraction, seeds[i])
       }, progress = trace)
     }
 
@@ -364,8 +378,9 @@ print.hpdegbm <- function(x, ...) {
 # Helper function to build a gbm model on a partition
 .buildLocalGbmModel <- function(dGBM_modeli, best.iter, x, y, n.trees,
                                 distribution, interaction.depth,
-                                n.minobsinnode, shrinkage, bag.fraction) {
+                                n.minobsinnode, shrinkage, bag.fraction, seed) {
   library(gbm)
+  set.seed(seed)
 
   # gbm.fit requires that y be a vector
   if (is.data.frame(y))
