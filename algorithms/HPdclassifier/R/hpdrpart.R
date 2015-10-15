@@ -271,8 +271,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	attr(model,"xlevels") <- attr(model,"xlevels")$Levels
 	names(attr(model,"xlevels")) <- colnames(data)[categorical_features]
 	response_col = colnames(data)[categorical_features] == response_name
-	response_col = which(response_col)
-	attr(model,"xlevels") <- attr(model,"xlevels")[-response_col]
+	attr(model,"xlevels") <- attr(model,"xlevels")[!response_col]
 	model$nExecutor = nExecutor
 	class(model) <- c("hpdrpart","rpart")
 
