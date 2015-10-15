@@ -219,7 +219,7 @@
         inputData$setSeed <- rep(setSeed, nExecutor)
     } else {
         # setting the seed to improve randomness of executors
-        inputData$setSeed <- runif(nExecutor, 1,10000)
+        inputData$setSeed <- sample.int(nExecutor*1000, nExecutor)
     }
 
     if(trace) {

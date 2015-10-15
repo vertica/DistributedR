@@ -59,3 +59,21 @@ test_that("the results are correct in complete mode", {
     expect_equivalent(hpdapply(newdata,depkm$centers), matrix(c(3,1),ncol=1))
 })
 
+context("Checking effectiveness of set.seed")
+
+test_that("setting seed must make the output of the function deterministic", {
+    nInst <- sum(distributedR_status()$Inst)
+    X <- darray(npartitions=nInst)
+    foreach(i, 1:npartitions(X), function(x=splits(X,i)) {
+        x <- matrix(sample.int(1e6, 50), nrow=10, ncol=5)
+        update(x)
+    })
+
+    set.seed(100)
+    model1 <- hpdkmeans(X, 3)
+
+    set.seed(100)
+    model2 <- hpdkmeans(X, 3)
+
+    expect_true(all(model1$centers == model2$centers))
+})

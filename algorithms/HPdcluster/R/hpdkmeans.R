@@ -343,7 +343,7 @@ fitted.hpdkmeans <- function(object, method = c("centers", "classes"), ...)
                 starttime<-proc.time()
             }
             selectedBlocks <- sample.int(nparts, k, replace=TRUE)
-            seeds <- runif(nparts, min=1, max=nparts + 1) # making seeds for the executors
+            seeds <- sample.int(nparts *1000, nparts) # making seeds for the executors
 
             foreach(i, 1:nparts, progress=trace, centerDist <- function(idx=i, Xi=splits(X,i), selectedBlocks=selectedBlocks
                     , d.centersi=splits(d.centers,i), seeds=seeds){

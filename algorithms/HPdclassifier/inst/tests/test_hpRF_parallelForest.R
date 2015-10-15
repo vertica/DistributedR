@@ -236,3 +236,22 @@ test_that("the results are returned correctly for unsupervised", {
     expect_is(hRFc, "randomForest")
 })
 
+context("Checking effectiveness of set.seed")
+
+test_that("setting seed must make the output of the function deterministic", {
+    DFdata <- dframe(npartitions=nInst)
+    foreach(i, 1:npartitions(DFdata), function(di=splits(DFdata, i)) {
+        di <- data.frame(matrix(sample.int(1e6, 50), nrow=10, ncol=5))
+        update(di)
+    })
+    colnames(DFdata) <- c("X1", "X2", "X3", "X4", "X5")
+
+    set.seed(100)
+    model1 <- hpdRF_parallelForest(X1~., data=DFdata)
+
+    set.seed(100)
+    model2 <- hpdRF_parallelForest(X1~., data=DFdata)
+
+    expect_true(all(model1$mse == model2$mse))
+})
+
