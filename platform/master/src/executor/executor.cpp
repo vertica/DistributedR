@@ -471,7 +471,7 @@ int Executor::ReadCompositeArgs() {
 int Executor::Execute(set<tuple<string, bool, vector<pair<int64_t,int64_t>>>> const & updates) {
 
   string scoping_prefix = ".DistributedR_exec_func <- function() {";
-  string scoping_postfix = "rm(list = ls()); gc()} ; .DistributedR_exec_func()";
+  string scoping_postfix = "rm(list = ls())} ; .DistributedR_exec_func()";
 
   // In order to automatically add tryCatch block to prevent the executor
   // being killed while evaluating R-command.
