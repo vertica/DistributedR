@@ -41,7 +41,7 @@ db2dframes(tableName, dsn, resp = list(...), pred = list(...), except=list(...),
 The number of partitions of the resultant dframes will be approximately equal to value provided in argument 'npartitions'.
 When Vertica Connector for Distributed R is used, argument 'loadPolicy' defines the data loading policy between Distributed R and Vertica. loadPolicy "local" is employed when number of Distributed R worker is same as number for Vertica nodes containing data for table specified in argument 'tableName'. With this policy, there is one-to-one data load from a Vertica node to a Distributed R worker. For the alternate scenario, loadPolicy "uniform" is used where each Vertica nodes involves all Distributed R nodes in the data loading process. By default, loadPolicy "local" is used but it is automatically changed to "uniform" when the conditions for loadPolicy "local" are not met.
 
-db2dframes supports numeric, logical, and character data types.
+db2dframes supports numeric, logical, and character data types. Strings of size greater than 256 are not supported.
 }
 
 \value{
