@@ -10,7 +10,7 @@
 library(gbm)
 #library(testthat)
 library(HPdclassifier)
-
+set.seed(123)
 
 confusion <- function(a, b){
   a <- a > 0.5
@@ -102,6 +102,7 @@ foreach(i, 1:nExecutor, function(X_train=splits(dfX,i),Y_train=splits(daY,i)) {
 })
 
 
+
 #############################################################################################
 ################ generate distributed testing data
 ### generate training data by distributedR
@@ -129,6 +130,20 @@ foreach(i, 1:nExecutor_test, function(X_test=splits(dfX_test,i),Y_test=splits(da
 })
 
 
+test_that("Models are same when seed is set", {
+  set.seed(123) 
+  m1 <- hpdegbm(irisX_train, irisY_train, distribution = "multinomial")
+  set.seed(123) 
+  m2 <- hpdegbm(irisX_train, irisY_train, distribution = "multinomial")
+  expect_true(all.equal(m1, m2))
+
+  set.seed(123) 
+  m1 <- hpdegbm(dfX_test, daY_test, distribution = "bernoulli")
+  set.seed(123) 
+  m2 <- hpdegbm(dfX_test,  daY_test, distribution = "bernoulli")
+  expect_true(all.equal(m1, m2))
+
+})
 
 
 #################################################################################################
@@ -589,7 +604,7 @@ test_that("Test classification accuracy: multinomial", {
     print(table ((Predictions7), (valid.iris$Species)))
     result7 <- table ((Predictions7), (valid.iris$Species))
     errorRate7 <- 1 - sum(diag(result7))/sum(result7)
-    print(errorRate7)
+    message(errorRate7)
 
 
     # compute classification error rate
@@ -597,13 +612,13 @@ test_that("Test classification accuracy: multinomial", {
     aa7_1 <- apply(PredictionsGBM7_1, 1, which.max) - as.numeric(valid.iris$Species)
     correctCount7_1 <- sum(aa7_1 == 0)
     errorRate7_1 <- 1 - correctCount7_1/(nrow(newdata7))
-    print(errorRate7_1)
+    message(errorRate7_1)
 
     PredictionsGBM7_2 <- predict.gbm(finalModel7$model[[2]], newdata7, n.trees=finalModel7$bestIterations[2], trace = FALSE)
     aa7_2 <- apply(PredictionsGBM7_2, 1, which.max) - as.numeric(valid.iris$Species)
     correctCount7_2 <- sum(aa7_2 == 0)
     errorRate7_2 <- 1 - correctCount7_2/(nrow(newdata7))
-    print(errorRate7_2)
+    message(errorRate7_2)
 
    # PredictionsGBM7_3 <- predict.gbm(finalModel7$model[[3]], newdata7, n.trees=finalModel7$bestIterations[3], trace = FALSE)
    # aa7_3 <- apply(PredictionsGBM7_3, 1, which.max) - as.numeric(valid.iris$Species)
@@ -653,7 +668,6 @@ mu <- c(-1,0,1,2)[as.numeric(X3)]
 SNR <- 10 # signal-to-noise ratio
 Y <- X1**1.5 + 2 * (X2**.5) + mu
 sigma <- sqrt(var(Y)/SNR) 
-print(paste("sigma:",sigma))
 Y <- Y + rnorm(N,0,sigma)
 
 data <- data.frame(Y=Y,X1=X1,X2=X2,X3=X3,X4=X4,X5=X5,X6=X6)
@@ -736,7 +750,7 @@ test_that("Test regression accuracy: gaussian", {
  
     newdata8 <- data2[,-1]
     Predictions8 <- predict.hpdegbm(finalModel8, newdata8, trace = FALSE)
-    print (sum((data2$Y - Predictions8)^2))
+    message(sum((data2$Y - Predictions8)^2))
     result8 <- sum((data2$Y - Predictions8)^2)
 
     PredictionsGBM8_1 <- predict.gbm(finalModel8$model[[1]], newdata8, n.trees=finalModel8$bestIterations[1], trace = FALSE)

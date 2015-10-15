@@ -100,18 +100,22 @@ hpdsample <- function(data1, data2, nSamplePartitions, samplingRatio, trace = FA
   # factor. Otherwise, it is NULL and isn't used later
   dLevels <- if(is.dframe(data)) .getGlobalLevels(data)
 
+  seeds <- sample(1:max(1e6, nSamplePartitions), nSamplePartitions)
   for (k in 1:npartitions(data)) { # For each partition dk of the input data
     # Iterate over the output partitions si in parallel and copy some portion of
     # the data from partition dk to sample partition si. This copied data will
     # be appended to the data copied from previous partitions
-    foreach(i, 1:nSamplePartitions, function(si = splits(sdata, i),
-                                      dk = splits(data, k),
-                                      psizes = psizes,
-                                      dLevels = dLevels,
-                                      k = k, 
-                                      .coerceFactorsToGlobalLevels =
-                                        .coerceFactorsToGlobalLevels, 
-                                      .copyClassStructure = .copyClassStructure) {
+    foreach(i, 1:nSamplePartitions, function(si      = splits(sdata, i),
+                                             dk      = splits(data, k),
+                                             psizes  = psizes,
+                                             dLevels = dLevels,
+                                             k       = k, 
+                                             seeds   = seeds,
+                                             i       = i,
+                                             .coerceFactorsToGlobalLevels =
+                                               .coerceFactorsToGlobalLevels, 
+                                             .copyClassStructure = .copyClassStructure) {
+      set.seed(seeds[i])
       # Create a random index to choose which data items to copy from dk to si
       idx <- sample(1:nrow(dk), psizes[k], replace = TRUE)
 
@@ -171,20 +175,27 @@ hpdsample <- function(data1, data2, nSamplePartitions, samplingRatio, trace = FA
   d2Levels <- if(is.dframe(data2)) .getGlobalLevels(data2)
 
   for (k in 1:npartitions(data1)) { # For each partition dk of the input data
+    # Allow for determinism when seed is set outside the algorithm
+    seeds <- sample(1:max(1e6, nSamplePartitions), nSamplePartitions)
+
     # Iterate over the output partitions si in parallel and copy some portion of
     # the data from partition dk to sample partition si. This copied data will
     # be appended to the data copied from previous partitions
-    foreach(i, 1:nSamplePartitions, function(si1 = splits(sdata1, i),
-                                      si2 = splits(sdata2, i),
-                                      dk1 = splits(data1, k),
-                                      dk2 = splits(data2, k),
-                                      psizes = psizes,
-                                      k = k, 
-                                      d1Levels = d1Levels,
-                                      d2Levels = d2Levels,
-                                      .coerceFactorsToGlobalLevels =
-                                        .coerceFactorsToGlobalLevels,
-                                      .copyClassStructure = .copyClassStructure) {
+    foreach(i, 1:nSamplePartitions, function(si1      = splits(sdata1, i),
+                                             si2      = splits(sdata2, i),
+                                             dk1      = splits(data1, k),
+                                             dk2      = splits(data2, k),
+                                             psizes   = psizes,
+                                             k        = k, 
+                                             d1Levels = d1Levels,
+                                             d2Levels = d2Levels,
+                                             seeds    = seeds,
+                                             i = i,
+                                             .coerceFactorsToGlobalLevels =
+                                               .coerceFactorsToGlobalLevels,
+                                             .copyClassStructure = .copyClassStructure) {
+      # Allow for determinism when seed is set outside the algorithm
+      set.seed(seeds[i])
       # Create a random index to choose which data items to copy from dk to si
       idx <- sample(1:nrow(dk1), psizes[k], replace = TRUE)
 
