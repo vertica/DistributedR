@@ -5,12 +5,12 @@
 \description{Load \code{so} library on all Executors}
 
 \usage{
-    ddyn.load(x)
-    ddyn.load(c("package1","package2",...))
+    ddyn.load(x,trace=FALSE)
 }
 
 \arguments{
-    \item{x}{List or a vector of packages that their \code{so} libraries need to be loaded on all executors}
+    \item{x}{A vector of packages that their \code{so} libraries need to be loaded on all executors}
+    \item{trace}{when it is FALSE (default) the progress of the foreach will be hidden.}
 }
 
 \details{
