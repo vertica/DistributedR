@@ -278,11 +278,15 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 	if(is.data.frame(data))
 		responses = getpartition(responses)
 	
-	variable.importance = cbind(data.frame(var = rownames(model$splits)),
-			    data.frame(improve =model$splits[,"improve"]))
-	variable.importance <- aggregate(improve ~ var, variable.importance, sum)
-	rownames(variable.importance) <- variable.importance$var
-	variable.importance$var <- NULL
+	variable.importance = NULL
+	if(nrow(model$splits)>0)
+	{
+		variable.importance = cbind(data.frame(var = rownames(model$splits)),
+			data.frame(improve =model$splits[,"improve"]))
+		variable.importance <- aggregate(improve ~ var, variable.importance, sum)
+		rownames(variable.importance) <- variable.importance$var
+		variable.importance$var <- NULL
+	}
 	
 	if(completeModel)
 	{
@@ -423,9 +427,9 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 	if(!is.null(node_counts))
 	{
 		node_counts = matrix(node_counts,ncol = nClasses)
-		node_ratio = apply(node_counts,2,function(x) x/sum(x))
-		node_prob = rowSums(node_counts)/n
-		yval2 = cbind(matrix(model[[4]]),node_counts, node_ratio, node_prob)
+		node_ratio = apply(node_counts,1,function(x) x/sum(x))
+		node_prob = rowSums(node_counts)/model$n
+		yval2 = cbind(matrix(model$yval),node_counts, node_ratio, node_prob)
 		colnames(yval2) <- c(paste("yval2.V",1:(2*nClasses+1),sep = ""),
 				"yval2.nodeprob")
 		model = cbind(model,yval2)
