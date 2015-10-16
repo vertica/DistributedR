@@ -39,7 +39,7 @@
 #'                }
 #' @param delimiter Column separator. Example: delimiter='|'. By default delimiter is ','.
 #' @param commentCharacter Discard lines starting with this character. Leading spaces are ignored.
-#' @param hdfsConfigurationFile By default: \code{paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')}.
+#' @param hdfsConfigurationFile By default: \code{paste(system.file(package='dataconnector'),'/conf/hdfs.json',sep='')}.
 #'
 #'                              Options are:
 #'                              \itemize{
@@ -64,7 +64,7 @@
 #' df <- csv2dframe(url=paste(system.file(package='HPdata'),'/tests/data/ex001.csv',sep=''), schema='a:int64,b:character')
 
 csv2dframe <- function(url, schema, delimiter=',', commentCharacter='#', 
-                       hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep=''),
+                       hdfsConfigurationFile=paste(system.file(package='dataconnector'),'/conf/hdfs.json',sep=''),
                        skipHeader=FALSE) {
     options = list()
     options['schema'] = schema
@@ -131,7 +131,7 @@ csv2dframe <- function(url, schema, delimiter=',', commentCharacter='#',
 #'
 #' @param url File URL. Examples: '/tmp/file.orc', 'hdfs:///file.orc'.
 #' @param selectedStripes ORC stripes to include. Stripes need to be consecutive. If not specified defaults to all the stripes in the ORC file.
-#' @param hdfsConfigurationFile By default: \code{paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')}.
+#' @param hdfsConfigurationFile By default: \code{paste(system.file(package='dataconnector'),'/conf/hdfs.json',sep='')}.
 #'
 #'                              Options are:
 #'                              \itemize{
@@ -155,7 +155,7 @@ csv2dframe <- function(url, schema, delimiter=',', commentCharacter='#',
 
 
 orc2dframe <- function(url, selectedStripes='', 
-                       hdfsConfigurationFile=paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')) {
+                       hdfsConfigurationFile=paste(system.file(package='dataconnector'),'/conf/hdfs.json',sep='')) {
     options = list()
     options['selectedStripes'] = selectedStripes
     options['hdfsConfigurationFile'] = hdfsConfigurationFile
@@ -167,14 +167,14 @@ orc2dframe <- function(url, selectedStripes='',
 .ddc_read <- function(url, options) {
     if(!("hdfsConfigurationFile" %in% names(options))) {
         # set default hdfsConfigurationFile
-        options["hdfsConfigurationFile"] = paste(system.file(package='hdfsconnector'),'/conf/hdfs.json',sep='')
+        options["hdfsConfigurationFile"] = paste(system.file(package='dataconnector'),'/conf/hdfs.json',sep='')
     }
 
 
     pm <- get_pm_object()
     # 1. Schedule file across workers. Handles globbing also.
-    library(hdfsconnector)
-    plan <- hdfsconnector::create_plan(url, options, pm$worker_map())
+    library(dataconnector)
+    plan <- dataconnector::create_plan(url, options, pm$worker_map())
 
     hdfsConfigurationStr <- paste(readLines(as.character(options["hdfsConfigurationFile"])),collapse='\n')
     for (i in 1:length(plan$configs)) {
@@ -209,7 +209,7 @@ orc2dframe <- function(url, selectedStripes='',
             func <- function(dhs = splits(d,i),
                              url = url,
                              config = plan$configs[[i]]) {
-                library(hdfsconnector)
+                library(dataconnector)
                 if (config$file_type == "csv") {
                     dhs <- csv2dataframe(config$url,
                                          schema=config$schema,
@@ -236,11 +236,11 @@ orc2dframe <- function(url, selectedStripes='',
     c <- NULL
     if("schema" %in% names(options)) {
         # CSV
-        c <- hdfsconnector::schema2colnames(as.character(options['schema']))
+        c <- dataconnector::schema2colnames(as.character(options['schema']))
     }
     else if(as.character(options['fileType']) == 'orc') {
         # ORC
-        c <- hdfsconnector::orccolnames(plan$configs[[1]]$url, as.character(options['hdfsConfigurationFile']))
+        c <- dataconnector::orccolnames(plan$configs[[1]]$url, as.character(options['hdfsConfigurationFile']))
     }
     colnames(d) <- c;
     d # return dframe
