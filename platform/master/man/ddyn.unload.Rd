@@ -5,12 +5,12 @@
 \description{Unload \code{so} library from all Executors}
 
 \usage{
-    ddyn.unload(x)
-    ddyn.unload(c("package1","package2",...))
+    ddyn.unload(x,trace=FALSE)
 }
 
 \arguments{
-    \item{x}{List or a vector of packages that their \code{so} libraries need to be un-loaded on all executors}
+    \item{x}{A  vector of packages that their \code{so} libraries need to be un-loaded on all executors}
+    \item{trace}{when it is FALSE (default) the progress of the foreach will be hidden.}
 }
 
 \details{
