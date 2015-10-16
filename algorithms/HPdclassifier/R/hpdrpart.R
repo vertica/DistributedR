@@ -412,23 +412,26 @@ predict.hpdrpart <- function(model, newdata, do.trace = FALSE, ...)
 	varnames = c("<leaf>", varnames)
 	model[[2]] = varnames[model[[2]]+1]
 	leaf_ids = model[[1]]
+	node_counts = model[[12]]
+	model = data.frame(var = model[[2]], n = model[[6]], wt = model[[7]], 
+	      dev = model[[3]], yval = matrix(model[[4]]), complexity = model[[5]])
+	colnames(model) <- c("var", "n","wt","dev", "yval", "complexity")
+	model <- cbind(model, ncompete = 0, nsurrogate = 0)
+
+	tryCatch({
 	yval2 = NULL
-	if(!is.null(model[[12]]))
+	if(!is.null(node_counts))
 	{
-		node_counts = matrix(model[[12]],ncol = nClasses)
+		node_counts = matrix(node_counts,ncol = nClasses)
 		node_ratio = apply(node_counts,2,function(x) x/sum(x))
 		node_prob = rowSums(node_counts)/n
 		yval2 = cbind(matrix(model[[4]]),node_counts, node_ratio, node_prob)
 		colnames(yval2) <- c(paste("yval2.V",1:(2*nClasses+1),sep = ""),
 				"yval2.nodeprob")
-	}
-	model = data.frame(var = model[[2]], n = model[[6]], wt = model[[7]], 
-	      dev = model[[3]], yval = matrix(model[[4]]), complexity = model[[5]])
-	colnames(model) <- c("var", "n","wt","dev", "yval", "complexity")
-	if(!is.null(yval2))
 		model = cbind(model,yval2)
+	}
+	},error = function(e){})
 	rownames(model) <- leaf_ids
-	model <- cbind(model, ncompete = 0, nsurrogate = 0)
 	valid_splits <- complete.cases(splits)
 	splits <- splits[valid_splits,]
 	if(!is.matrix(splits))  n[node_index] = tree->summary_info->n;

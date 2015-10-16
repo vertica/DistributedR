@@ -375,7 +375,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			forest = oob_predictions$dforest
 			},error = function(e)
 			{
-				stop(paste("aborting oob computations. received error:", e))
+				warning(paste("aborting oob computations. received error:", e))
 			})
 
 		if(do.trace)
@@ -442,7 +442,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			}
 			},
 			error = function(e){
-			      stop(paste("could not compute additional statistics due to error:", e))
+			      warning(paste("could not compute additional statistics due to error:", e))
 			})			
 
 		}
@@ -501,7 +501,7 @@ hpdrandomForest <- hpdRF_parallelTree <- function(formula, data,
 			}
 			},
 			error = function(e){
-			      stop(paste("could not compute additional statistics due to error:", e))
+			      warning(paste("could not compute additional statistics due to error:", e))
 			})			
 
 		}
@@ -581,7 +581,7 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 		  data = newdata, trace = do.trace, na.action = na.action)
 	},
 	error = function(cond){
-	      paste("'newdata' incompatible with model. possibly missing columns.",cond)
+	      stop(paste("'newdata' incompatible with model. possibly missing columns.",cond))
 	})
 
 
@@ -612,12 +612,15 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 
 	y <- dframe(npartitions = npartitions(data))
 	x <- dframe(npartitions = npartitions(data))
-	
+	w <- dframe(npartitions = npartitions(data))
+		
 	if(trace)
 	.master_output("\tprocessing formula: ", appendLF = FALSE)
 	
+
 	if(is.null(weights))
 		weights = clone(data,ncol = 1, data = 1)
+
 
 
 	terms = dlist(npartitions = npartitions(x))
@@ -632,12 +635,13 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 				       model_terms = splits(terms,i),
 				       x_colnames = splits(x_colnames,i),
 				       weights = splits(weights,i),
+				       w = splits(w,i),
 				       na.action = na.action)
 	{
   		assign("data", na.action(cbind(weights,data)), globalenv())
-		weights = data.frame(as.double(data[,1]))
+		w = data.frame(as.double(data[,1]))
 		data[,1] = NULL
-		update(weights)
+		update(w)
 		colnames(data) <- column_names
 		if(inherits(model_formula, "formula"))
 			model_terms = terms(model_formula, data = data)
@@ -723,7 +727,7 @@ predict.hpdRF_parallelTree <- function(model, newdata, cutoff,
 		nsmall = 2))
 
 
-    return(list(x=x,y=y, weights = weights, terms = terms,
+    return(list(x=x,y=y, weights = w, terms = terms,
     		  x_cardinality = x_cardinality, 
 		  y_cardinality = y_cardinality,
 		  y_classes = y_classes,
