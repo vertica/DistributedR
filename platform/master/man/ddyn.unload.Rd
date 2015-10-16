@@ -9,7 +9,7 @@
 }
 
 \arguments{
-    \item{x}{A  vector of packages that their \code{so} libraries need to be un-loaded on all executors}i
+    \item{x}{A  vector of packages that their \code{so} libraries need to be un-loaded on all executors}
     \item{trace}{when it is FALSE (default) the progress of the foreach will be hidden.}
 }
 
