@@ -287,7 +287,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 		rownames(variable.importance) <- variable.importance$var
 		variable.importance$var <- NULL
 	}
-	
+	model$variable.importance = variable.importance
 	if(completeModel)
 	{
 		if(do.trace)
@@ -301,7 +301,7 @@ hpdrpart <- function(formula, data, weights, subset , na.action = na.omit,
 		if(!is.na(response_cardinality))
 		model$variable.importance <- 
 			varImportance(model,data,responses, 
-				trace = do.trace,type = "vector")
+				trace = do.trace,type = "class")
 
 		timing_info <- Sys.time() - timing_info
 		if(do.trace)

@@ -183,6 +183,7 @@ varImportance <- function(model, xtest, ytest,  ..., distance_metric, trace = FA
 	base_accuracy = distance_metric(ytest, normal_predictions)[1]
 
 	importance <- (importance - base_accuracy) / base_accuracy
+	importance <- sapply(importance, max,0)
 	importance <- as.data.frame(importance)
 	colnames(importance) <- "Importance"
 	return(importance)
