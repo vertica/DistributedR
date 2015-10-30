@@ -1,0 +1,4 @@
+useDynLib(HPdrecommend)
+importFrom(Rcpp, evalCpp)
+exportPattern("^[[:alpha:]]+")
+import(distributedR)

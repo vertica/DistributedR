@@ -1,0 +1,12 @@
+Package: HPdrecommend
+Type: Package
+Title: Distributed Collaborative Filtering
+Version: 1.0
+Date: 2015-07-10
+Author: HP Vertica Analytics Team
+Maintainer: Jihwan Lee <jihwan.lee@hp.com>
+Depends: distributedR
+Description: Distributed version of Alternating Least Sqaures algorithm
+License: TBD
+Imports: Rcpp (>= 0.11.6)
+LinkingTo: Rcpp, RcppArmadillo
